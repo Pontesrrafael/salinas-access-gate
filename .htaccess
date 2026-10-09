@@ -1,0 +1,8 @@
+# Se o DocumentRoot apontar para a raiz do projeto, redireciona para public/
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+<FilesMatch "^\.env|\.sql$|\.log$">
+  Require all denied
+</FilesMatch>

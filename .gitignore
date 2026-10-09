@@ -1,0 +1,9 @@
+.env
+storage/uploads/*
+storage/logs/*
+storage/sessions/*
+storage/cache/*
+!storage/**/.gitkeep
+importacao/
+*.csv
+storage/importacao/
