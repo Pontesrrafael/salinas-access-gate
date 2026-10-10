@@ -30,7 +30,25 @@ Navegador ──HTTP :222──► [app] PHP 8.3 + Apache ──rede interna─�
 - [ ] Porta **222** livre. O instalador verifica e aborta se outro serviço estiver usando a porta, por exemplo um SSH alternativo.
 - [ ] No Windows: o *Cliente OpenSSH*, que já vem no Windows 10 e 11.
 
-## 3. Instalação (1 clique no Windows)
+## 3. Instalação direta pelo GitHub (no console do Ubuntu)
+
+O repositório é **privado**. Por isso o download usa um **token de leitura** do GitHub, que você digita na hora e que não fica gravado no histórico.
+
+**Criar o token (uma vez):**
+1. GitHub → *Settings* → *Developer settings* → *Personal access tokens* → *Fine-grained tokens* → *Generate new token*.
+2. *Expiration*: 7 dias.
+3. *Repository access*: *Only select repositories* → `physical-entry-flow`.
+4. *Permissions* → *Contents*: **Read-only**. Gere o token e copie.
+
+**Instalar ou atualizar:** cole no terminal do servidor.
+
+```bash
+read -rsp "Token GitHub: " GT && echo && rm -rf /tmp/sag && mkdir -p /tmp/sag && curl -fSL -H "Authorization: Bearer $GT" https://api.github.com/repos/Pontesrrafael/physical-entry-flow/tarball/php-mariadb | tar -xz -C /tmp/sag --strip-components=1 && unset GT && sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag
+```
+
+O comando baixa a versão mais recente do branch `php-mariadb` e executa `docker/instalar.sh`. Para atualizar, rode o mesmo comando: segredos, banco e fotos são preservados. Revogue o token depois do uso.
+
+## 3.1 Instalação a partir do Windows (1 clique)
 
 1. Na pasta do projeto, dê dois cliques em **`bin\INSTALAR-NO-SERVIDOR.bat`**.
    - Para outro servidor, use `INSTALAR-NO-SERVIDOR.bat IP USUARIO PORTA`.
@@ -94,11 +112,12 @@ Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves 
 
 ## 8. Validação desta revisão
 
-Instalação testada do zero em ambiente Docker:
+Instalação testada do zero em ambiente Docker, inclusive a partir do pacote baixado do GitHub:
 - **Testes:** 77/77 dos testes ponta a ponta pela porta 222.
 - **Persistência:** os dados continuam após `down`/`up`.
 - **Reinstalação:** chaves, banco e admin preservados.
 - **Backup:** banco, fotos e segredos copiados.
 - **Conflito de porta:** detectado, e a instalação aborta.
+- **Falha no Docker Hub:** se a consulta falhar, por exemplo por limite de downloads (erro 429), o instalador usa as imagens já baixadas.
 - **Exposição:** `.env`, `docker/`, `bin/` e `storage/` inacessíveis pela web.
 - **Banco:** porta não publicada na rede.

@@ -101,7 +101,10 @@ printf 'SAG_PORTA=%s\n' "$PORTA" > .env
 chmod 600 .env
 
 etapa "Build e inicialização (pode levar alguns minutos na 1ª vez)"
-docker compose build --pull
+if ! docker compose build --pull; then
+  aviso "Não foi possível consultar o Docker Hub (rede ou limite de downloads). Tentando com as imagens já baixadas..."
+  docker compose build || falha "Build falhou. Verifique o acesso à internet (Docker Hub) e rode novamente; se for limite de downloads (erro 429), aguarde alguns minutos."
+fi
 docker compose up -d --remove-orphans
 
 etapa "Aguardando a aplicação ficar saudável"

@@ -32,7 +32,8 @@ O instalador:
 - cria o primeiro admin;
 - agenda a expiração de solicitações e o backup diário.
 
-Para atualizar, rode o mesmo `.bat`. Detalhes no runbook `docs/05-DEPLOY-DOCKER-UBUNTU.md` (MD-TI-SIS-CBA-005).
+Também dá para instalar direto do GitHub, no console do Ubuntu, com um token de leitura: veja a seção 3 do runbook.
+Para atualizar, rode o mesmo `.bat` ou o mesmo comando. Detalhes no runbook `docs/05-DEPLOY-DOCKER-UBUNTU.md` (MD-TI-SIS-CBA-005).
 
 ## Tema claro e escuro
 
