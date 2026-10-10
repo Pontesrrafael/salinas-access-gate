@@ -37,6 +37,28 @@ O instalador:
 Também dá para instalar direto do GitHub, no console do Ubuntu, com um token de leitura: veja a seção 3 do runbook.
 Para atualizar, rode o mesmo `.bat` ou o mesmo comando. Detalhes no runbook `docs/05-DEPLOY-DOCKER-UBUNTU.md` (MD-TI-SIS-CBA-005).
 
+## Portaria ágil
+
+- **Saída rápida:** a saída é registrada com 1 clique na lista *Dentro agora*. Também há saída em lote (ônibus, fim de turno) na portaria e em *Quem está no site*.
+- **Atalhos de teclado:**
+  - `F2` pessoa · `F3` QR · `F4` veículo;
+  - `F8`/`F9` entrada/saída;
+  - `Ctrl+Enter` confirmar · `Esc` limpar · `?` ajuda.
+- **Alerta vermelho com ciência obrigatória** (gravada no registro e na auditoria):
+  - documento vencido;
+  - visitante/terceiro sem integração na mina;
+  - veículo sem comissionamento.
+- **Convite com QR assinado:**
+  - enviado por link ou WhatsApp, ou impresso;
+  - lido na portaria pelo leitor USB, pela câmera ou por foto;
+  - a pessoa e a solicitação são selecionadas automaticamente.
+- **Sem conexão:**
+  - cadastro local no navegador (sem CPF) e fila de registros com reenvio automático;
+  - não há duplicidade e a hora real é preservada;
+  - com HTTPS, a tela abre mesmo com o servidor fora do ar.
+
+Guia completo em [docs/07-OPERACAO-PORTARIA.md](docs/07-OPERACAO-PORTARIA.md) (MD-TI-SIS-CBA-007).
+
 ## BI (Power BI, Metabase, Excel)
 
 O banco tem uma camada própria para BI (migração `004_bi.sql`):
@@ -127,6 +149,7 @@ Deploy no Virtualmin em [docs/02-DEPLOY-VIRTUALMIN-UBUNTU.md](docs/02-DEPLOY-VIR
 Migração dos dados do Supabase em [docs/03-MIGRACAO-SUPABASE.md](docs/03-MIGRACAO-SUPABASE.md).
 Integração com Active Directory (opcional, liga/desliga em *Configurações*) em [docs/04-INTEGRACAO-AD-LDAP.md](docs/04-INTEGRACAO-AD-LDAP.md).
 Camada de BI e dicionário de dados em [docs/06-BI-DICIONARIO-DE-DADOS.md](docs/06-BI-DICIONARIO-DE-DADOS.md).
+Operação da portaria (atalhos, QR, alertas, sem conexão) em [docs/07-OPERACAO-PORTARIA.md](docs/07-OPERACAO-PORTARIA.md).
 
 ## Estrutura
 

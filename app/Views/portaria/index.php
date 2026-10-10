@@ -2,6 +2,11 @@
   <div class="alerta alerta-aviso">Nenhum local ativo cadastrado. <?php if (can('locais.gerir')): ?><a href="<?= e(url('/locais')) ?>">Cadastre um local</a>.<?php endif; ?></div>
 <?php return; endif; ?>
 
+<div id="faixa-conexao" class="faixa-conexao" role="status" aria-live="polite" hidden>
+  <?= icon('nuvem-off', 'icon') ?> <span id="faixa-conexao-texto">Sem conexão com o servidor.</span>
+  <button type="button" class="btn btn-sm btn-secundario" id="btn-sincronizar" hidden>Sincronizar agora</button>
+</div>
+
 <div class="grade-portaria">
   <div class="coluna-principal">
 
@@ -39,16 +44,20 @@
       <input type="hidden" name="local_id" value="<?= e($local['id'] ?? '') ?>">
       <input type="hidden" name="pessoa_id" id="pessoa_id">
       <input type="hidden" name="veiculo_id" id="veiculo_id">
+      <input type="hidden" name="registro_id" id="registro_id">
 
       <!-- 2. Pessoa -->
       <section class="cartao">
         <div class="cartao-cabecalho">
           <h2><?= icon('pessoas', 'icon icon-sm') ?> Buscar pessoa <span class="obrigatorio">*</span></h2>
-          <?php if (can('pessoas.criar')): ?><button type="button" class="btn btn-secundario btn-sm" data-abrir="dlg-pessoa"><?= icon('mais', 'icon icon-sm') ?> Cadastro rápido</button><?php endif; ?>
+          <div class="botoes">
+            <button type="button" class="btn btn-ouro btn-sm" id="btn-ler-qr" title="Ler QR do convite (F3)"><?= icon('qr', 'icon icon-sm') ?> Ler QR</button>
+            <?php if (can('pessoas.criar')): ?><button type="button" class="btn btn-secundario btn-sm" data-abrir="dlg-pessoa"><?= icon('mais', 'icon icon-sm') ?> Cadastro rápido</button><?php endif; ?>
+          </div>
         </div>
         <div class="busca" id="busca-pessoa-box">
           <?= icon('busca', 'icon busca-icone') ?>
-          <input type="search" id="busca-pessoa" class="alto" placeholder="Nome, CPF (11 dígitos), matrícula ou empresa" autocomplete="off" autofocus>
+          <input type="search" id="busca-pessoa" class="alto" placeholder="Nome, CPF, matrícula, empresa ou leia o QR (F2)" autocomplete="off" autofocus>
           <ul class="resultados" id="res-pessoa" hidden></ul>
         </div>
         <p class="dica" id="dica-pessoa">Digite pelo menos 2 caracteres para buscar.</p>
@@ -123,7 +132,17 @@
       </section>
 
       <div id="bloqueios" class="alerta alerta-erro" hidden></div>
+      <div id="alertas-criticos" class="alerta-critico" role="alert" hidden>
+        <div class="alerta-critico-topo"><?= icon('alerta', 'icon icon-lg') ?> <strong>ATENÇÃO — confirme antes de liberar</strong></div>
+        <ul id="alertas-criticos-lista"></ul>
+        <label class="checkbox alerta-critico-ciente"><input type="checkbox" name="ciente_alertas" value="1" id="ciente-alertas">
+          <span>Conferi e autorizo a entrada mesmo assim <small>(fica registrado no histórico e na auditoria)</small></span></label>
+      </div>
       <div id="avisos" class="alerta alerta-aviso" hidden></div>
+
+      <p class="atalhos-dica nao-imprimir"><?= icon('teclado', 'icon icon-sm') ?>
+        <kbd>F2</kbd> pessoa · <kbd>F3</kbd> QR · <kbd>F4</kbd> veículo · <kbd>F8</kbd>/<kbd>F9</kbd> entrada/saída ·
+        <kbd>Ctrl</kbd>+<kbd>Enter</kbd> confirmar · <kbd>Esc</kbd> limpar · <button type="button" class="link-botao" data-abrir="dlg-atalhos">todos (<kbd>?</kbd>)</button></p>
 
       <button type="submit" id="btn-registrar" class="btn btn-registrar entrada" disabled>
         <?= icon('entrada', 'icon ic-entrada') ?><?= icon('saida', 'icon ic-saida') ?> <span id="btn-registrar-texto">CONFIRMAR ENTRADA</span>
@@ -144,6 +163,35 @@
         </div>
       </section>
     <?php endif; ?>
+    <section class="cartao presentes-portaria" id="presentes-portaria">
+      <details id="det-presentes" open>
+      <summary class="cartao-cabecalho"><h2>Dentro agora <span class="badge badge-info" id="presentes-total"><?= count($presentes) ?></span></h2>
+        <a class="dica" href="<?= e(url('/presenca', ['local_id' => $local['id'] ?? ''])) ?>">ver tudo</a></summary>
+      <?php if (!$presentes): ?>
+        <p class="dica">Ninguém registrado como presente neste local.</p>
+      <?php else: ?>
+      <form method="post" action="<?= e(url('/portaria/saida-rapida')) ?>" id="form-saida-rapida" data-confirmar-lote>
+        <?= csrf_field() ?>
+        <input type="hidden" name="voltar" value="/portaria">
+        <input type="search" class="filtro-presentes" id="filtro-presentes" placeholder="Filtrar por nome, empresa ou placa" autocomplete="off" aria-label="Filtrar presentes">
+        <ul class="lista-presentes" id="lista-presentes">
+          <?php foreach ($presentes as $p): $chave = $p['pessoa_id'] . '|' . $p['local_id']; ?>
+          <li data-busca="<?= e(mb_strtolower($p['pessoa_nome'] . ' ' . ($p['pessoa_empresa'] ?? '') . ' ' . ($p['veiculo_placa'] ?? ''))) ?>">
+            <label class="presente-sel"><input type="checkbox" name="itens[]" value="<?= e($chave) ?>" aria-label="Selecionar <?= e($p['pessoa_nome']) ?>"></label>
+            <span class="presente-info"><strong><?= e($p['pessoa_nome']) ?></strong>
+              <small><?= e(implode(' · ', array_filter([CATEGORIAS[$p['pessoa_categoria']] ?? '', $p['pessoa_empresa'], $p['veiculo_placa'], 'desde ' . substr(fmt_data_hora($p['entrada_em']), -5)]))) ?></small></span>
+            <button type="submit" class="btn btn-saida btn-sm" name="itens[]" value="<?= e($chave) ?>" data-saida-unica title="Registrar a saída de <?= e($p['pessoa_nome']) ?>"><?= icon('saida', 'icon icon-sm') ?> Saída</button>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+        <div class="presentes-acoes">
+          <label class="checkbox"><input type="checkbox" id="presentes-todos"> Todos visíveis</label>
+          <button type="submit" class="btn btn-saida" id="btn-saida-lote" disabled data-lote><?= icon('saida', 'icon icon-sm') ?> Saída dos selecionados (<span id="lote-qtd">0</span>)</button>
+        </div>
+      </form>
+      <?php endif; ?>
+      </details>
+    </section>
     <section class="cartao instrucoes">
       <h2 class="titulo-primario">Pronto para operar</h2>
       <ol class="passos">
@@ -227,6 +275,38 @@
       <button type="submit" class="btn btn-primario">Cadastrar</button>
     </div>
   </form>
+</dialog>
+
+<!-- Diálogo: atalhos de teclado -->
+<dialog id="dlg-atalhos" class="dialogo">
+  <h2>Atalhos de teclado da portaria</h2>
+  <table class="tabela tabela-atalhos">
+    <tbody>
+      <tr><td><kbd>F2</kbd></td><td>Buscar pessoa (troca a pessoa selecionada)</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>Buscar veículo</td></tr>
+      <tr><td><kbd>F3</kbd></td><td>Ler QR do convite pela câmera ou foto</td></tr>
+      <tr><td><kbd>F8</kbd> / <kbd>F9</kbd></td><td>Entrada / Saída (fora de campos de texto também <kbd>E</kbd> / <kbd>S</kbd>)</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Confirmar o registro (com alerta vermelho, leva até a caixa de ciência — marque com <kbd>Espaço</kbd>)</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Fecha a lista de resultados; de novo, limpa tudo para a próxima pessoa</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Esta ajuda</td></tr>
+    </tbody>
+  </table>
+  <p class="dica">Leitor de QR USB: com esta tela aberta, basta ler o convite — não precisa clicar em nenhum campo.</p>
+  <div class="dialogo-acoes"><button type="button" class="btn btn-primario" data-fechar>Entendi</button></div>
+</dialog>
+
+<!-- Diálogo: leitura de QR pela câmera -->
+<dialog id="dlg-qr" class="dialogo">
+  <h2>Ler QR do convite</h2>
+  <div class="qr-video" id="qr-video-box" hidden><video id="qr-video" playsinline muted></video><div class="qr-mira" aria-hidden="true"></div></div>
+  <p class="dica" id="qr-status">Aponte a câmera para o QR do convite.</p>
+  <label class="btn btn-secundario" id="qr-foto-label"><?= icon('camera', 'icon icon-sm') ?> Tirar foto do QR
+    <input type="file" accept="image/*" capture="environment" id="qr-foto" class="oculto-acessivel"></label>
+  <label class="campo"><span>Ou digite/cole o código</span><input type="text" id="qr-manual" class="mono" autocomplete="off" placeholder="SAG1.…"></label>
+  <div class="dialogo-acoes">
+    <button type="button" class="btn btn-secundario" data-fechar>Cancelar</button>
+    <button type="button" class="btn btn-primario" id="qr-manual-ok">Usar código</button>
+  </div>
 </dialog>
 
 <template id="tpl-tipos-foto">

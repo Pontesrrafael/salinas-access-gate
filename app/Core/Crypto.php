@@ -110,6 +110,17 @@ final class Crypto
     }
 
     /** Subchave derivada da chave do CPF (KDF libsodium, contexto próprio): não reutiliza a chave diretamente. */
+    /**
+     * Assinatura curta (HMAC-SHA256 truncado em 96 bits, base64url) para tokens impressos,
+     * como o QR do convite. Chave derivada da CPF_ENCRYPTION_KEY (subchave 3, contexto SAGQRV01).
+     */
+    public static function assinaturaCurta(string $mensagem): string
+    {
+        static $k = null;
+        $k ??= sodium_crypto_kdf_derive_from_key(32, 3, 'SAGQRV01', self::key('cpf_key'));
+        return rtrim(strtr(base64_encode(substr(hash_hmac('sha256', $mensagem, $k, true), 0, 12)), '+/', '-_'), '=');
+    }
+
     private static function chaveSegredos(): string
     {
         static $k = null;
