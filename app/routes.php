@@ -37,6 +37,9 @@ $router->get('/indicadores', [IndicadoresController::class, 'index']);
 $router->get('/portaria', [PortariaController::class, 'index']);
 $router->post('/portaria/local', [PortariaController::class, 'trocarLocal']);
 $router->post('/portaria/registrar', [PortariaController::class, 'registrar']);
+$router->post('/portaria/saida-rapida', [PortariaController::class, 'saidaRapida']);
+$router->get('/api/portaria/qr', [PortariaController::class, 'lerQr']);
+$router->get('/api/portaria/cache', [PortariaController::class, 'cacheOffline']);
 $router->get('/api/portaria/analise', [PortariaController::class, 'analise']);
 $router->get('/api/pessoas/busca', [PortariaController::class, 'buscarPessoas']);
 $router->get('/api/veiculos/busca', [PortariaController::class, 'buscarVeiculos']);
@@ -104,6 +107,10 @@ $router->post('/configuracoes/areas', [ConfiguracoesController::class, 'salvarAr
 $router->post('/configuracoes/ldap', [ConfiguracoesController::class, 'salvarLdap']);
 $router->post('/configuracoes/ldap/testar', [ConfiguracoesController::class, 'testarLdap']);
 $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'salvarArea']);
+
+// ---- Convite com QR ----
+$router->get('/solicitacoes/{id}/convite', [SolicitacoesController::class, 'convite']);
+$router->get('/convite/{id}/{assinatura}', [SolicitacoesController::class, 'conviteExterno']);
 
 // ---- Formulário público (sem login) ----
 $router->get('/solicitar-acesso', [PublicoController::class, 'formPublico']);

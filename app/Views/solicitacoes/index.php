@@ -75,6 +75,9 @@ slot('acoes', '<button type="button" class="btn btn-ouro" data-abrir="dlg-nova">
             <?php elseif (!$finalizada): ?>
               <span class="sub"><?= $aguardandoForm ? 'aguardando visitante' : 'aguardando autorizador' ?></span>
             <?php endif; ?>
+            <?php if ($s['status'] === 'aprovada' && $s['data_prevista'] >= date('Y-m-d')): ?>
+              <a class="btn btn-secundario btn-sm" href="<?= e(url('/solicitacoes/' . $s['id'] . '/convite')) ?>" title="Convite com QR para a portaria"><?= icon('qr', 'icon icon-sm') ?> Convite QR</a>
+            <?php endif; ?>
             <?php if ($s['pode_link'] && $aguardandoForm): ?>
               <button type="button" class="btn btn-fantasma btn-sm" title="Copiar link externo" data-copiar-link="<?= e('/solicitacoes/' . $s['id'] . '/link') ?>"><?= icon('link', 'icon icon-sm') ?></button>
             <?php endif; ?>

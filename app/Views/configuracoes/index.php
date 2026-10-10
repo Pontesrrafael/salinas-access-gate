@@ -11,6 +11,7 @@
     <h2>Regras da portaria</h2>
     <div class="grade-2 compacta">
       <label class="checkbox"><input type="checkbox" name="exigir_destino" value="1"<?= checked($cfg['exigir_destino'] ?? '0') ?>> <span>Exigir destino na entrada<br><small>Campo obrigatório no registro.</small></span></label>
+      <label class="checkbox"><input type="checkbox" name="alerta_sem_integracao_mina" value="1"<?= checked($cfg['alerta_sem_integracao_mina'] ?? '1') ?>> <span>Alertar visitante/terceiro sem integração na mina<br><small>Alerta vermelho na portaria; o porteiro confirma e fica registrado.</small></span></label>
       <label class="campo"><span>Alerta de permanência longa (horas)</span><input type="number" name="alerta_permanencia_horas" min="1" max="48" value="<?= e($cfg['alerta_permanencia_horas'] ?? '8') ?>">
         <small>Destaca visitantes/terceiros acima deste tempo em “Quem está no site”.</small></label>
     </div>

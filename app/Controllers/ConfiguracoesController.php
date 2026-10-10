@@ -43,6 +43,7 @@ final class ConfiguracoesController extends Controller
             'org_nome'                    => Http::nstr('org_nome', 200),
             'org_cnpj'                    => Http::nstr('org_cnpj', 20),
             'exigir_destino'              => Http::bool('exigir_destino') ? '1' : '0',
+            'alerta_sem_integracao_mina'  => Http::bool('alerta_sem_integracao_mina') ? '1' : '0',
             'alerta_permanencia_horas'    => (string) max(1, min(48, (int) Http::str('alerta_permanencia_horas', '8'))),
             'link_externo_validade_horas' => (string) max(1, min(720, (int) Http::str('link_externo_validade_horas', '72'))),
             'form_publico_ativo'          => Http::bool('form_publico_ativo') ? '1' : '0',

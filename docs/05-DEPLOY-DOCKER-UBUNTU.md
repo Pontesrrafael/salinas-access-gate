@@ -123,7 +123,7 @@ Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves 
 
 | Risco | Tratamento |
 |---|---|
-| HTTP sem criptografia na porta 222 | Uso restrito à rede interna. Para acesso externo, coloque um proxy reverso com HTTPS (Nginx/Traefik + Let's Encrypt) e use `SESSION_SECURE_COOKIE=true` |
+| HTTP sem criptografia na porta 222 | Uso restrito à rede interna. Para acesso externo, coloque um proxy reverso com HTTPS (Nginx/Traefik + Let's Encrypt) e use `SESSION_SECURE_COOKIE=true`. Com HTTPS, a portaria também ganha a câmera ao vivo para o QR e a abertura da tela sem conexão (MD-TI-SIS-CBA-007) |
 | Docker publica portas ignorando o UFW | Restrinja no Sophos o acesso à porta 222 à VLAN corporativa e às portarias, e a porta do BI (se publicada) ao IP do gateway de BI |
 | Banco publicado para BI | Opcional. O `sag_bi` só lê views sem dados sensíveis, tem no máximo 5 conexões e 120 s por consulta, e o `root@'%'` é removido |
 | Backup no próprio servidor | Copie `/var/backups/salinas-access-gate` para o NAS ou outro local fora do servidor (ex.: rsync noturno) |

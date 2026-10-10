@@ -10,10 +10,10 @@ use App\Core\Database;
 use App\Core\Http;
 use App\Core\Session;
 use App\Core\Uuid;
+use App\Services\ConviteQr;
 use App\Services\Portaria;
 use App\Services\Settings;
 use App\Services\Upload;
-use Throwable;
 
 final class PortariaController extends Controller
 {
@@ -45,6 +45,12 @@ final class PortariaController extends Controller
             [$localId]
         ) : [];
 
+        $presentes = $localId ? Database::all(
+            'SELECT pessoa_id, pessoa_nome, pessoa_categoria, pessoa_empresa, veiculo_placa, entrada_em, local_id
+               FROM vw_presenca_dentro WHERE local_id = ? ORDER BY entrada_em DESC LIMIT 300',
+            [$localId]
+        ) : [];
+
         // Responsável interno padrão = pessoa vinculada ao usuário logado
         $respPadrao = $u['pessoa_id']
             ? Database::one('SELECT id, nome, empresa, telefone_principal, email_principal FROM pessoas WHERE id = ? AND ativo = 1', [$u['pessoa_id']])
@@ -59,6 +65,7 @@ final class PortariaController extends Controller
             'locais'        => $locais,
             'local'         => $local,
             'recentes'      => $recentes,
+            'presentes'     => $presentes,
             'respPadrao'    => $respPadrao,
             'exigirDestino' => Settings::bool('exigir_destino'),
             'idem'          => $idem,
@@ -89,133 +96,155 @@ final class PortariaController extends Controller
     public function registrar(): void
     {
         $u = Auth::authorize('portaria.operar');
+        $ajax = Http::isAjax();
 
-        // Idempotência: evita registro duplicado por duplo clique / reenvio
-        $idem = Http::str('_idem');
-        if ($idem === '' || !hash_equals((string) Session::get('portaria_idem', ''), $idem)) {
-            Session::flash('aviso', 'Este formulário já foi enviado. Confira as movimentações recentes antes de registrar novamente.');
-            Http::redirect('/portaria');
+        // Idempotência: pelo navegador, registro_id (UUID gerado na tela; também usado na fila offline);
+        // sem JavaScript, token de uso único guardado na sessão.
+        if (!$ajax) {
+            $idem = Http::str('_idem');
+            if ($idem === '' || !hash_equals((string) Session::get('portaria_idem', ''), $idem)) {
+                Session::flash('aviso', 'Este formulário já foi enviado. Confira as movimentações recentes antes de registrar novamente.');
+                Http::redirect('/portaria');
+            }
+            Session::forget('portaria_idem');
         }
-        Session::forget('portaria_idem');
-
-        $localId = Http::str('local_id');
-        $sentido = Http::str('sentido');
-        $pessoaId = Http::str('pessoa_id');
-        $veiculoId = Http::str('veiculo_id') ?: null;
-        $solicitacaoId = Http::str('solicitacao_id') ?: null;
-
-        $local = Uuid::valid($localId) ? Database::one('SELECT * FROM locais WHERE id = ? AND ativo = 1', [$localId]) : null;
-        if (!$local) {
-            $this->falha('Selecione um local válido.', '/portaria');
-        }
-        if (!in_array($sentido, ['entrada', 'saida'], true)) {
-            $this->falha('Movimentação inválida.', '/portaria');
-        }
-        if (!Uuid::valid($pessoaId)) {
-            $this->falha('Selecione uma pessoa antes de registrar.', '/portaria');
-        }
-        if ($veiculoId !== null && !Uuid::valid($veiculoId)) {
-            $this->falha('Veículo inválido.', '/portaria');
-        }
-        if ($solicitacaoId !== null && !Uuid::valid($solicitacaoId)) {
-            $solicitacaoId = null;
-        }
-
-        $destino = Http::nstr('destino', 150);
-        if ($sentido === 'entrada' && Settings::bool('exigir_destino') && $destino === null) {
-            $this->falha('Informe o destino/setor da entrada.', '/portaria');
-        }
-
-        $analise = Portaria::analisar($pessoaId, $localId, $sentido, $veiculoId, $solicitacaoId);
-        if (isset($analise['erro'])) {
-            $this->falha($analise['erro'], '/portaria');
-        }
-        if ($analise['bloqueios']) {
-            Audit::log('portaria', $pessoaId, 'TENTATIVA_BLOQUEADA', [
-                'sentido' => $sentido, 'local_id' => $localId, 'motivos' => $analise['bloqueios'],
-            ]);
-            $this->falha(($sentido === 'entrada' ? 'Entrada bloqueada: ' : 'Saída não permitida: ') . implode(' ', $analise['bloqueios']), '/portaria');
-        }
-        if ($sentido === 'entrada' && $analise['exige_solicitacao']) {
-            $solicitacaoId = $solicitacaoId ?: $analise['solicitacao_sugerida'];
-        } elseif ($sentido === 'saida') {
-            $solicitacaoId = null;
-        }
-
-        // Responsável interno: dados de contato vêm do cadastro (não do navegador)
-        $respId = Http::str('responsavel_interno_id');
-        $respNome = Http::nstr('responsavel_interno', 150);
-        $resp = Uuid::valid($respId)
-            ? Database::one('SELECT id, nome, telefone_principal, email_principal FROM pessoas WHERE id = ?', [$respId])
-            : null;
 
         $fotos = Upload::files('fotos');
-        $tiposFoto = (array) ($_POST['fotos_tipo'] ?? []);
         if ($erros = Upload::validar($fotos)) {
-            $this->falha(implode(' ', $erros), '/portaria');
+            $this->responder($ajax, ['ok' => false, 'erro' => implode(' ', $erros)]);
         }
+        $sincronizacao = $ajax && Http::bool('sincronizacao');
+        $r = Portaria::registrar([
+            'local_id'               => Http::str('local_id'),
+            'sentido'                => Http::str('sentido'),
+            'pessoa_id'              => Http::str('pessoa_id'),
+            'veiculo_id'             => Http::str('veiculo_id'),
+            'solicitacao_id'         => Http::str('solicitacao_id'),
+            'destino'                => Http::str('destino'),
+            'responsavel_interno_id' => Http::str('responsavel_interno_id'),
+            'responsavel_interno'    => Http::str('responsavel_interno'),
+            'observacoes'            => Http::str('observacoes'),
+            'ciente_alertas'         => Http::bool('ciente_alertas'),
+            'registro_id'            => $ajax ? Http::str('registro_id') : '',
+            'offline_em'             => $sincronizacao ? Http::str('offline_em') : '',
+        ], $u, $fotos, (array) ($_POST['fotos_tipo'] ?? []));
 
-        $registroId = Uuid::v4();
-        $gravados = [];
-        try {
-            Database::transaction(function () use ($registroId, $pessoaId, $veiculoId, $localId, $solicitacaoId, $sentido, $destino, $resp, $respNome, $u, $fotos, $tiposFoto, &$gravados): void {
-                Database::insert('registros_acesso', [
-                    'id'                           => $registroId,
-                    'pessoa_id'                    => $pessoaId,
-                    'veiculo_id'                   => $veiculoId,
-                    'local_id'                     => $localId,
-                    'solicitacao_id'               => $solicitacaoId,
-                    'sentido'                      => $sentido,
-                    'destino'                      => $destino,
-                    'responsavel_interno'          => $resp['nome'] ?? $respNome,
-                    'responsavel_interno_id'       => $resp['id'] ?? null,
-                    'responsavel_interno_nome'     => $resp['nome'] ?? $respNome,
-                    'responsavel_interno_telefone' => $resp['telefone_principal'] ?? null,
-                    'responsavel_interno_email'    => $resp['email_principal'] ?? null,
-                    'porteiro_id'                  => $u['id'],
-                    'observacoes'                  => Http::nstr('observacoes', 2000),
-                ]);
-                if ($solicitacaoId !== null) {
-                    // Vincula a solicitação aprovada do dia à pessoa (somente se ainda livre)
-                    Database::run(
-                        "UPDATE solicitacoes_acesso SET pessoa_id = ?
-                          WHERE id = ? AND pessoa_id IS NULL AND status = 'aprovada' AND data_prevista = CURDATE()",
-                        [$pessoaId, $solicitacaoId]
-                    );
-                }
-                foreach ($fotos as $i => $f) {
-                    $meta = Upload::salvar($f);
-                    $gravados[] = $meta['storage_path'];
-                    $tipo = (string) ($tiposFoto[$i] ?? 'outra');
-                    Database::insert('registro_anexos', [
-                        'id'                 => Uuid::v4(),
-                        'registro_acesso_id' => $registroId,
-                        'storage_path'       => $meta['storage_path'],
-                        'tipo_foto'          => array_key_exists($tipo, TIPOS_FOTO) ? $tipo : 'outra',
-                        'nome_arquivo'       => $meta['nome_arquivo'],
-                        'mime_type'          => $meta['mime_type'],
-                        'tamanho_bytes'      => $meta['tamanho_bytes'],
-                        'sha256'             => $meta['sha256'],
-                        'criado_por'         => $u['id'],
-                    ]);
-                }
-            });
-        } catch (Throwable $e) {
-            foreach ($gravados as $rel) {
-                @unlink(Upload::dir() . '/' . $rel);
-            }
-            throw $e;
+        if ($r['ok'] && empty($r['duplicado']) && !$sincronizacao) {
+            Session::set('portaria_confirmacao', [
+                'titulo'    => Http::str('sentido') === 'entrada' ? 'Entrada registrada' : 'Saída registrada',
+                'descricao' => $r['pessoa_nome'] . ($r['placa'] ? ' · ' . $r['placa'] : '') . ' — ' . $r['local_nome'],
+                'avisos'    => $r['avisos'],
+                'fotos'     => count($fotos),
+            ]);
+            Session::flash('sucesso', 'Movimentação registrada.');
         }
+        $this->responder($ajax, $r);
+    }
 
-        $veic = $veiculoId ? Database::value('SELECT placa FROM veiculos WHERE id = ?', [$veiculoId]) : null;
-        Session::set('portaria_confirmacao', [
-            'titulo'    => $sentido === 'entrada' ? 'Entrada registrada' : 'Saída registrada',
-            'descricao' => $analise['pessoa']['nome'] . ($veic ? ' · ' . $veic : '') . ' — ' . $local['nome'],
-            'avisos'    => $analise['avisos'],
-            'fotos'     => count($fotos),
-        ]);
-        Session::flash('sucesso', 'Movimentação registrada.');
+    /** Resposta do registro: JSON para a tela (fetch) ou redirecionamento clássico. */
+    private function responder(bool $ajax, array $r): never
+    {
+        if ($ajax) {
+            unset($r['pessoa_nome'], $r['local_nome']);
+            Http::json($r, $r['ok'] ? 200 : 422);
+        }
+        if (!$r['ok']) {
+            $this->falha($r['erro'], '/portaria');
+        }
         Http::redirect('/portaria');
+    }
+
+    /** Saída rápida / em lote: itens[] = "pessoa_id|local_id". */
+    public function saidaRapida(): void
+    {
+        $u = Auth::authorize('portaria.operar');
+        $voltar = Http::str('voltar') === '/presenca' ? '/presenca' : '/portaria';
+        $itens = [];
+        foreach ((array) ($_POST['itens'] ?? []) as $v) {
+            [$p, $l] = array_pad(explode('|', (string) $v, 2), 2, '');
+            if (Uuid::valid($p) && Uuid::valid($l)) {
+                $itens[$p . $l] = ['pessoa_id' => strtolower($p), 'local_id' => strtolower($l)];
+            }
+        }
+        if (!$itens) {
+            $this->falha('Selecione ao menos uma pessoa para registrar a saída.', $voltar);
+        }
+        if (count($itens) > 200) {
+            $this->falha('Máximo de 200 saídas por vez.', $voltar);
+        }
+        $r = Portaria::saidaRapida(array_values($itens), $u);
+        if ($r['ok']) {
+            Session::flash('sucesso', $r['ok'] === 1 ? '1 saída registrada.' : $r['ok'] . ' saídas registradas.');
+        }
+        if ($r['falhas']) {
+            Session::flash('aviso', 'Não registradas: ' . implode(' ', $r['falhas']));
+        }
+        Http::redirect($voltar);
+    }
+
+    /** Leitura do QR do convite (leitor USB ou câmera). */
+    public function lerQr(): void
+    {
+        Auth::authorize('portaria.operar');
+        $solId = ConviteQr::validar(Http::str('t'));
+        if ($solId === null) {
+            Audit::log('portaria', null, 'QR_INVALIDO', ['inicio' => mb_substr(Http::str('t'), 0, 12)]);
+            Http::json(['erro' => 'QR inválido ou adulterado. Busque a pessoa pelo nome ou CPF.'], 422);
+        }
+        $s = ConviteQr::solicitacao($solId);
+        if (!$s) {
+            Http::json(['erro' => 'Solicitação do convite não encontrada.'], 404);
+        }
+        $erro = null;
+        if ($s['status'] !== 'aprovada') {
+            $erro = 'Convite de ' . $s['visitante_nome'] . ': solicitação "' . (STATUS_SOLICITACAO[$s['status']] ?? $s['status']) . '", não aprovada.';
+        } elseif ($s['data_prevista'] !== date('Y-m-d')) {
+            $erro = 'Convite de ' . $s['visitante_nome'] . ' é para ' . fmt_data($s['data_prevista']) . ', não para hoje.';
+        }
+        $pessoaId = ConviteQr::pessoaDaSolicitacao($s);
+        $cpf = Crypto::cpfDigits($s['visitante_doc']);
+        Audit::log('solicitacoes_acesso', $s['id'], 'QR_LIDO', ['pessoa_id' => $pessoaId, 'valido_hoje' => $erro === null]);
+        Http::json([
+            'erro'          => $erro,
+            'solicitacao'   => ['id' => $s['id'], 'visitante_nome' => $s['visitante_nome'], 'empresa' => $s['empresa'], 'area' => $s['area_nome'], 'local' => $s['local_nome']],
+            'pessoa_id'     => $pessoaId,
+            'cadastro'      => $pessoaId ? null : [
+                'nome' => $s['visitante_nome'], 'empresa' => $s['empresa'], 'categoria' => $s['tipo'] === 'terceiro' ? 'terceiro' : 'visitante',
+                'cpf' => strlen($cpf) === 11 && Crypto::cpfValido($cpf) ? Crypto::formatCpf($cpf) : '',
+            ],
+        ], $erro ? 409 : 200);
+    }
+
+    /**
+     * Pacote para operar sem conexão: pessoas ativas (sem CPF), veículos, solicitações aprovadas de hoje
+     * e quem está presente no local. Guardado no navegador do posto (IndexedDB) e apagado no logout.
+     */
+    public function cacheOffline(): void
+    {
+        Auth::authorize('portaria.operar');
+        $localId = Http::str('local_id');
+        if (!Uuid::valid($localId)) {
+            Http::json(['erro' => 'Local inválido'], 400);
+        }
+        $pessoas = Database::all(
+            "SELECT p.id, p.nome, p.categoria, p.empresa, p.matricula,
+                    EXISTS (SELECT 1 FROM documentos d WHERE d.pessoa_id = p.id
+                             AND d.validade < CURDATE()
+                             AND NOT EXISTS (SELECT 1 FROM documentos n WHERE n.pessoa_id = p.id AND n.tipo = d.tipo AND n.validade >= CURDATE())) AS doc_vencido
+               FROM pessoas p WHERE p.ativo = 1 ORDER BY p.nome LIMIT 20000"
+        );
+        Http::json([
+            'gerado_em'    => date('Y-m-d H:i:s'),
+            'local_id'     => $localId,
+            'pessoas'      => array_map(fn ($p) => [...$p, 'doc_vencido' => (int) $p['doc_vencido'] === 1,
+                                                    'categoria_label' => CATEGORIAS[$p['categoria']] ?? $p['categoria']], $pessoas),
+            'veiculos'     => Database::all('SELECT id, placa, tipo, marca_modelo, cor, empresa, tag FROM veiculos WHERE ativo = 1 ORDER BY placa LIMIT 20000'),
+            'solicitacoes' => Database::all(
+                "SELECT id, visitante_nome, empresa, pessoa_id, atividade_risco FROM solicitacoes_acesso
+                  WHERE status = 'aprovada' AND data_prevista = CURDATE()"
+            ),
+            'presentes'    => array_column(Database::all('SELECT pessoa_id FROM vw_presenca_dentro WHERE local_id = ?', [$localId]), 'pessoa_id'),
+        ]);
     }
 
     /* ------------------------------------------------------------------

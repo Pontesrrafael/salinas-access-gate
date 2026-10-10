@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\Http;
 use App\Core\Session;
 use App\Core\Uuid;
+use App\Services\ConviteQr;
 use App\Services\Settings;
 
 /**
@@ -212,6 +213,45 @@ final class SolicitacoesController extends Controller
             Http::json(['erro' => 'Sem permissão para copiar o link'], 403);
         }
         Http::json(['url' => Http::absoluteUrl('/solicitar-acesso/' . $s['token_externo'])]);
+    }
+
+    /** Convite imprimível com QR (para entregar ou enviar ao visitante). */
+    public function convite(string $id): void
+    {
+        Auth::authorize('solicitacoes.ver');
+        $this->uuidOu404($id);
+        $s = ConviteQr::solicitacao($id) ?? Http::abort(404, 'Solicitação não encontrada.');
+        if ($s['status'] !== 'aprovada') {
+            $this->falha('O convite com QR só existe para solicitações aprovadas.', '/solicitacoes');
+        }
+        $token = ConviteQr::token($s['id']);
+        $this->view('solicitacoes/convite', [
+            'titulo'    => 'Convite de acesso',
+            'descricao' => 'Apresente o QR na portaria · válido para ' . fmt_data($s['data_prevista']),
+            's'         => $s,
+            'token'     => $token,
+            'linkExterno' => Http::absoluteUrl(ConviteQr::caminhoPublico($s['id'])),
+            'vigente'   => ConviteQr::vigente($s),
+        ]);
+    }
+
+    /** Página pública do convite (link enviado ao visitante). Mostra só o essencial. */
+    public function conviteExterno(string $id, string $assinatura): void
+    {
+        header('X-Robots-Tag: noindex, nofollow');
+        header('Cache-Control: no-store');
+        $id = ConviteQr::validar(ConviteQr::PREFIXO . '.' . strtolower($id) . '.' . $assinatura);
+        $s = $id ? ConviteQr::solicitacao($id) : null;
+        $valido = $s !== null && ConviteQr::vigente($s);
+        if (!$valido) {
+            http_response_code(404);
+        }
+        $this->view('publico/convite', [
+            'titulo'  => 'Convite de acesso',
+            'largo'   => false,
+            's'       => $valido ? $s : null,
+            'token'   => $valido ? ConviteQr::token($s['id']) : null,
+        ], 'layout/simples');
     }
 
     /* ------------------------------------------------------------------ */
