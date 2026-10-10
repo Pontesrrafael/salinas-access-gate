@@ -28,7 +28,7 @@ WORKDIR /var/www/html
 COPY --chown=www-data:www-data . /var/www/html
 RUN set -eux; \
     sed -i 's/\r$//' docker/*.sh; chmod +x docker/*.sh; \
-    mkdir -p storage/uploads storage/logs storage/sessions storage/cache storage/importacao; \
+    mkdir -p storage/uploads storage/logs storage/sessions storage/cache storage/importacao storage/certs; \
     chown -R www-data:www-data storage; \
     rm -f .env
 

@@ -79,6 +79,98 @@ final class ConfiguracoesController extends Controller
         $this->ok('Área salva.', '/configuracoes');
     }
 
+    /**
+     * Liga/desliga e configura o AD/LDAP pela tela. Valores gravados em configuracoes ("ldap.*")
+     * sobrescrevem o .env. A senha da conta de serviço é cifrada e nunca vai para a auditoria.
+     */
+    public function salvarLdap(): void
+    {
+        $u = Auth::authorize('configuracoes.gerir');
+        $ligado = Http::bool('enabled');
+        $dn = static fn (string $k): string => trim((string) Http::nstr($k, 500));
+        $v = [
+            'enabled'        => $ligado ? '1' : '0',
+            'host'           => trim(preg_replace('/\s+/', ' ', (string) Http::nstr('host', 500))),
+            'port'           => (string) max(0, min(65535, (int) Http::str('port', '0'))),
+            'starttls'       => Http::bool('starttls') ? '1' : '0',
+            'tls_verify'     => Http::bool('tls_verify') ? '1' : '0',
+            'timeout'        => (string) max(1, min(60, (int) Http::str('timeout', '5'))),
+            'base_dn'        => $dn('base_dn'),
+            'users_base_dn'  => $dn('users_base_dn'),
+            'bind_dn'        => $dn('bind_dn'),
+            'auto_provision' => Http::bool('auto_provision') ? '1' : '0',
+            'sync_roles'     => Http::bool('sync_roles') ? '1' : '0',
+            'nested_groups'  => Http::bool('nested_groups') ? '1' : '0',
+        ];
+        foreach (['group_admin', 'group_supervisor', 'group_ssma', 'group_porteiro', 'group_seg_patrimonial'] as $g) {
+            $v[$g] = $dn($g);
+        }
+
+        if ($ligado) {
+            $erros = [];
+            if ($v['host'] === '') {
+                $erros[] = 'informe o servidor';
+            } elseif (!preg_match('~^(ldaps?://)?[A-Za-z0-9.\-]+(:\d+)?( (ldaps?://)?[A-Za-z0-9.\-]+(:\d+)?)*$~', $v['host'])) {
+                $erros[] = 'servidor inválido (ex.: ldaps://dc01.salinasgold.local)';
+            } elseif (!str_contains($v['host'], 'ldaps://') && $v['starttls'] !== '1' && !Ldap::cfg()['allow_insecure']) {
+                $erros[] = 'use ldaps:// ou marque StartTLS (LDAP sem criptografia é bloqueado)';
+            }
+            if ($v['base_dn'] === '' || !self::pareceDn($v['base_dn'])) {
+                $erros[] = 'Base DN inválido (ex.: DC=salinasgold,DC=local)';
+            }
+            foreach (['users_base_dn', 'bind_dn', 'group_admin', 'group_supervisor', 'group_ssma', 'group_porteiro', 'group_seg_patrimonial'] as $k) {
+                if ($v[$k] !== '' && !self::pareceDn($v[$k])) {
+                    $erros[] = "DN inválido em {$k}";
+                }
+            }
+            if ($v['auto_provision'] === '1' && $v['group_admin'] . $v['group_supervisor'] . $v['group_ssma'] . $v['group_porteiro'] === '') {
+                $erros[] = 'o provisionamento automático exige ao menos um grupo de perfil mapeado';
+            }
+            if ($erros) {
+                $this->falha('LDAP não salvo: ' . implode('; ', $erros) . '.', '/configuracoes');
+            }
+        }
+
+        // Certificado da CA (opcional): validado e gravado em storage/certs
+        $pem = trim((string) Http::nstr('ca_pem', 20000));
+        if ($pem !== '') {
+            if (!preg_match('/^-----BEGIN CERTIFICATE-----[A-Za-z0-9+\/=\s]+-----END CERTIFICATE-----$/', $pem)
+                || (function_exists('openssl_x509_parse') && openssl_x509_parse($pem) === false)) {
+                $this->falha('Certificado da CA inválido: cole o conteúdo PEM (BEGIN/END CERTIFICATE).', '/configuracoes');
+            }
+            $dir = \App\Core\App::root('storage/certs');
+            if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+                $this->falha('Não foi possível criar storage/certs.', '/configuracoes');
+            }
+            file_put_contents($dir . '/ldap-ca.pem', $pem . "\n", LOCK_EX);
+            $v['ca_cert'] = 'storage/certs/ldap-ca.pem';
+        }
+
+        foreach ($v as $k => $valor) {
+            Settings::set('ldap.' . $k, $valor, $u['id']);
+        }
+        $senha = (string) Http::input('bind_password', '');
+        $senhaAlterada = $senha !== '';
+        if ($senhaAlterada) {
+            Settings::set('ldap.bind_password_enc', \App\Core\Crypto::cifrarSegredo($senha), $u['id']);
+        }
+        Ldap::recarregar();
+        Audit::log('configuracoes', null, 'LDAP_CONFIG', [...$v, 'senha_servico_alterada' => $senhaAlterada, 'ca_atualizada' => $pem !== '']);
+
+        if (!$ligado) {
+            $this->ok('LDAP desligado. O login usa somente contas locais.', '/configuracoes');
+        }
+        if (Http::bool('testar') && extension_loaded('ldap')) {
+            $this->testarLdap();
+        }
+        $this->ok('Configuração LDAP salva.', '/configuracoes');
+    }
+
+    private static function pareceDn(string $dn): bool
+    {
+        return (bool) preg_match('/^[A-Za-z][A-Za-z0-9-]*=[^,=]+(,\s*[A-Za-z][A-Za-z0-9-]*=[^,=]+)*$/u', $dn);
+    }
+
     public function testarLdap(): void
     {
         Auth::authorize('configuracoes.gerir');

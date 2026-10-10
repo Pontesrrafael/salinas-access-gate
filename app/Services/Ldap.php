@@ -14,16 +14,59 @@ use RuntimeException;
  *  2. A senha do usuário é validada com um bind usando o DN encontrado.
  *  3. Grupos (inclusive aninhados, no AD) definem perfil e Segurança Patrimonial.
  *
- * Nenhuma senha de rede é armazenada no banco. Configuração apenas via .env.
+ * Nenhuma senha de rede de usuário é armazenada no banco.
+ * Configuração: tela Configurações (tabela configuracoes, chaves "ldap.*") com o .env como padrão.
+ * A senha da conta de serviço definida pela tela fica cifrada (Crypto::cifrarSegredo).
  */
 final class Ldap
 {
     private const UAC_DESATIVADA = 0x2;
     private const OID_CADEIA = '1.2.840.113556.1.4.1941'; // LDAP_MATCHING_RULE_IN_CHAIN (AD)
 
+    /** Campos editáveis pela tela (chave em configuracoes = "ldap." + nome). */
+    public const CAMPOS_TELA = [
+        'enabled' => 'bool', 'host' => 'str', 'port' => 'int', 'starttls' => 'bool', 'tls_verify' => 'bool',
+        'ca_cert' => 'str', 'timeout' => 'int', 'base_dn' => 'str', 'users_base_dn' => 'str', 'bind_dn' => 'str',
+        'auto_provision' => 'bool', 'sync_roles' => 'bool', 'nested_groups' => 'bool',
+        'group_admin' => 'str', 'group_supervisor' => 'str', 'group_ssma' => 'str', 'group_porteiro' => 'str',
+        'group_seg_patrimonial' => 'str',
+    ];
+
+    private static ?array $cfgCache = null;
+
+    /** Configuração efetiva: .env como base, sobrescrita pelo que foi salvo na tela. */
     public static function cfg(): array
     {
-        return App::config('ldap');
+        if (self::$cfgCache !== null) {
+            return self::$cfgCache;
+        }
+        $c = App::config('ldap');
+        try {
+            $s = Settings::all();
+        } catch (\Throwable) {
+            $s = []; // banco indisponível ou tabela ainda não migrada: usa só o .env
+        }
+        foreach (self::CAMPOS_TELA as $k => $tipo) {
+            $v = $s['ldap.' . $k] ?? null;
+            if ($v === null) {
+                continue;
+            }
+            $c[$k] = match ($tipo) { 'bool' => $v === '1', 'int' => (int) $v, default => (string) $v };
+        }
+        if (isset($s['ldap.bind_password_enc']) && $s['ldap.bind_password_enc'] !== '') {
+            $c['bind_password'] = (string) (\App\Core\Crypto::decifrarSegredo($s['ldap.bind_password_enc']) ?? '');
+        }
+        if (($c['ca_cert'] ?? '') !== '' && !str_starts_with($c['ca_cert'], '/') && !preg_match('~^[A-Za-z]:[\\\\/]~', $c['ca_cert'])) {
+            $c['ca_cert'] = App::root($c['ca_cert']); // caminho relativo à raiz do projeto (ex.: storage/certs/ldap-ca.pem)
+        }
+        $c['configurado_pela_tela'] = isset($s['ldap.enabled']);
+        return self::$cfgCache = $c;
+    }
+
+    /** Descarta o cache após salvar pela tela. */
+    public static function recarregar(): void
+    {
+        self::$cfgCache = null;
     }
 
     public static function habilitado(): bool

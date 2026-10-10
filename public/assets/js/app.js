@@ -359,6 +359,16 @@
     }));
   })();
 
+  /* ---------------- Configurações: LDAP liga/desliga ---------------- */
+  (() => {
+    const liga = $('[data-ldap-liga]');
+    const campos = $('[data-ldap-campos]');
+    if (!liga || !campos) return;
+    const sync = () => { campos.hidden = !liga.checked; };
+    liga.addEventListener('change', sync);
+    sync();
+  })();
+
   /* ---------------- Portaria ---------------- */
   const form = $('#form-portaria');
   if (!form) { return; }

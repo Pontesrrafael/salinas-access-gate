@@ -60,6 +60,14 @@ final class Auth
             $chave = substr($chave, (int) strrpos($chave, '\\') + 1);
         }
         $u = Database::one('SELECT * FROM usuarios WHERE email = ? OR (ldap_usuario IS NOT NULL AND ldap_usuario = ?) LIMIT 1', [$chave, $chave]);
+        if ($u === null && $chave !== '' && !str_contains($chave, '@')) {
+            // Usuário sem e-mail: "rafael.pontes" encontra rafael.pontes@dominio, desde que seja único
+            $candidatos = Database::all(
+                "SELECT * FROM usuarios WHERE email LIKE ? ESCAPE '!' LIMIT 2",
+                [str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $chave) . '@%']
+            );
+            $u = count($candidatos) === 1 ? $candidatos[0] : null;
+        }
 
         // Conta vinculada ao AD: a senha é validada no diretório
         if ($u && $u['auth_origem'] === 'ldap') {

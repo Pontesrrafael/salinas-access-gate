@@ -9,16 +9,18 @@ Sistema de controle de acesso (portaria) da **Salinas Gold Mineração LTDA**, r
 | Front-end | TanStack Start + React | PHP renderizado no servidor + JS puro (sem build, sem Node) |
 | Back-end | Supabase (RLS, Edge Functions) | PHP 8.2+ (imagem Docker: 8.5) · MVC próprio, sem dependências externas |
 | Banco | PostgreSQL (Supabase) | MariaDB 10.4+ (Docker: 11.8 LTS) / MySQL 8 |
-| Autenticação | Supabase Auth | Sessão PHP + bcrypt (cost 12) + bloqueio por tentativas · **opcional: Active Directory (LDAPS)** |
+| Autenticação | Supabase Auth | Sessão PHP + bcrypt (cost 12) + bloqueio por tentativas · login por e-mail **ou usuário** · **opcional: Active Directory (LDAPS), ligado pela tela** |
 | Regras de acesso | RLS no banco + validações no navegador | RBAC no servidor + triggers append-only no banco |
 | CPF | Texto puro mascarado por view | **Cifrado (libsodium) + índice cego HMAC-SHA256** |
 | Fotos | Supabase Storage | `storage/uploads` fora da pasta pública, servidas só com login |
+| BI | — | Views `bi_*` em modelo estrela + dicionário no banco + usuário `sag_bi` somente leitura |
 
 ## Módulos
 
 Painel · **Indicadores** (dashboard com Modo TV) · Portaria (entrada/saída, fotos, cadastro rápido) · Solicitações de acesso (interna, link externo 72 h, formulário público)
 · Verificação SSMA · Quem está no site (+ lista de evacuação para impressão) · Pessoas e documentos (ASO, NRs, Integração, CNH)
-· Veículos · Locais · Relatórios (CSV) · Auditoria · Usuários · Configurações e áreas · `/saude` para monitoramento (Zabbix).
+· Veículos · Locais · Relatórios (CSV) · Auditoria · Usuários · Configurações (áreas e AD) · `/saude` para monitoramento (Zabbix).
+O logo da Salinas Gold no menu e no Modo TV é o botão de início (leva ao Painel).
 
 ## Instalação em servidor Linux com Docker
 
@@ -29,11 +31,22 @@ O instalador:
 - instala o Docker, se faltar;
 - sobe a aplicação (PHP 8.5 + Apache) e o MariaDB 11.8 LTS;
 - gera os segredos;
-- cria o primeiro admin;
+- cria o primeiro admin e o usuário de consulta do BI (`sag_bi`);
 - agenda a expiração de solicitações e o backup diário.
 
 Também dá para instalar direto do GitHub, no console do Ubuntu, com um token de leitura: veja a seção 3 do runbook.
 Para atualizar, rode o mesmo `.bat` ou o mesmo comando. Detalhes no runbook `docs/05-DEPLOY-DOCKER-UBUNTU.md` (MD-TI-SIS-CBA-005).
+
+## BI (Power BI, Metabase, Excel)
+
+O banco tem uma camada própria para BI (migração `004_bi.sql`):
+- **Dados prontos:** dimensões (`bi_dim_*`), fatos (`bi_fato_*`, `bi_presenca_atual`) e resumo diário (`bi_agg_diario_local`), sem CPF, RG, telefone ou e-mail.
+- **Banco comentado:** toda tabela e coluna tem `COMMENT`, e a tabela `bi_dicionario` descreve cada view e coluna.
+- **Usuário `sag_bi`:** só `SELECT` nas views, até 5 conexões e consultas de no máximo 120 s.
+  - No Docker ele é criado automaticamente. Para acesso pela rede: `SAG_BI_PORTA=3306`.
+  - Sem Docker: `php bin/console.php bi-sql`.
+
+Guia, modelo estrela, consultas de exemplo e dicionário completo em [docs/06-BI-DICIONARIO-DE-DADOS.md](docs/06-BI-DICIONARIO-DE-DADOS.md) (MD-TI-SIS-CBA-006).
 
 ## Tema claro e escuro
 
@@ -112,7 +125,8 @@ php -d post_max_size=72M -d upload_max_filesize=8M -S localhost:8080 -t public p
 No Windows com XAMPP, basta dar dois cliques em `bin\INSTALAR-E-INICIAR.bat`. Guia completo do Windows em [docs/01-INSTALACAO-LOCAL-WINDOWS.md](docs/01-INSTALACAO-LOCAL-WINDOWS.md).
 Deploy no Virtualmin em [docs/02-DEPLOY-VIRTUALMIN-UBUNTU.md](docs/02-DEPLOY-VIRTUALMIN-UBUNTU.md).
 Migração dos dados do Supabase em [docs/03-MIGRACAO-SUPABASE.md](docs/03-MIGRACAO-SUPABASE.md).
-Integração com Active Directory em [docs/04-INTEGRACAO-AD-LDAP.md](docs/04-INTEGRACAO-AD-LDAP.md).
+Integração com Active Directory (opcional, liga/desliga em *Configurações*) em [docs/04-INTEGRACAO-AD-LDAP.md](docs/04-INTEGRACAO-AD-LDAP.md).
+Camada de BI e dicionário de dados em [docs/06-BI-DICIONARIO-DE-DADOS.md](docs/06-BI-DICIONARIO-DE-DADOS.md).
 
 ## Estrutura
 

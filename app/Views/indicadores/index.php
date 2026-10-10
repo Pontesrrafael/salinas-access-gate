@@ -26,7 +26,7 @@ $dadosConteudo = array_intersect_key(get_defined_vars(), array_flip([
 ?>
 <?php if ($modoTv): ?>
 <header class="tv-topo">
-  <img src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração" class="tv-logo" width="150" height="50">
+  <a href="<?= e(url('/painel')) ?>" class="tv-logo-link" title="Ir para o início (Painel)" aria-label="Salinas Gold Mineração — ir para o início"><img src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="" class="tv-logo" width="150" height="50"></a>
   <div class="tv-titulo">
     <h1>Controle de Acesso · Indicadores</h1>
     <p><?= e($localNome ?? 'Todos os locais') ?></p>

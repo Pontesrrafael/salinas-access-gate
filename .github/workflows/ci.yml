@@ -1,4 +1,4 @@
-# Integração contínua: sintaxe (PHP 8.2 e 8.5), scripts shell e instalação Docker completa com teste de saúde.
+# Integração contínua: sintaxe (PHP 8.2 e 8.5), scripts shell e instalação Docker completa com teste de saúde e do usuário de BI.
 name: CI
 
 on:
@@ -50,6 +50,19 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8222$u")
             echo "$u -> $code"; [ "$code" != "200" ]
           done
+      - name: Usuário de BI vê só as views bi_* (somente leitura)
+        run: |
+          cd /opt/salinas-access-gate
+          bi() { printf '%s\n' "$1" | sudo bash -c 'set -a; . docker/bi.env; set +a; docker compose exec -T -e SAG_BI_SENHA db sh -c "exec mariadb -h127.0.0.1 -usag_bi -p\"\$SAG_BI_SENHA\" salinas_access_gate -N"'; }
+          deve_negar() { if bi "$1" 2>/dev/null; then echo "FALHA: permitido -> $1"; exit 1; else echo "negado (ok): $1"; fi; }
+          sudo docker compose exec -T app php bin/console.php bi-verificar
+          [ "$(bi 'SELECT COUNT(*) FROM bi_dicionario')" -gt 0 ]
+          bi 'SELECT COUNT(*) FROM bi_fato_movimentacao'
+          bi 'SELECT COUNT(*) FROM bi_presenca_atual'
+          deve_negar 'SELECT * FROM pessoas LIMIT 1'
+          deve_negar 'SELECT senha_hash FROM usuarios LIMIT 1'
+          deve_negar 'DELETE FROM bi_dicionario'
+          deve_negar 'CREATE TABLE x (i INT)'
       - name: Logs (em caso de falha)
         if: failure()
         run: sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml logs --tail=200

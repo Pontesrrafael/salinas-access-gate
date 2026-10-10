@@ -1,13 +1,14 @@
 # Integração com Active Directory (LDAP)
 
-**Documento:** MD-TI-SIS-CBA-004 · Rev. 00 · Salinas Access Gate
+**Documento:** MD-TI-SIS-CBA-004 · Rev. 01 · Salinas Access Gate
 
-A integração é **opcional**. Com `LDAP_ENABLED=false` todos os usuários são locais.
-Quando ela está ligada, cada usuário pode ser:
+A integração é **opcional** e vem **desligada**: sem AD, todos os usuários são locais e o sistema funciona normalmente.
+Ela pode ser ligada e desligada pela tela **Configurações → Active Directory / LDAP** (seção 3), sem editar arquivos nem reiniciar.
+Quando está ligada, cada usuário pode ser:
 
 | Tipo | Como entra | Senha |
 |---|---|---|
-| **Conta local** | e-mail + senha do sistema | bcrypt no banco, com troca obrigatória no 1º acesso |
+| **Conta local** | e-mail **ou só o usuário** (`rafael.pontes` para `rafael.pontes@salinasgold.com.br`) + senha do sistema | bcrypt no banco, com troca obrigatória no 1º acesso |
 | **Active Directory** | usuário de rede (`rafael.pontes`, `SALINASGOLD\rafael.pontes` ou e-mail) | validada no AD a cada login. **Nenhuma senha de rede é gravada** |
 
 > Mantenha sempre **um admin local** como conta de contingência. Ele entra mesmo com o AD fora do ar.
@@ -48,7 +49,30 @@ Set-ADUser rafael.pontes -EmployeeID "1001"
 **LDAPS (porta 636):** o DC precisa de um certificado de servidor emitido pela CA interna (AD CS, modelo *Domain Controller Authentication* ou *Kerberos Authentication*).
 Exporte o certificado **da CA raiz** em Base-64 (`.cer`/`.pem`) para configurar `LDAP_CA_CERT`.
 
-## 3. Configuração (`.env` do servidor)
+## 3. Configuração
+
+### 3.1 Pela tela (recomendado)
+
+Em **Configurações → Active Directory / LDAP** (perfil admin):
+
+1. Marque **Usar o Active Directory para login**. Os campos aparecem.
+2. Preencha:
+   - **Conexão:** servidores (`ldaps://dc01... ldaps://dc02...`), porta (0 = padrão), StartTLS, verificação do certificado e tempo limite.
+   - **Certificado da CA interna:** cole o PEM. Ele é validado e gravado em `storage/certs/ldap-ca.pem`, que entra no backup.
+   - **Diretório:** Base DN, OU dos usuários, DN da conta de serviço e senha da conta de serviço.
+   - **Perfis:** provisionamento automático, perfil pelos grupos, grupos aninhados e os 5 grupos.
+3. Deixe **Testar a conexão ao salvar** marcado e clique em **Salvar LDAP**. O resultado (tempo, contas encontradas, grupos encontrados) aparece no próprio cartão.
+
+**Regras de segurança da tela:**
+- A senha da conta de serviço é gravada **cifrada** no banco (libsodium, chave derivada da `CPF_ENCRYPTION_KEY`; se essa chave for trocada, digite a senha de novo). Ela nunca é exibida e nunca vai para a auditoria. Deixar o campo **em branco mantém a senha atual**.
+- Os dados são validados antes de gravar: formato de servidor e DNs. LDAP sem criptografia é recusado, salvo com `LDAP_ALLOW_INSECURE=true` no `.env`. O provisionamento automático exige ao menos um grupo de perfil.
+- Toda alteração gera o registro `LDAP_CONFIG` na Auditoria, com os parâmetros e sem a senha.
+- **Desligar** mantém os parâmetros gravados, para religar depois com um clique. As contas locais continuam entrando, inclusive com o AD fora do ar.
+- **Precedência:** o que foi salvo na tela vale sobre o `.env`. O rodapé do cartão indica a origem atual (*tela* ou *.env*).
+
+### 3.2 Pelo `.env` do servidor (alternativa / padrão)
+
+Os valores abaixo valem enquanto nada for salvo na tela. Atributos avançados (`LDAP_USER_FILTER`, `LDAP_ATTR_*`, `LDAP_ALLOW_INSECURE`) existem só no `.env`.
 
 ```ini
 LDAP_ENABLED=true
@@ -87,7 +111,7 @@ php bin/console.php ldap-buscar rafael     # pesquisa contas
 php bin/console.php verificar              # inclui o status do AD
 ```
 
-Também é possível testar pela tela **Configurações → Active Directory / LDAP → Testar conexão**.
+Também é possível testar pela tela **Configurações → Active Directory / LDAP → Testar conexão**, ou deixar marcado *Testar a conexão ao salvar*.
 
 ## 5. Uso no dia a dia
 
