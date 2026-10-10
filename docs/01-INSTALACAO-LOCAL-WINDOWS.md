@@ -18,8 +18,8 @@ Os itens 1 a 5 abaixo descrevem o mesmo processo de forma manual.
 
 | Componente | Versão | Observação |
 |---|---|---|
-| PHP | 8.1 ou superior (8.2 recomendado) | precisa das extensões `pdo_mysql`, `sodium`, `mbstring`, `fileinfo` e `curl` |
-| Banco | MariaDB 10.6+ ou MySQL 8.0.16+ | |
+| PHP | 8.2 ou superior (8.4/8.5 recomendado) | precisa das extensões `pdo_mysql`, `sodium`, `mbstring`, `fileinfo` e `curl` |
+| Banco | MariaDB 10.4+ (a do XAMPP 8.2) ou MySQL 8.0.16+ | recomendado: MariaDB 11.8 LTS |
 | Navegador | Chrome ou Edge atualizado | |
 
 A forma mais simples de obter PHP + MariaDB no Windows é o **XAMPP 8.2** (gratuito). Laragon ou PHP e MariaDB instalados separadamente também funcionam, porque o sistema não depende do Apache do pacote.

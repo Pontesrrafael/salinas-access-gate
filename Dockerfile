@@ -1,16 +1,18 @@
-# Salinas Access Gate — imagem da aplicação (PHP 8.3 + Apache)
+# Salinas Access Gate — imagem da aplicação (PHP 8.5 + Apache, Debian 13 trixie)
 # Build: docker compose build   ·   Doc: docs/05-DEPLOY-DOCKER-UBUNTU.md
-FROM php:8.3-apache-bookworm
+# Mantenha esta versão igual à de docker/instalar.sh (função puxar). O Dependabot propõe atualizações.
+FROM php:8.5-apache-trixie
 
 ENV TZ=America/Cuiaba \
     APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-# Extensões: pdo_mysql, ldap (AD opcional), opcache. sodium, mbstring, fileinfo e curl já vêm na imagem oficial.
+# Extensões: pdo_mysql e ldap (AD opcional). sodium, mbstring, fileinfo, curl e (no PHP 8.5) OPcache já vêm na imagem oficial.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends tzdata libldap2-dev; \
     docker-php-ext-configure ldap --with-libdir="lib/$(uname -m)-linux-gnu"; \
-    docker-php-ext-install -j"$(nproc)" pdo_mysql ldap opcache; \
+    docker-php-ext-install -j"$(nproc)" pdo_mysql ldap; \
+    php -m | grep -qi "Zend OPcache" || docker-php-ext-install opcache; \
     rm -rf /var/lib/apt/lists/*; \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone; \
     cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"; \

@@ -1,4 +1,4 @@
-# Salinas Access Gate — PHP 8 + MariaDB
+# Salinas Access Gate
 
 Sistema de controle de acesso (portaria) da **Salinas Gold Mineração LTDA**, reescrito para rodar
 **sem Lovable Cloud / Supabase**: primeiro localmente (Windows) e depois em servidor
@@ -7,8 +7,8 @@ Sistema de controle de acesso (portaria) da **Salinas Gold Mineração LTDA**, r
 | Item | Antes (Lovable) | Agora |
 |---|---|---|
 | Front-end | TanStack Start + React | PHP renderizado no servidor + JS puro (sem build, sem Node) |
-| Back-end | Supabase (RLS, Edge Functions) | PHP 8.1+ MVC próprio, sem dependências externas |
-| Banco | PostgreSQL (Supabase) | MariaDB 10.6+ / MySQL 8 |
+| Back-end | Supabase (RLS, Edge Functions) | PHP 8.2+ (imagem Docker: 8.5) · MVC próprio, sem dependências externas |
+| Banco | PostgreSQL (Supabase) | MariaDB 10.4+ (Docker: 11.8 LTS) / MySQL 8 |
 | Autenticação | Supabase Auth | Sessão PHP + bcrypt (cost 12) + bloqueio por tentativas · **opcional: Active Directory (LDAPS)** |
 | Regras de acesso | RLS no banco + validações no navegador | RBAC no servidor + triggers append-only no banco |
 | CPF | Texto puro mascarado por view | **Cifrado (libsodium) + índice cego HMAC-SHA256** |
@@ -27,7 +27,7 @@ O script empacota a pasta, envia por SSH e roda `docker/instalar.sh` no servidor
 
 O instalador:
 - instala o Docker, se faltar;
-- sobe a aplicação (PHP 8.3 + Apache) e o MariaDB 10.11;
+- sobe a aplicação (PHP 8.5 + Apache) e o MariaDB 11.8 LTS;
 - gera os segredos;
 - cria o primeiro admin;
 - agenda a expiração de solicitações e o backup diário.
@@ -141,4 +141,4 @@ docs/            Instalação, deploy e migração
 
 ## Requisitos
 
-PHP **8.1+** (recomendado 8.2/8.3) com `pdo_mysql`, `sodium`, `mbstring`, `fileinfo`, `curl` (opcional, para o Turnstile), `ldap` (opcional, para o AD) · MariaDB **10.6+** ou MySQL **8.0.16+**.
+PHP **8.2+** (recomendado 8.4/8.5) com `pdo_mysql`, `sodium`, `mbstring`, `fileinfo`, `curl` (opcional, para o Turnstile), `ldap` (opcional, para o AD) · MariaDB **10.4+** (a do XAMPP 8.2; recomendado **11.8 LTS**) ou MySQL **8.0.16+**.

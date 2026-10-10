@@ -2,7 +2,7 @@
 
 **Documento:** MD-TI-SIS-CBA-005 · Rev. 00 · Salinas Access Gate
 **Servidor:** `192.168.4.5` (Ubuntu Server) · **Porta:** `222/TCP` (HTTP)
-**Pilha:** Docker Compose com `app` (PHP 8.3 + Apache) e `db` (MariaDB 10.11)
+**Pilha:** Docker Compose com `app` (PHP 8.5 + Apache) e `db` (MariaDB 11.8 LTS)
 **Horário de referência:** Horário de Mato Grosso – UTC-4
 
 ---
@@ -10,7 +10,7 @@
 ## 1. Arquitetura
 
 ```
-Navegador ──HTTP :222──► [app] PHP 8.3 + Apache ──rede interna──► [db] MariaDB 10.11
+Navegador ──HTTP :222──► [app] PHP 8.5 + Apache ──rede interna──► [db] MariaDB 11.8
                            volume "arquivos"  (fotos, sessões, logs)  volume "banco"
 ```
 
@@ -37,16 +37,16 @@ O repositório é **privado**. Por isso o download usa um **token de leitura** d
 **Criar o token (uma vez):**
 1. GitHub → *Settings* → *Developer settings* → *Personal access tokens* → *Fine-grained tokens* → *Generate new token*.
 2. *Expiration*: 7 dias.
-3. *Repository access*: *Only select repositories* → `physical-entry-flow`.
+3. *Repository access*: *Only select repositories* → `salinas-access-gate`.
 4. *Permissions* → *Contents*: **Read-only**. Gere o token e copie.
 
 **Instalar ou atualizar:** cole no terminal do servidor.
 
 ```bash
-read -rsp "Token GitHub: " GT && echo && rm -rf /tmp/sag && mkdir -p /tmp/sag && curl -fSL -H "Authorization: Bearer $GT" https://api.github.com/repos/Pontesrrafael/physical-entry-flow/tarball/php-mariadb | tar -xz -C /tmp/sag --strip-components=1 && unset GT && sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag
+read -rsp "Token GitHub: " GT && echo && rm -rf /tmp/sag && mkdir -p /tmp/sag && curl -fSL -H "Authorization: Bearer $GT" https://api.github.com/repos/Pontesrrafael/salinas-access-gate/tarball/main | tar -xz -C /tmp/sag --strip-components=1 && unset GT && sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag
 ```
 
-O comando baixa a versão mais recente do branch `php-mariadb` e executa `docker/instalar.sh`. Para atualizar, rode o mesmo comando: segredos, banco e fotos são preservados. Revogue o token depois do uso.
+O comando baixa a versão mais recente do branch `main` e executa `docker/instalar.sh`. Para atualizar, rode o mesmo comando: segredos, banco e fotos são preservados. Revogue o token depois do uso.
 
 ## 3.2 Instalação pelo PuTTY (passo a passo)
 

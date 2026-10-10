@@ -110,7 +110,7 @@ try {
 switch ($cmd) {
     case 'verificar':
         out('Verificação do ambiente — Salinas Access Gate');
-        version_compare(PHP_VERSION, '8.1.0', '>=') ? ok('PHP ' . PHP_VERSION) : falhou('PHP ' . PHP_VERSION . ' (mínimo 8.1)');
+        version_compare(PHP_VERSION, '8.2.0', '>=') ? ok('PHP ' . PHP_VERSION) : falhou('PHP ' . PHP_VERSION . ' (mínimo 8.2)');
         foreach (['pdo_mysql', 'sodium', 'mbstring', 'fileinfo', 'json'] as $ext) {
             extension_loaded($ext) ? ok("extensão {$ext}") : falhou("extensão {$ext} ausente (habilite no php.ini)");
         }

@@ -100,11 +100,22 @@ fi
 printf 'SAG_PORTA=%s\n' "$PORTA" > .env
 chmod 600 .env
 
+etapa "Imagens base"
+# Docker Hub limita downloads anônimos (erro 429). Se falhar, usa os mirrors oficiais (Google e AWS) e re-etiqueta.
+puxar() {
+  local img="$1" nome="${1%%:*}" tag="${1##*:}"
+  docker pull -q "$img" >/dev/null 2>&1 && { echo "ok  $img"; return 0; }
+  for m in "mirror.gcr.io/library/$nome:$tag" "public.ecr.aws/docker/library/$nome:$tag"; do
+    if docker pull -q "$m" >/dev/null 2>&1; then docker tag "$m" "$img"; echo "ok  $img (via ${m%%/*})"; return 0; fi
+  done
+  docker image inspect "$img" >/dev/null 2>&1 && { aviso "Sem acesso aos registros; usando $img já baixada."; return 0; }
+  falha "Não foi possível baixar $img (Docker Hub e mirrors). Verifique a internet do servidor."
+}
+puxar php:8.5-apache-trixie
+puxar mariadb:11.8
+
 etapa "Build e inicialização (pode levar alguns minutos na 1ª vez)"
-if ! docker compose build --pull; then
-  aviso "Não foi possível consultar o Docker Hub (rede ou limite de downloads). Tentando com as imagens já baixadas..."
-  docker compose build || falha "Build falhou. Verifique o acesso à internet (Docker Hub) e rode novamente; se for limite de downloads (erro 429), aguarde alguns minutos."
-fi
+docker compose build || falha "Build falhou (veja as mensagens acima)."
 docker compose up -d --remove-orphans
 
 etapa "Aguardando a aplicação ficar saudável"

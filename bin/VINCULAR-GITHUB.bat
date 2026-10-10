@@ -1,11 +1,11 @@
 @echo off
-rem Salinas Access Gate - liga esta pasta ao branch php-mariadb do GitHub.
+rem Salinas Access Gate - liga esta pasta ao repositorio salinas-access-gate (branch main) do GitHub.
 rem Preserva .env, storage/ e demais arquivos locais (ignorados pelo .gitignore).
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0.."
-set REPO=https://github.com/Pontesrrafael/physical-entry-flow.git
-set BRANCH=php-mariadb
+set REPO=https://github.com/Pontesrrafael/salinas-access-gate.git
+set BRANCH=main
 
 where git >nul 2>nul
 if errorlevel 1 (
@@ -39,5 +39,5 @@ echo.
 git status -sb
 echo.
 echo Pronto. No GitHub Desktop use: File ^> Add local repository ^> %CD%
-start "" https://github.com/Pontesrrafael/physical-entry-flow/tree/%BRANCH%
+start "" https://github.com/Pontesrrafael/salinas-access-gate/tree/%BRANCH%
 pause

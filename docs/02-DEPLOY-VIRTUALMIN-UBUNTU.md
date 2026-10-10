@@ -20,7 +20,7 @@
 ```bash
 apt update
 apt install -y php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-curl php8.3-intl php8.3-ldap   # Ubuntu 24.04 (ldap: opcional, p/ AD)
-# Ubuntu 22.04 (PHP 8.1): apt install -y php8.1-fpm php8.1-mysql php8.1-mbstring php8.1-curl php8.1-intl
+# Ubuntu 22.04 traz PHP 8.1 (sem suporte desde 01/2026): use Ubuntu 24.04 ou o PPA ondrej/php (php8.4-*)
 php -m | grep -Ei "sodium|pdo_mysql|fileinfo|mbstring"   # sodium e fileinfo já vêm no php-common
 timedatectl set-timezone America/Cuiaba                  # cron e logs no Horário de Mato Grosso – UTC-4
 ```
@@ -34,7 +34,7 @@ Em **Virtualmin → Create Virtual Server**:
 | Domain name | `accessgate.mycode.app.br` |
 | Administration username | `accessgate` |
 | Features | Apache website · SSL website · MariaDB database |
-| PHP execution mode | **FPM**, versão 8.1 ou superior (*Web Configuration → PHP Options*) |
+| PHP execution mode | **FPM**, versão 8.2 ou superior; prefira 8.4 (*Web Configuration → PHP Options*) |
 
 O Virtualmin cria o usuário Linux `accessgate`, a pasta `/home/accessgate/public_html` e um banco `accessgate`.
 O usuário do banco é `accessgate`, com a mesma senha do servidor virtual.

@@ -1,0 +1,15 @@
+# Atualizações semanais propostas por Pull Request (imagens Docker e GitHub Actions).
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: "/"
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: America/Cuiaba }
+    labels: [dependencias]
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: America/Cuiaba }
+    labels: [dependencias]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: America/Cuiaba }
+    labels: [dependencias]

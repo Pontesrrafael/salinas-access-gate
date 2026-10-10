@@ -1,0 +1,55 @@
+# Integração contínua: sintaxe (PHP 8.2 e 8.5), scripts shell e instalação Docker completa com teste de saúde.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sintaxe:
+    name: Sintaxe (PHP ${{ matrix.php }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        php: ["8.2", "8.5"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_mysql, sodium, mbstring, fileinfo, ldap
+          coverage: none
+      - name: php -l em todos os arquivos
+        run: find . -name '*.php' -not -path './storage/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+      - name: Scripts shell
+        run: for f in docker/*.sh; do bash -n "$f"; done
+
+  docker:
+    name: Instalação Docker + saúde
+    runs-on: ubuntu-24.04
+    needs: sintaxe
+    steps:
+      - uses: actions/checkout@v5
+      - name: Instala com docker/instalar.sh (porta 8222)
+        run: sudo SAG_PORTA=8222 SAG_ADMIN_EMAIL=ci@salinasgold.com.br SAG_ADMIN_NOME="CI" bash docker/instalar.sh "$PWD" < /dev/null
+      - name: /saude responde ok
+        run: curl -fsS http://127.0.0.1:8222/saude | grep '"status":"ok"'
+      - name: Login abre e arquivos sensíveis ficam bloqueados
+        run: |
+          curl -fsS -o /dev/null http://127.0.0.1:8222/login
+          for u in /.env /docker/app.env /bin/console.php /storage/logs/app.log; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8222$u")
+            echo "$u -> $code"; [ "$code" != "200" ]
+          done
+      - name: Logs (em caso de falha)
+        if: failure()
+        run: sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml logs --tail=200
