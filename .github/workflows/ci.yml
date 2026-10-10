@@ -22,7 +22,7 @@ jobs:
       matrix:
         php: ["8.2", "8.5"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: sintaxe
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Instala com docker/instalar.sh (porta 8222)
         run: sudo SAG_PORTA=8222 SAG_ADMIN_EMAIL=ci@salinasgold.com.br SAG_ADMIN_NOME="CI" bash docker/instalar.sh "$PWD" < /dev/null
       - name: /saude responde ok
