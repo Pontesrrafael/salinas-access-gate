@@ -190,6 +190,150 @@
     });
   }
 
+  /* ---------------- Indicadores (modo dashboard / Modo TV) ---------------- */
+  (function indicadores() {
+    const caixa = $('[data-indicadores]');
+    if (!caixa) { return; }
+    const form = $('#form-indicadores');
+    const selPeriodo = $('#ind-periodo');
+    const inDesde = $('#ind-desde');
+    const inAte = $('#ind-ate');
+    const selAtualizar = $('#ind-atualizar');
+    const status = $('#ind-status');
+    const CHAVE = 'sag_ind_atualizar';
+    // Gráficos largos (rolagem horizontal no celular) começam mostrando o período mais recente
+    const rolarParaFim = () => $$('.viz-rolagem', caixa).forEach((el) => { el.scrollLeft = el.scrollWidth; });
+    rolarParaFim();
+    const permitidos = Array.from(selAtualizar ? selAtualizar.options : []).map((o) => o.value);
+
+    // Período: atalho limpa as datas e aplica; mexer nas datas vira "Personalizado"
+    if (selPeriodo) {
+      selPeriodo.addEventListener('change', () => {
+        if (selPeriodo.value !== 'personalizado') {
+          if (inDesde) { inDesde.value = ''; }
+          if (inAte) { inAte.value = ''; }
+          form.submit();
+        } else if (inDesde) { inDesde.focus(); }
+      });
+    }
+    [inDesde, inAte].forEach((el) => el && el.addEventListener('change', () => { if (selPeriodo) { selPeriodo.value = 'personalizado'; } }));
+
+    // Intervalo: parâmetro da URL > preferência salva neste navegador > padrão
+    const lerPref = () => { try { return localStorage.getItem(CHAVE); } catch (e) { return null; } };
+    const salvarPref = (v) => { try { localStorage.setItem(CHAVE, v); } catch (e) { /* navegador sem storage */ } };
+    let intervalo = caixa.dataset.atualizar;
+    if (intervalo === '' || permitidos.indexOf(intervalo) < 0) {
+      const pref = lerPref();
+      intervalo = pref !== null && permitidos.indexOf(pref) >= 0 ? pref : caixa.dataset.padrao;
+    }
+    if (selAtualizar) { selAtualizar.value = intervalo; }
+
+    const hora = () => new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Cuiaba' });
+    const setStatus = (txt, cls) => {
+      if (!status) { return; }
+      status.classList.remove('erro', 'carregando');
+      if (cls) { status.classList.add(cls); }
+      const span = status.querySelector('span');
+      if (span) { span.textContent = txt; }
+    };
+    const descrever = () => (intervalo === '0' ? ' · atualização automática desligada' : ' · próxima em ' + (selAtualizar ? selAtualizar.options[selAtualizar.selectedIndex].text : intervalo + ' s'));
+
+    let timer = null;
+    let emCurso = false;
+    let pendenteAoVoltar = false;
+
+    function agendar() {
+      clearTimeout(timer);
+      const s = parseInt(intervalo, 10) || 0;
+      if (s > 0) { timer = setTimeout(atualizar, s * 1000); }
+    }
+
+    async function atualizar() {
+      if (document.hidden) { pendenteAoVoltar = true; return; }   // economiza servidor com a aba oculta
+      if (emCurso) { agendar(); return; }
+      emCurso = true;
+      setStatus('Atualizando…', 'carregando');
+      const params = new URLSearchParams(window.location.search);
+      params.set('parcial', '1');
+      try {
+        const r = await fetch(window.location.pathname + '?' + params.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }, credentials: 'same-origin', cache: 'no-store',
+        });
+        if (r.status === 401 || r.redirected) { window.location.href = BASE + '/login'; return; }
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        const html = await r.text();
+        const abertos = $$('details', caixa).map((d, i) => (d.open ? i : -1)).filter((i) => i >= 0);
+        caixa.innerHTML = html;
+        const novos = $$('details', caixa);
+        abertos.forEach((i) => { if (novos[i]) { novos[i].open = true; } });
+        rolarParaFim();
+        setStatus('Atualizado às ' + hora() + descrever());
+      } catch (e) {
+        setStatus('Falha ao atualizar às ' + hora() + ' — nova tentativa no próximo ciclo', 'erro');
+      } finally {
+        emCurso = false;
+        agendar();
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && pendenteAoVoltar) { pendenteAoVoltar = false; atualizar(); }
+    });
+
+    if (selAtualizar) {
+      selAtualizar.addEventListener('change', () => {
+        intervalo = selAtualizar.value;
+        salvarPref(intervalo);
+        const url = new URL(window.location.href);
+        url.searchParams.set('atualizar', intervalo);
+        window.history.replaceState(null, '', url.toString());
+        setStatus('Atualizado às ' + hora() + descrever());
+        agendar();
+      });
+    }
+    setStatus('Atualizado às ' + hora() + descrever());
+    agendar();
+
+    // Dica flutuante dos gráficos (substitui o title nativo)
+    const dica = document.createElement('div');
+    dica.className = 'viz-dica';
+    dica.setAttribute('role', 'tooltip');
+    document.body.appendChild(dica);
+    caixa.addEventListener('mouseover', (ev) => {
+      const alvo = ev.target.closest && ev.target.closest('[data-tip]');
+      if (!alvo) { return; }
+      alvo.removeAttribute('title');
+      dica.textContent = alvo.dataset.tip;
+      dica.classList.add('visivel');
+    });
+    caixa.addEventListener('mousemove', (ev) => {
+      if (!dica.classList.contains('visivel')) { return; }
+      const w = dica.offsetWidth;
+      const h = dica.offsetHeight;
+      let x = ev.clientX + 14;
+      let y = ev.clientY + 14;
+      if (x + w > window.innerWidth - 8) { x = ev.clientX - w - 14; }
+      if (y + h > window.innerHeight - 8) { y = ev.clientY - h - 14; }
+      dica.style.left = Math.max(8, x) + 'px';
+      dica.style.top = Math.max(8, y) + 'px';
+    });
+    caixa.addEventListener('mouseout', (ev) => {
+      const alvo = ev.target.closest && ev.target.closest('[data-tip]');
+      if (alvo && !alvo.contains(ev.relatedTarget)) { dica.classList.remove('visivel'); }
+    });
+
+    // Modo TV: relógio e tela cheia
+    const relogio = $('#tv-relogio');
+    if (relogio) {
+      const tic = () => { relogio.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Cuiaba' }); };
+      tic();
+      setInterval(tic, 1000);
+    }
+    $$('[data-tela-cheia]').forEach((b) => b.addEventListener('click', () => {
+      if (document.fullscreenElement) { document.exitFullscreen(); } else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }));
+  })();
+
   /* ---------------- Portaria ---------------- */
   const form = $('#form-portaria');
   if (!form) { return; }

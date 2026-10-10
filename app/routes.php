@@ -7,6 +7,7 @@ use App\Controllers\AuditoriaController;
 use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
 use App\Controllers\DashboardController;
+use App\Controllers\IndicadoresController;
 use App\Controllers\LocaisController;
 use App\Controllers\PessoasController;
 use App\Controllers\PortariaController;
@@ -31,6 +32,7 @@ $router->post('/trocar-senha', [AuthController::class, 'trocarSenha']);
 
 // ---- Operação ----
 $router->get('/painel', [DashboardController::class, 'index']);
+$router->get('/indicadores', [IndicadoresController::class, 'index']);
 
 $router->get('/portaria', [PortariaController::class, 'index']);
 $router->post('/portaria/local', [PortariaController::class, 'trocarLocal']);

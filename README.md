@@ -16,9 +16,26 @@ Sistema de controle de acesso (portaria) da **Salinas Gold Mineração LTDA**, r
 
 ## Módulos
 
-Painel · Portaria (entrada/saída, fotos, cadastro rápido) · Solicitações de acesso (interna, link externo 72 h, formulário público)
+Painel · **Indicadores** (dashboard com Modo TV) · Portaria (entrada/saída, fotos, cadastro rápido) · Solicitações de acesso (interna, link externo 72 h, formulário público)
 · Verificação SSMA · Quem está no site (+ lista de evacuação para impressão) · Pessoas e documentos (ASO, NRs, Integração, CNH)
 · Veículos · Locais · Relatórios (CSV) · Auditoria · Usuários · Configurações e áreas · `/saude` para monitoramento (Zabbix).
+
+## Indicadores (modo dashboard)
+
+Menu **Operação → Indicadores** (`/indicadores`), para Admin/TI, Supervisor e SSMA.
+
+- **Filtros:** período (Hoje, Últimas 24 h, 7, 30 ou 90 dias), **"A partir de"** e **"Até"** com data e hora (até 366 dias), e local.
+- **Atualização automática:** desligada, 5 s, 10 s, 30 s, 1 min ou 5 min. Atualiza só os números e os gráficos, sem recarregar a página.
+  Pausa quando a aba fica oculta, e a escolha fica salva no navegador.
+- **Indicadores:** presentes agora (por categoria), entradas, saídas e pessoas distintas com variação contra o período anterior, veículos,
+  permanência média de visitantes e terceiros, solicitações pendentes, taxa de aprovação, verificações SSMA e entradas de externos sem solicitação.
+- **Gráficos:** entradas por hora, dia ou semana e categoria; horário de pico; presença por local; empresas com mais entradas; solicitações por situação.
+  Cada gráfico tem a opção "Ver dados em tabela".
+- **Alertas:** presentes com documento vencido e pessoas dentro há mais horas que o limite de `alerta_permanencia_horas` (Configurações).
+- **Modo TV** (`/indicadores?tv=1`): tela cheia, relógio e fonte maior, para monitores da portaria ou da Segurança Patrimonial.
+
+Os gráficos são HTML/CSS gerados no servidor, sem bibliotecas externas e compatíveis com a CSP.
+As cores foram validadas para daltonismo (protanopia e deuteranopia) e têm contraste de 3:1 ou mais.
 
 ## Regras de negócio aplicadas no servidor
 
@@ -50,6 +67,7 @@ Toda movimentação é auditada por trigger, inclusive o IP do cliente.
 | Veículos: criar / editar | ✔ / ✔ | ✔ / ✔ | | ✔ / |
 | Locais | ✔ | ✔ | | |
 | Verificação SSMA | ✔ | | ✔ | |
+| Indicadores (dashboard / Modo TV) | ✔ | ✔ | ✔ | |
 | Relatórios e auditoria | ✔ | ✔ | | |
 | Usuários e configurações | ✔ | | | |
 

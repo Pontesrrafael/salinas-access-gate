@@ -38,6 +38,7 @@ final class Auth
         'solicitacoes.ver'         => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'solicitacoes.criar'       => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'ssma.verificar'           => ['admin', 'ssma'],
+        'indicadores.ver'          => ['admin', 'supervisor', 'ssma'],
         'relatorios.ver'           => ['admin', 'supervisor'],
         'auditoria.ver'            => ['admin', 'supervisor'],
         'usuarios.gerir'           => ['admin'],

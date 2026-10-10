@@ -6,6 +6,7 @@ $ativo = static fn (string $p): string => ($path === $p || str_starts_with($path
 $menu = [
     'Operação' => [
         ['/painel', 'Painel', 'painel', null],
+        ['/indicadores', 'Indicadores', 'grafico', 'indicadores.ver'],
         ['/portaria', 'Portaria', 'portaria', 'portaria.operar'],
         ['/solicitacoes', 'Solicitações', 'solicit', 'solicitacoes.ver'],
         ['/ssma', 'Verificação SSMA', 'escudo', 'ssma.verificar'],
@@ -37,7 +38,7 @@ $menu = [
   <meta name="theme-color" content="#024B37">
   <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 </head>
-<body>
+<body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
 <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-hidden="true">
 <aside class="sidebar">
   <div class="sidebar-logo">
