@@ -1,0 +1,8 @@
+# Salinas Access Gate — publicação OPCIONAL do MariaDB para ferramentas de BI (Power BI, Metabase, Excel).
+# Ativada pelo instalador com SAG_BI_PORTA (ex.: sudo SAG_BI_PORTA=3306 bash docker/instalar.sh).
+# O usuário de BI (sag_bi) só enxerga as views bi_* e a tabela bi_dicionario. Documento: MD-TI-SIS-CBA-006.
+# ATENÇÃO: o Docker publica portas ignorando o UFW. Restrinja no firewall (Sophos) ao IP do gateway/servidor de BI.
+services:
+  db:
+    ports:
+      - "${SAG_BI_REDE:-127.0.0.1}:${SAG_BI_PORTA:-3306}:3306"

@@ -7,3 +7,6 @@ storage/cache/*
 importacao/
 *.csv
 storage/importacao/
+storage/certs/*
+# Segredos do Docker (gerados por docker/instalar.sh) — nunca versionar
+docker/*.env

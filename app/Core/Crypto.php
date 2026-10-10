@@ -88,6 +88,34 @@ final class Crypto
         return '***.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-**';
     }
 
+    /** Cifra um segredo de configuração (ex.: senha da conta de serviço do AD). Retorna base64. */
+    public static function cifrarSegredo(string $texto): string
+    {
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        return base64_encode($nonce . sodium_crypto_secretbox($texto, $nonce, self::chaveSegredos()));
+    }
+
+    public static function decifrarSegredo(?string $b64): ?string
+    {
+        $blob = $b64 === null ? false : base64_decode($b64, true);
+        if ($blob === false || strlen($blob) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
+            return null;
+        }
+        $plain = sodium_crypto_secretbox_open(
+            substr($blob, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
+            substr($blob, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
+            self::chaveSegredos()
+        );
+        return $plain === false ? null : $plain;
+    }
+
+    /** Subchave derivada da chave do CPF (KDF libsodium, contexto próprio): não reutiliza a chave diretamente. */
+    private static function chaveSegredos(): string
+    {
+        static $k = null;
+        return $k ??= sodium_crypto_kdf_derive_from_key(SODIUM_CRYPTO_SECRETBOX_KEYBYTES, 2, 'SAGCONF1', self::key('cpf_key'));
+    }
+
     private static function key(string $name): string
     {
         static $cache = [];

@@ -1,6 +1,6 @@
 # Runbook — Deploy em Docker (Ubuntu Server)
 
-**Documento:** MD-TI-SIS-CBA-005 · Rev. 00 · Salinas Access Gate
+**Documento:** MD-TI-SIS-CBA-005 · Rev. 01 · Salinas Access Gate
 **Servidor:** `192.168.4.5` (Ubuntu Server) · **Porta:** `222/TCP` (HTTP)
 **Pilha:** Docker Compose com `app` (PHP 8.5 + Apache) e `db` (MariaDB 11.8 LTS)
 **Horário de referência:** Horário de Mato Grosso – UTC-4
@@ -17,11 +17,12 @@ Navegador ──HTTP :222──► [app] PHP 8.5 + Apache ──rede interna─�
 | Item | Valor |
 |---|---|
 | Pasta no servidor | `/opt/salinas-access-gate` |
-| Segredos | `docker/app.env` e `docker/db.env`, gerados na 1ª instalação com `chmod 600` |
-| Banco | Não fica exposto na rede. Só o container `app` alcança o MariaDB |
+| Segredos | `docker/app.env`, `docker/db.env` e `docker/bi.env`, gerados na 1ª instalação com `chmod 600` |
+| Banco | Não fica exposto na rede por padrão. Só o container `app` alcança o MariaDB |
+| BI | Usuário `sag_bi` (somente leitura, só views `bi_*`), criado em toda instalação. Publicação opcional com `SAG_BI_PORTA=3306` (ver MD-TI-SIS-CBA-006) |
 | Migrações | Aplicadas automaticamente a cada início do container |
 | Agendamentos | `/etc/cron.d/salinas-access-gate`: expira solicitações às 00:05 e faz backup à 01:30 |
-| Backup | `/var/backups/salinas-access-gate`: banco, fotos e cópia do `app.env`, com retenção de 14 dias |
+| Backup | `/var/backups/salinas-access-gate`: banco, fotos, certificado da CA do AD e cópias do `app.env` e do `bi.env`, com retenção de 14 dias |
 
 ## 2. Pré-requisitos
 
@@ -85,7 +86,9 @@ sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag
 
 ## 4. Pós-instalação (obrigatório)
 
-- [ ] **Guardar as chaves:** copie `/opt/salinas-access-gate/docker/app.env` para o cofre de senhas. Sem as chaves `CPF_*` os CPFs ficam ilegíveis.
+- [ ] **Guardar as chaves:** copie `/opt/salinas-access-gate/docker/app.env` e `docker/bi.env` (senha do usuário de BI) para o cofre de senhas. Sem as chaves `CPF_*` os CPFs ficam ilegíveis.
+- [ ] **AD (opcional):** ligue e configure pela tela *Configurações → Active Directory / LDAP* (MD-TI-SIS-CBA-004).
+- [ ] **BI (opcional):** para Power BI ou Metabase em outra máquina, reinstale com `SAG_BI_PORTA=3306` e restrinja a porta no Sophos (MD-TI-SIS-CBA-006).
 - [ ] **Primeiro acesso:** entre com o admin e troque a senha temporária.
 - [ ] **Configurações:** ajuste as áreas, os locais e o `alerta_permanencia_horas` (turnos de 12 h pedem 14 h).
 - [ ] **Monitoramento:** cadastre no Zabbix o *web scenario* `http://192.168.4.5:222/saude`, esperando HTTP 200 e `"status":"ok"`.
@@ -121,7 +124,8 @@ Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves 
 | Risco | Tratamento |
 |---|---|
 | HTTP sem criptografia na porta 222 | Uso restrito à rede interna. Para acesso externo, coloque um proxy reverso com HTTPS (Nginx/Traefik + Let's Encrypt) e use `SESSION_SECURE_COOKIE=true` |
-| Docker publica portas ignorando o UFW | Restrinja no Sophos o acesso à porta 222 à VLAN corporativa e às portarias |
+| Docker publica portas ignorando o UFW | Restrinja no Sophos o acesso à porta 222 à VLAN corporativa e às portarias, e a porta do BI (se publicada) ao IP do gateway de BI |
+| Banco publicado para BI | Opcional. O `sag_bi` só lê views sem dados sensíveis, tem no máximo 5 conexões e 120 s por consulta, e o `root@'%'` é removido |
 | Backup no próprio servidor | Copie `/var/backups/salinas-access-gate` para o NAS ou outro local fora do servidor (ex.: rsync noturno) |
 | Perda do `app.env` | Mantenha uma cópia no cofre. Cada backup também copia o arquivo |
 
@@ -135,4 +139,5 @@ Instalação testada do zero em ambiente Docker, inclusive a partir do pacote ba
 - **Conflito de porta:** detectado, e a instalação aborta.
 - **Falha no Docker Hub:** se a consulta falhar, por exemplo por limite de downloads (erro 429), o instalador usa as imagens já baixadas.
 - **Exposição:** `.env`, `docker/`, `bin/` e `storage/` inacessíveis pela web.
-- **Banco:** porta não publicada na rede.
+- **Banco:** porta não publicada na rede (padrão).
+- **Rev. 01:** atualização de uma instalação existente para a migração 004. Usuário `sag_bi` com acesso só às views. Porta de BI publicada e root remoto recusado. Estrutura das tabelas idêntica no MariaDB 11.8.

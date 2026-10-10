@@ -15,6 +15,8 @@ declare(strict_types=1);
  *   php bin/console.php ldap-buscar <termo>        Busca contas no AD
  *   php bin/console.php ldap-sincronizar           Sincroniza/desativa usuários do AD (agendar no cron)
  *   php bin/console.php ldap-vincular --email=<usuario local> --login=<usuario de rede>
+ *   php bin/console.php bi-sql [--usuario=sag_bi] [--host=%]   SQL do usuário de consulta do BI (rodar como root)
+ *   php bin/console.php bi-verificar               Confere se todas as colunas das views bi_* estão no dicionário
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -234,6 +236,58 @@ switch ($cmd) {
         Database::update('usuarios', ['senha_hash' => Auth::hash($senha), 'must_change_password' => 1, 'ativo' => 1], 'id = ?', [$u['id']]);
         Audit::log('usuarios', $u['id'], 'RESET_SENHA_CLI', [], null);
         ok("Senha temporária de {$email}: {$senha}  (troca obrigatória no próximo acesso)");
+        break;
+
+    case 'bi-sql':
+        // Gera o SQL do usuário de consulta para BI (executar como root/DBA). Não executa nada.
+        $usuario = $opts['usuario'] ?? 'sag_bi';
+        $host = $opts['host'] ?? '%';
+        if (!preg_match('/^[A-Za-z0-9_]{1,32}$/', $usuario) || !preg_match('/^[A-Za-z0-9_.%:\-]{1,255}$/', $host)) {
+            err('Usuário ou host inválido.');
+        }
+        $db = (string) App::config('db')['database'];
+        $objetos = array_column(Database::all(
+            "SELECT table_name AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'bi!_%' ESCAPE '!' ORDER BY table_name"
+        ), 'n');
+        if (!$objetos) {
+            err('Nenhuma view bi_* encontrada. Rode antes: php bin/console.php migrar');
+        }
+        $senha = (string) (getenv('SAG_BI_SENHA') ?: '');
+        $sqlStr = static fn (string $v): string => "'" . str_replace(['\\', "'"], ['\\\\', "''"], $v) . "'";
+        $conta = $sqlStr($usuario) . '@' . $sqlStr($host);
+        out('-- Salinas Access Gate — usuário somente leitura para BI (MD-TI-SIS-CBA-006)');
+        out('-- Execute como root. Gerado em ' . date('d/m/Y H:i') . ' (Horário de Mato Grosso – UTC-4). Reexecutar é seguro.');
+        if ($senha === '') {
+            out('-- ATENÇÃO: troque TROQUE_ESTA_SENHA por uma senha forte antes de executar.');
+        }
+        out("CREATE USER IF NOT EXISTS {$conta} IDENTIFIED BY " . $sqlStr($senha !== '' ? $senha : 'TROQUE_ESTA_SENHA') . ';');
+        if ($senha !== '') {
+            out("ALTER USER {$conta} IDENTIFIED BY " . $sqlStr($senha) . ';');
+        }
+        out("-- Limites: até 5 conexões simultâneas e consultas de no máximo 120 s (protege a portaria de relatórios pesados)");
+        out("ALTER USER {$conta} WITH MAX_USER_CONNECTIONS 5 MAX_STATEMENT_TIME 120;");
+        out("REVOKE ALL PRIVILEGES, GRANT OPTION FROM {$conta};");
+        foreach ($objetos as $o) {
+            out('GRANT SELECT ON `' . str_replace('`', '', $db) . '`.`' . $o . "` TO {$conta};");
+        }
+        break;
+
+    case 'bi-verificar':
+        // Confere se toda coluna das views bi_* está descrita no bi_dicionario (e vice-versa).
+        $reais = Database::all(
+            "SELECT table_name AS o, column_name AS c FROM information_schema.columns
+              WHERE table_schema = DATABASE() AND table_name LIKE 'bi!_%' ESCAPE '!'"
+        );
+        $doc = Database::all("SELECT objeto AS o, coluna AS c FROM bi_dicionario WHERE coluna <> '*'");
+        $k = static fn (array $l): array => array_map(static fn ($r) => $r['o'] . '.' . $r['c'], $l);
+        $semDescricao = array_diff($k($reais), $k($doc));
+        $orfas = array_diff($k($doc), $k($reais));
+        foreach ($semDescricao as $x) { falhou("sem descrição no bi_dicionario: {$x}"); }
+        foreach ($orfas as $x) { falhou("descrita mas inexistente: {$x}"); }
+        if ($semDescricao || $orfas) {
+            exit(1);
+        }
+        ok(count($reais) . ' colunas em ' . count(array_unique(array_column($reais, 'o'))) . ' objetos bi_* documentadas.');
         break;
 
     case 'expirar-solicitacoes':

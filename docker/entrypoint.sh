@@ -2,7 +2,7 @@
 # Inicialização do container: aguarda o banco, aplica migrações e sobe o Apache.
 set -e
 cd /var/www/html
-mkdir -p storage/uploads storage/logs storage/sessions storage/cache storage/importacao
+mkdir -p storage/uploads storage/logs storage/sessions storage/cache storage/importacao storage/certs
 
 echo "[sag] aguardando o banco ${DB_HOST:-db}:${DB_PORT:-3306}..."
 i=0

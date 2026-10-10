@@ -62,18 +62,57 @@
 </section>
 
 <section class="cartao ldap-status">
-  <div class="cartao-cabecalho"><h2>Active Directory / LDAP</h2>
-    <?= $ldap['enabled'] ? badge('Habilitado', 'sucesso') : badge('Desabilitado', 'neutro') ?></div>
-  <?php if (!$ldapExt): ?><div class="alerta alerta-aviso">Extensão PHP <code>ldap</code> não carregada. XAMPP: habilite <code>extension=ldap</code> no php.ini · Ubuntu: <code>apt install php8.3-ldap</code>.</div><?php endif; ?>
-  <dl class="dados">
-    <div><dt>Servidor(es)</dt><dd class="mono"><?= e($ldap['host'] ?: '—') ?></dd></div>
-    <div><dt>Base DN</dt><dd class="mono"><?= e($ldap['base_dn'] ?: '—') ?></dd></div>
-    <div><dt>Conta de serviço</dt><dd class="mono"><?= e($ldap['bind_dn'] ?: '—') ?></dd></div>
-    <div><dt>Segurança</dt><dd><?= e(str_contains($ldap['host'], 'ldaps://') ? 'LDAPS' : ($ldap['starttls'] ? 'StartTLS' : 'sem TLS')) ?> · certificado <?= $ldap['tls_verify'] ? 'verificado' : 'NÃO verificado' ?></dd></div>
-    <div><dt>Provisionamento automático</dt><dd><?= $ldap['auto_provision'] ? 'Sim (1º login de quem está em grupo mapeado)' : 'Não (admin vincula manualmente)' ?></dd></div>
-    <div><dt>Perfis pelos grupos</dt><dd><?= $ldap['sync_roles'] ? 'Sim (a cada login/sincronização)' : 'Não (definidos no Access Gate)' ?></dd></div>
-    <div><dt>Usuários vinculados ao AD</dt><dd><?= (int) $ldapUsuarios ?></dd></div>
-  </dl>
+  <div class="cartao-cabecalho"><h2>Active Directory / LDAP <small>(opcional)</small></h2>
+    <?= $ldap['enabled'] ? badge('Habilitado', 'sucesso') : badge('Desabilitado — só contas locais', 'neutro') ?></div>
+  <?php if (!$ldapExt): ?><div class="alerta alerta-aviso">Extensão PHP <code>ldap</code> não carregada. XAMPP: habilite <code>extension=ldap</code> no php.ini · Ubuntu: <code>apt install php8.3-ldap</code> · Docker: já incluída na imagem.</div><?php endif; ?>
+
+  <form method="post" action="<?= e(url('/configuracoes/ldap')) ?>" data-ldap-form autocomplete="off">
+    <?= csrf_field() ?>
+    <label class="checkbox"><input type="checkbox" name="enabled" value="1" data-ldap-liga<?= checked($ldap['enabled'] ? 1 : 0) ?>>
+      <span>Usar o Active Directory para login<br><small>Desligado, o sistema funciona só com contas locais (e-mail ou usuário + senha). Contas locais continuam entrando mesmo com o AD ligado ou fora do ar.</small></span></label>
+
+    <div class="ldap-campos" data-ldap-campos<?= $ldap['enabled'] ? '' : ' hidden' ?>>
+      <h3>Conexão</h3>
+      <div class="grade-2 compacta">
+        <label class="campo"><span>Servidor(es)</span><input name="host" maxlength="500" class="mono" placeholder="ldaps://dc01.salinasgold.local ldaps://dc02.salinasgold.local" value="<?= e($ldap['host']) ?>">
+          <small>Separe vários controladores por espaço (failover). Use <code>ldaps://</code> ou marque StartTLS.</small></label>
+        <label class="campo"><span>Porta</span><input type="number" name="port" min="0" max="65535" value="<?= (int) $ldap['port'] ?>"><small>0 = padrão (636 LDAPS / 389 LDAP)</small></label>
+        <label class="checkbox"><input type="checkbox" name="starttls" value="1"<?= checked($ldap['starttls'] ? 1 : 0) ?>> <span>StartTLS na porta 389</span></label>
+        <label class="checkbox"><input type="checkbox" name="tls_verify" value="1"<?= checked($ldap['tls_verify'] ? 1 : 0) ?>> <span>Verificar certificado do servidor<br><small>Desmarque só em homologação.</small></span></label>
+        <label class="campo"><span>Tempo limite (s)</span><input type="number" name="timeout" min="1" max="60" value="<?= (int) $ldap['timeout'] ?>"></label>
+        <label class="campo"><span>Certificado da CA interna (PEM)</span><textarea name="ca_pem" rows="3" class="mono" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+          <small><?= $ldap['ca_cert'] !== '' ? 'Atual: <span class="mono">' . e(basename($ldap['ca_cert'])) . '</span>. Cole outro para substituir.' : 'Opcional. Cole o certificado raiz da CA do AD.' ?></small></label>
+      </div>
+
+      <h3>Diretório e conta de serviço</h3>
+      <div class="grade-2 compacta">
+        <label class="campo"><span>Base DN</span><input name="base_dn" maxlength="500" class="mono" placeholder="DC=salinasgold,DC=local" value="<?= e($ldap['base_dn']) ?>"></label>
+        <label class="campo"><span>OU dos usuários <small>(opcional)</small></span><input name="users_base_dn" maxlength="500" class="mono" placeholder="OU=Usuarios,DC=salinasgold,DC=local" value="<?= e($ldap['users_base_dn']) ?>"></label>
+        <label class="campo"><span>Conta de serviço (DN)</span><input name="bind_dn" maxlength="500" class="mono" placeholder="CN=svc-accessgate,OU=Servicos,DC=salinasgold,DC=local" value="<?= e($ldap['bind_dn']) ?>"></label>
+        <label class="campo"><span>Senha da conta de serviço</span><input type="password" name="bind_password" maxlength="256" autocomplete="new-password" placeholder="<?= $ldap['bind_password'] !== '' ? '•••••••• (definida — deixe em branco para manter)' : 'não definida' ?>">
+          <small>Gravada cifrada no banco (libsodium). Nunca é exibida.</small></label>
+      </div>
+
+      <h3>Perfis e provisionamento</h3>
+      <div class="grade-2 compacta">
+        <label class="checkbox"><input type="checkbox" name="auto_provision" value="1"<?= checked($ldap['auto_provision'] ? 1 : 0) ?>> <span>Criar usuário no 1º login<br><small>Só para quem está em um grupo mapeado abaixo.</small></span></label>
+        <label class="checkbox"><input type="checkbox" name="sync_roles" value="1"<?= checked($ldap['sync_roles'] ? 1 : 0) ?>> <span>Perfil definido pelos grupos do AD<br><small>Desmarcado, o perfil é definido no Access Gate.</small></span></label>
+        <label class="checkbox"><input type="checkbox" name="nested_groups" value="1"<?= checked($ldap['nested_groups'] ? 1 : 0) ?>> <span>Considerar grupos aninhados</span></label>
+      </div>
+      <div class="grade-2 compacta">
+        <?php foreach (['group_admin' => 'Administrador', 'group_supervisor' => 'Supervisor', 'group_ssma' => 'SSMA', 'group_porteiro' => 'Porteiro', 'group_seg_patrimonial' => 'Segurança Patrimonial (complemento)'] as $k => $rot): ?>
+          <label class="campo"><span>Grupo — <?= e($rot) ?></span><input name="<?= $k ?>" maxlength="500" class="mono" placeholder="CN=SG-AccessGate-...,OU=Grupos,DC=salinasgold,DC=local" value="<?= e($ldap[$k]) ?>"></label>
+        <?php endforeach; ?>
+      </div>
+      <p class="dica">Usuários vinculados ao AD: <strong><?= (int) $ldapUsuarios ?></strong>.</p>
+    </div>
+
+    <div class="form-acoes">
+      <button class="btn btn-primario" type="submit">Salvar LDAP</button>
+      <label class="checkbox"><input type="checkbox" name="testar" value="1" checked> Testar a conexão ao salvar</label>
+    </div>
+  </form>
+
   <?php if ($ldapTeste): ?>
     <?php if ($ldapTeste['ok']): ?>
       <div class="alerta alerta-sucesso compacto-bloco">
@@ -90,5 +129,5 @@
     <?= csrf_field() ?>
     <button class="btn btn-secundario" type="submit"<?= $ldap['enabled'] && $ldapExt ? '' : ' disabled' ?>>Testar conexão</button>
   </form>
-  <p class="dica">Parâmetros e senha da conta de serviço ficam apenas no arquivo <code>.env</code> do servidor (variáveis <code>LDAP_*</code>). A conta local de admin continua funcionando mesmo se o AD estiver fora do ar.</p>
+  <p class="dica">O que for salvo aqui tem prioridade sobre as variáveis <code>LDAP_*</code> do <code>.env</code>, que continuam valendo como padrão. <?= $ldap['configurado_pela_tela'] ? 'Origem atual: <strong>tela</strong>.' : 'Origem atual: <strong>.env</strong>.' ?></p>
 </section>

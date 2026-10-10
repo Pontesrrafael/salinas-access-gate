@@ -101,6 +101,7 @@ $router->post('/usuarios/{id}/sincronizar-ad', [UsuariosController::class, 'sinc
 $router->get('/configuracoes', [ConfiguracoesController::class, 'index']);
 $router->post('/configuracoes', [ConfiguracoesController::class, 'salvar']);
 $router->post('/configuracoes/areas', [ConfiguracoesController::class, 'salvarArea']);
+$router->post('/configuracoes/ldap', [ConfiguracoesController::class, 'salvarLdap']);
 $router->post('/configuracoes/ldap/testar', [ConfiguracoesController::class, 'testarLdap']);
 $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'salvarArea']);
 

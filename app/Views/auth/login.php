@@ -1,10 +1,10 @@
 <h1 class="titulo-central">Controle de Acesso</h1>
-<p class="subtitulo-central"><?= !empty($ldap) ? 'Use seu usuário e senha de rede (Windows) ou o e-mail da conta local.' : 'Entre com seu e-mail corporativo e senha.' ?></p>
+<p class="subtitulo-central"><?= !empty($ldap) ? 'Use seu usuário e senha de rede (Windows) ou o usuário/e-mail da conta local.' : 'Entre com seu usuário (ex.: rafael.pontes) ou e-mail corporativo.' ?></p>
 <form method="post" action="<?= e(url('/login')) ?>" class="form-pilha" autocomplete="on">
   <?= csrf_field() ?>
   <label class="campo">
-    <span><?= !empty($ldap) ? 'Usuário de rede ou e-mail' : 'E-mail' ?></span>
-    <input type="<?= !empty($ldap) ? 'text' : 'email' ?>" name="email" value="<?= e(old($old, 'email')) ?>" required autofocus autocomplete="username" maxlength="190"<?= !empty($ldap) ? ' placeholder="ex.: rafael.pontes"' : '' ?>>
+    <span><?= !empty($ldap) ? 'Usuário de rede ou e-mail' : 'Usuário ou e-mail' ?></span>
+    <input type="text" name="email" value="<?= e(old($old, 'email')) ?>" required autofocus autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="190" placeholder="ex.: rafael.pontes">
   </label>
   <label class="campo">
     <span>Senha</span>

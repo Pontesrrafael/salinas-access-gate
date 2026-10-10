@@ -90,7 +90,12 @@ final class Session
     /** Guarda dados do formulário para repopular após erro de validação. */
     public static function flashOld(array $data): void
     {
-        unset($data['_csrf'], $data['senha'], $data['nova_senha'], $data['senha_confirmacao'], $data['senha_atual']);
+        unset($data['_csrf']);
+        foreach (array_keys($data) as $k) {
+            if (preg_match('/senha|password|secret|token|pem/i', (string) $k)) {
+                unset($data[$k]); // nunca guardar segredos na sessão
+            }
+        }
         $_SESSION['_old'] = $data;
     }
 
