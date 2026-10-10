@@ -48,6 +48,21 @@ read -rsp "Token GitHub: " GT && echo && rm -rf /tmp/sag && mkdir -p /tmp/sag &&
 
 O comando baixa a versão mais recente do branch `php-mariadb` e executa `docker/instalar.sh`. Para atualizar, rode o mesmo comando: segredos, banco e fotos são preservados. Revogue o token depois do uso.
 
+## 3.2 Instalação pelo PuTTY (passo a passo)
+
+1. **Conectar:** abra o PuTTY e preencha *Host Name* `192.168.4.5`, *Port* `22`, *SSH*. Clique em *Open*. No 1º acesso, aceite a chave do servidor.
+   Faça login como `administrator`. A senha não aparece enquanto você digita.
+2. **Pré-checagem:** `sudo -v && curl -sI https://github.com | head -1 && sudo ss -ltnp | grep ':222 ' || echo "porta 222 livre"`.
+3. **Código, opção A (GitHub):** cole com o botão direito do mouse o comando da seção 3 e informe o token quando ele for pedido.
+4. **Código, opção B (sem token):** no Prompt de Comando do Windows:
+   `tar -czf %TEMP%\sag-deploy.tgz --exclude=.git --exclude=.env --exclude=storage --exclude=app.env --exclude=db.env -C %USERPROFILE%\Documents\salinas-access-gate .`
+   `"C:\Program Files\PuTTY\pscp.exe" %TEMP%\sag-deploy.tgz administrator@192.168.4.5:/tmp/`
+   Depois, no PuTTY:
+   `rm -rf /tmp/sag && mkdir -p /tmp/sag && tar -xzf /tmp/sag-deploy.tgz -C /tmp/sag && sed -i 's/\r$//' /tmp/sag/docker/*.sh && sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag`
+5. **Administrador:** confirme o e-mail e o nome e aperte *Enter* na senha. Anote a senha temporária exibida.
+6. **Validação:** `curl -s http://127.0.0.1:222/saude` deve retornar `"status":"ok"`, e `sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml ps` deve mostrar app e db como *healthy*.
+   No navegador, abra `http://192.168.4.5:222` e entre com o admin; o sistema pede a troca da senha.
+
 ## 3.1 Instalação a partir do Windows (1 clique)
 
 1. Na pasta do projeto, dê dois cliques em **`bin\INSTALAR-NO-SERVIDOR.bat`**.
