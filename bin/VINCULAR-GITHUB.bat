@@ -35,6 +35,8 @@ if errorlevel 1 (
 )
 git reset -q --mixed origin/%BRANCH%
 git branch -q --set-upstream-to=origin/%BRANCH% %BRANCH%
+rem Restaura arquivos versionados que faltam nesta pasta (ex.: .github)
+for /f "delims=" %%f in ('git ls-files -d') do git checkout -q -- "%%f"
 echo.
 git status -sb
 echo.
