@@ -33,6 +33,7 @@ $dadosConteudo = array_intersect_key(get_defined_vars(), array_flip([
   </div>
   <div class="tv-relogio" id="tv-relogio" aria-live="off"><?= e(date('H:i')) ?></div>
   <div class="tv-acoes">
+    <?= botao_tema('btn btn-secundario btn-sm') ?>
     <button type="button" class="btn btn-secundario btn-sm" data-tela-cheia><?= icon('tela-cheia') ?> Tela cheia</button>
     <a class="btn btn-secundario btn-sm" href="<?= e($urlNormal) ?>"><?= icon('x') ?> Sair do Modo TV</a>
   </div>

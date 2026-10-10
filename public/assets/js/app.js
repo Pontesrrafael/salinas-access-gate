@@ -190,6 +190,31 @@
     });
   }
 
+  /* ---------------- Tema (automático / escuro / claro) ---------------- */
+  (function tema() {
+    const botoes = $$('[data-tema]');
+    if (!botoes.length) { return; }
+    const ordem = ['', 'escuro', 'claro'];
+    const rotulos = { '': 'Automático', escuro: 'Escuro', claro: 'Claro' };
+    const atual = () => {
+      const m = document.cookie.match(/(?:^|;\s*)sag_tema=(escuro|claro)/);
+      return m ? m[1] : '';
+    };
+    const aplicar = (t) => {
+      const raiz = document.documentElement;
+      if (t === 'escuro') { raiz.setAttribute('data-theme', 'dark'); } else if (t === 'claro') { raiz.setAttribute('data-theme', 'light'); } else { raiz.removeAttribute('data-theme'); }
+      document.cookie = t
+        ? 'sag_tema=' + t + '; path=/; max-age=31536000; SameSite=Lax'
+        : 'sag_tema=; path=/; max-age=0; SameSite=Lax';
+      botoes.forEach((b) => { const s = b.querySelector('span'); if (s) { s.textContent = 'Tema: ' + rotulos[t]; } });
+    };
+    botoes.forEach((b) => b.addEventListener('click', () => {
+      const t = ordem[(ordem.indexOf(atual()) + 1) % ordem.length];
+      aplicar(t);
+      toast('Tema: ' + rotulos[t] + (t === '' ? ' (segue o sistema)' : ''));
+    }));
+  })();
+
   /* ---------------- Indicadores (modo dashboard / Modo TV) ---------------- */
   (function indicadores() {
     const caixa = $('[data-indicadores]');

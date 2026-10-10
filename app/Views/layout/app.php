@@ -25,7 +25,7 @@ $menu = [
     ],
 ];
 ?><!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR"<?= tema_attr() ?>>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -36,13 +36,15 @@ $menu = [
   <link rel="icon" href="<?= e(asset('img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
   <meta name="theme-color" content="#024B37">
+  <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 </head>
 <body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
 <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-hidden="true">
 <aside class="sidebar">
   <div class="sidebar-logo">
-    <img src="<?= e(asset('img/logo-horizontal.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
+    <img class="logo-claro" src="<?= e(asset('img/logo-horizontal.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
+    <img class="logo-escuro" src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
   </div>
   <nav>
     <?php foreach ($menu as $grupo => $itens):
@@ -57,6 +59,7 @@ $menu = [
   <div class="sidebar-rodape">
     <div class="usuario-nome"><?= e($u['nome'] ?? '') ?></div>
     <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · Seg. Patrimonial' : '' ?></div>
+    <?= botao_tema() ?>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
       <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span>Sair</span></button>

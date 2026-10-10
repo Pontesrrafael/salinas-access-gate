@@ -89,6 +89,27 @@ function hoje(): string
     return date('Y-m-d');
 }
 
+/** Tema escolhido pelo usuário (cookie sag_tema): '' = automático (segue o sistema), 'claro' ou 'escuro'. */
+function tema(): string
+{
+    $t = $_COOKIE['sag_tema'] ?? '';
+    return in_array($t, ['claro', 'escuro'], true) ? $t : '';
+}
+
+/** Atributo data-theme para <html> (evita "piscar" ao carregar a página). */
+function tema_attr(): string
+{
+    return match (tema()) { 'escuro' => ' data-theme="dark"', 'claro' => ' data-theme="light"', default => '' };
+}
+
+/** Botão que alterna Automático → Escuro → Claro. */
+function botao_tema(string $classe = 'nav-item'): string
+{
+    $rot = ['' => 'Automático', 'escuro' => 'Escuro', 'claro' => 'Claro'][tema()];
+    return '<button type="button" class="' . e($classe) . '" data-tema title="Alternar tema (automático, escuro, claro)">'
+        . icon('tema') . '<span>Tema: ' . e($rot) . '</span></button>';
+}
+
 function papel_label(?string $p): string
 {
     return Auth::PAPEIS[$p ?? ''] ?? '—';
@@ -174,6 +195,7 @@ function icon(string $nome, string $classe = 'icon'): string
         'tv'        => '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
         'atualizar' => '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
         'tela-cheia' => '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+        'tema'      => '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/>',
         'relogio'   => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     ];
     $p = $paths[$nome] ?? '';

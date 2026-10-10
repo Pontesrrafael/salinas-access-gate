@@ -20,6 +20,16 @@ Painel · **Indicadores** (dashboard com Modo TV) · Portaria (entrada/saída, f
 · Verificação SSMA · Quem está no site (+ lista de evacuação para impressão) · Pessoas e documentos (ASO, NRs, Integração, CNH)
 · Veículos · Locais · Relatórios (CSV) · Auditoria · Usuários · Configurações e áreas · `/saude` para monitoramento (Zabbix).
 
+## Tema claro e escuro
+
+Botão **Tema** no rodapé do menu, na tela de login e no Modo TV. Ele alterna entre três opções:
+- **Automático:** segue o tema do Windows ou do celular;
+- **Escuro**;
+- **Claro**.
+
+A escolha fica em um cookie (`sag_tema`) e a página já abre no tema certo, sem piscar em branco.
+Todas as cores vêm de tokens CSS, com contraste WCAG AA (4,5:1 ou mais) nos textos. Na impressão o sistema sempre usa o tema claro.
+
 ## Indicadores (modo dashboard)
 
 Menu **Operação → Indicadores** (`/indicadores`), para Admin/TI, Supervisor e SSMA.
