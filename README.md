@@ -20,6 +20,20 @@ Painel · **Indicadores** (dashboard com Modo TV) · Portaria (entrada/saída, f
 · Verificação SSMA · Quem está no site (+ lista de evacuação para impressão) · Pessoas e documentos (ASO, NRs, Integração, CNH)
 · Veículos · Locais · Relatórios (CSV) · Auditoria · Usuários · Configurações e áreas · `/saude` para monitoramento (Zabbix).
 
+## Instalação em servidor Linux com Docker
+
+Dê dois cliques em `bin\INSTALAR-NO-SERVIDOR.bat` (padrão: `admin@192.168.4.5`, porta **222**).
+O script empacota a pasta, envia por SSH e roda `docker/instalar.sh` no servidor. A senha do servidor é digitada por você.
+
+O instalador:
+- instala o Docker, se faltar;
+- sobe a aplicação (PHP 8.3 + Apache) e o MariaDB 10.11;
+- gera os segredos;
+- cria o primeiro admin;
+- agenda a expiração de solicitações e o backup diário.
+
+Para atualizar, rode o mesmo `.bat`. Detalhes no runbook `docs/05-DEPLOY-DOCKER-UBUNTU.md` (MD-TI-SIS-CBA-005).
+
 ## Tema claro e escuro
 
 Botão **Tema** no rodapé do menu, na tela de login e no Modo TV. Ele alterna entre três opções:

@@ -1,0 +1,43 @@
+# Salinas Access Gate — Docker Compose (aplicação + MariaDB)
+# Porta publicada: SAG_PORTA (padrão 222) -> 80 do container.
+# Segredos: docker/app.env e docker/db.env (gerados por docker/instalar.sh, chmod 600, nunca versionar).
+name: salinas-access-gate
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    env_file: docker/db.env
+    environment:
+      TZ: America/Cuiaba
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=-04:00"]
+    volumes:
+      - banco:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [interna]
+
+  app:
+    build: .
+    image: salinas-access-gate:latest
+    restart: unless-stopped
+    env_file: docker/app.env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${SAG_PORTA:-222}:80"
+    volumes:
+      - arquivos:/var/www/html/storage
+    networks: [interna]
+
+volumes:
+  banco:
+  arquivos:
+
+networks:
+  interna:
