@@ -1,6 +1,6 @@
 # Runbook — Deploy em Docker (Ubuntu Server)
 
-**Documento:** MD-TI-SIS-CBA-005 · Rev. 01 · Salinas Access Gate
+**Documento:** MD-TI-SIS-CBA-005 · Rev. 02 · Salinas Access Gate
 **Servidor:** `192.168.4.5` (Ubuntu Server) · **Porta:** `222/TCP` (HTTP)
 **Pilha:** Docker Compose com `app` (PHP 8.5 + Apache) e `db` (MariaDB 11.8 LTS)
 **Horário de referência:** Horário de Mato Grosso – UTC-4
@@ -22,7 +22,9 @@ Navegador ──HTTP :222──► [app] PHP 8.5 + Apache ──rede interna─�
 | BI | Usuário `sag_bi` (somente leitura, só views `bi_*`), criado em toda instalação. Publicação opcional com `SAG_BI_PORTA=3306` (ver MD-TI-SIS-CBA-006) |
 | Migrações | Aplicadas automaticamente a cada início do container |
 | Agendamentos | `/etc/cron.d/salinas-access-gate`: expira solicitações às 00:05 e faz backup à 01:30 |
-| Backup | `/var/backups/salinas-access-gate`: banco, fotos, certificado da CA do AD e cópias do `app.env` e do `bi.env`, com retenção de 14 dias |
+| Backup | `/var/backups/salinas-access-gate`: banco, fotos, certificado da CA do AD e cópias do `app.env` e do `bi.env`, **cifrados** com `docker/backup.chave`, com retenção de 14 dias |
+| Senhas do banco | Escolhidas na instalação. Troca: `sudo bash docker/alterar-senha-banco.sh app\|root\|bi` |
+| LGPD | Retenção mensal (`lgpd-retencao`, dia 1 às 02:15). Ver MD-TI-SIS-CBA-008 |
 
 ## 2. Pré-requisitos
 
@@ -60,8 +62,12 @@ O comando baixa a versão mais recente do branch `main` e executa `docker/instal
    `"C:\Program Files\PuTTY\pscp.exe" %TEMP%\sag-deploy.tgz administrator@192.168.4.5:/tmp/`
    Depois, no PuTTY:
    `rm -rf /tmp/sag && mkdir -p /tmp/sag && tar -xzf /tmp/sag-deploy.tgz -C /tmp/sag && sed -i 's/\r$//' /tmp/sag/docker/*.sh && sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag`
-5. **Administrador:** confirme o e-mail e o nome e aperte *Enter* na senha. Anote a senha temporária exibida.
-6. **Validação:** `curl -s http://127.0.0.1:222/saude` deve retornar `"status":"ok"`, e `sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml ps` deve mostrar app e db como *healthy*.
+5. **Banco de dados (1ª instalação):** informe o usuário da aplicação (Enter = `sag_app`), a senha desse usuário e a senha do root do MariaDB.
+   - A senha deve ter de 12 a 64 caracteres, com maiúscula, minúscula e número, e não pode ter espaço, aspas, `$`, `#` ou `\`.
+   - Enter gera uma senha forte.
+   - Guarde tudo no cofre (MD-TI-SIS-CBA-008, seção 2).
+6. **Administrador:** confirme o e-mail e o nome e aperte *Enter* na senha. Anote a senha temporária exibida.
+7. **Validação:** `curl -s http://127.0.0.1:222/saude` deve retornar `"status":"ok"`, e `sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml ps` deve mostrar app e db como *healthy*.
    No navegador, abra `http://192.168.4.5:222` e entre com o admin; o sistema pede a troca da senha.
 
 ## 3.1 Instalação a partir do Windows (1 clique)
@@ -86,7 +92,8 @@ sudo SAG_PORTA=222 bash /tmp/sag/docker/instalar.sh /tmp/sag
 
 ## 4. Pós-instalação (obrigatório)
 
-- [ ] **Guardar as chaves:** copie `/opt/salinas-access-gate/docker/app.env` e `docker/bi.env` (senha do usuário de BI) para o cofre de senhas. Sem as chaves `CPF_*` os CPFs ficam ilegíveis.
+- [ ] **Guardar as chaves:** copie para o cofre de senhas os arquivos `/opt/salinas-access-gate/docker/app.env`, `db.env`, `bi.env` e **`backup.chave`**. Sem as chaves `CPF_*` os CPFs ficam ilegíveis; sem a `backup.chave` os backups não abrem.
+- [ ] **Privacidade:** em *Configurações → Privacidade (LGPD)*, informe o encarregado (DPO) e confira os prazos de retenção.
 - [ ] **AD (opcional):** ligue e configure pela tela *Configurações → Active Directory / LDAP* (MD-TI-SIS-CBA-004).
 - [ ] **BI (opcional):** para Power BI ou Metabase em outra máquina, reinstale com `SAG_BI_PORTA=3306` e restrinja a porta no Sophos (MD-TI-SIS-CBA-006).
 - [ ] **Primeiro acesso:** entre com o admin e troque a senha temporária.
@@ -110,14 +117,19 @@ sudo /opt/salinas-access-gate/docker/backup.sh   # backup sob demanda
 
 ## 6. Restauração
 
+Os arquivos de backup são cifrados. Para abrir, use a chave `docker/backup.chave`, que está no servidor e no cofre:
+
 ```bash
 cd /opt/salinas-access-gate
-gunzip -c /var/backups/salinas-access-gate/banco-AAAA-MM-DD-HHMM.sql.gz | \
+K=docker/backup.chave; B=/var/backups/salinas-access-gate; D=AAAA-MM-DD-HHMM
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:$K -in $B/banco-$D.sql.gz.enc | gunzip | \
   sudo docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"'
-sudo docker compose exec -T app tar -xzf - -C /var/www/html/storage < /var/backups/salinas-access-gate/fotos-AAAA-MM-DD-HHMM.tar.gz
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:$K -in $B/fotos-$D.tar.gz.enc | \
+  sudo docker compose exec -T app tar -xzf - -C /var/www/html/storage
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:$K -in $B/app.env-$D.enc > /tmp/app.env.restaurado   # só em servidor novo
 ```
 
-Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves `CPF_*`, **antes** de subir a aplicação.
+Em um servidor novo, primeiro copie do cofre o `app.env`, que contém as mesmas chaves `CPF_*`, e a `backup.chave`. Só depois suba a aplicação.
 
 ## 7. Riscos e limitações
 
@@ -126,7 +138,7 @@ Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves 
 | HTTP sem criptografia na porta 222 | Uso restrito à rede interna. Para acesso externo, coloque um proxy reverso com HTTPS (Nginx/Traefik + Let's Encrypt) e use `SESSION_SECURE_COOKIE=true`. Com HTTPS, a portaria também ganha a câmera ao vivo para o QR e a abertura da tela sem conexão (MD-TI-SIS-CBA-007) |
 | Docker publica portas ignorando o UFW | Restrinja no Sophos o acesso à porta 222 à VLAN corporativa e às portarias, e a porta do BI (se publicada) ao IP do gateway de BI |
 | Banco publicado para BI | Opcional. O `sag_bi` só lê views sem dados sensíveis, tem no máximo 5 conexões e 120 s por consulta, e o `root@'%'` é removido |
-| Backup no próprio servidor | Copie `/var/backups/salinas-access-gate` para o NAS ou outro local fora do servidor (ex.: rsync noturno) |
+| Backup no próprio servidor | Copie `/var/backups/salinas-access-gate` para o NAS (ex.: rsync noturno). Os arquivos já saem cifrados; **não** copie a `backup.chave` junto |
 | Perda do `app.env` | Mantenha uma cópia no cofre. Cada backup também copia o arquivo |
 
 ## 8. Validação desta revisão

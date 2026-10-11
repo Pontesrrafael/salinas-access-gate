@@ -17,6 +17,7 @@ declare(strict_types=1);
  *   php bin/console.php ldap-vincular --email=<usuario local> --login=<usuario de rede>
  *   php bin/console.php bi-sql [--usuario=sag_bi] [--host=%]   SQL do usuário de consulta do BI (rodar como root)
  *   php bin/console.php bi-verificar               Confere se todas as colunas das views bi_* estão no dicionário
+ *   php bin/console.php lgpd-retencao [--simular]  Anonimiza cadastros antigos e apaga fotos vencidas (cron mensal)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -233,7 +234,7 @@ switch ($cmd) {
         $email = mb_strtolower(trim($opts['email'] ?? ''));
         $u = Database::one('SELECT id FROM usuarios WHERE email = ?', [$email]) ?? err('Usuário não encontrado.');
         $senha = senhaTemporaria();
-        Database::update('usuarios', ['senha_hash' => Auth::hash($senha), 'must_change_password' => 1, 'ativo' => 1], 'id = ?', [$u['id']]);
+        Database::update('usuarios', ['senha_hash' => Auth::hash($senha), 'must_change_password' => 1, 'ativo' => 1, 'senha_alterada_em' => date('Y-m-d H:i:s')], 'id = ?', [$u['id']]);
         Audit::log('usuarios', $u['id'], 'RESET_SENHA_CLI', [], null);
         ok("Senha temporária de {$email}: {$senha}  (troca obrigatória no próximo acesso)");
         break;
@@ -288,6 +289,15 @@ switch ($cmd) {
             exit(1);
         }
         ok(count($reais) . ' colunas em ' . count(array_unique(array_column($reais, 'o'))) . ' objetos bi_* documentadas.');
+        break;
+
+    case 'lgpd-retencao':
+        // Política de retenção LGPD (agendar mensalmente). --simular mostra o que seria feito.
+        $r = \App\Services\Lgpd::aplicarRetencao(isset($opts['simular']));
+        out(($r['simulacao'] ? '[SIMULAÇÃO] ' : '') . sprintf(
+            'Retenção LGPD: %d pessoa(s) anonimizada(s), %d solicitação(ões) antiga(s) anonimizada(s), %d foto(s) apagada(s). (cadastro: %d meses; fotos: %d meses)',
+            $r['pessoas'], $r['solicitacoes'], $r['fotos'], \App\Services\Lgpd::retencaoMeses(), \App\Services\Lgpd::fotosMeses()
+        ));
         break;
 
     case 'expirar-solicitacoes':

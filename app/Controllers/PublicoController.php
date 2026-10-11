@@ -31,6 +31,21 @@ final class PublicoController extends Controller
         }
     }
 
+    /** Aviso de privacidade (LGPD art. 9º): público, linkado no login, formulário e convite. */
+    public function privacidade(): void
+    {
+        $this->view('publico/privacidade', [
+            'titulo'      => 'Aviso de privacidade',
+            'largo'       => true,
+            'org'         => Settings::get('org_nome', 'Salinas Gold Mineração LTDA'),
+            'cnpj'        => Settings::get('org_cnpj', ''),
+            'encNome'     => Settings::get('lgpd_encarregado_nome', ''),
+            'encEmail'    => Settings::get('lgpd_encarregado_email', ''),
+            'retencao'    => \App\Services\Lgpd::retencaoMeses(),
+            'fotosMeses'  => \App\Services\Lgpd::fotosMeses(),
+        ], 'layout/simples');
+    }
+
     public function formPublico(): void
     {
         if (!Settings::bool('form_publico_ativo')) {

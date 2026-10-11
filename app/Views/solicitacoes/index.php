@@ -41,7 +41,7 @@ slot('acoes', '<button type="button" class="btn btn-ouro" data-abrir="dlg-nova">
           <td>
             <strong><?= e($s['visitante_nome']) ?></strong>
             <?php if ((int) $s['atividade_risco'] === 1): ?><?= badge('Risco', 'perigo') ?><?php endif; ?>
-            <span class="sub"><?= e(implode(' · ', array_filter([$s['empresa'], $s['tipo'] === 'terceiro' ? 'Terceiro' : 'Visitante', $s['visitante_doc'], $s['contato_telefone']]))) ?></span>
+            <span class="sub"><?= e(implode(' · ', array_filter([$s['empresa'], $s['tipo'] === 'terceiro' ? 'Terceiro' : 'Visitante', mascarar_documento($s['visitante_doc']), $s['contato_telefone']]))) ?></span>
             <?php if ($s['motivo']): ?><span class="sub"><?= e(mb_strimwidth($s['motivo'], 0, 120, '…')) ?></span><?php endif; ?>
             <?php if ($s['pessoa_nome']): ?><span class="sub"><?= icon('link', 'icon icon-sm') ?> Vinculada a <?= e($s['pessoa_nome']) ?></span><?php endif; ?>
           </td>

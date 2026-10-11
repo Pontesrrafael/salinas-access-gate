@@ -31,6 +31,7 @@ O instalador:
 - instala o Docker, se faltar;
 - sobe a aplicação (PHP 8.5 + Apache) e o MariaDB 11.8 LTS;
 - gera os segredos;
+- pergunta o usuário e a senha do banco e a senha do root (Enter gera senhas fortes);
 - cria o primeiro admin e o usuário de consulta do BI (`sag_bi`);
 - agenda a expiração de solicitações e o backup diário.
 
@@ -150,6 +151,7 @@ Migração dos dados do Supabase em [docs/03-MIGRACAO-SUPABASE.md](docs/03-MIGRA
 Integração com Active Directory (opcional, liga/desliga em *Configurações*) em [docs/04-INTEGRACAO-AD-LDAP.md](docs/04-INTEGRACAO-AD-LDAP.md).
 Camada de BI e dicionário de dados em [docs/06-BI-DICIONARIO-DE-DADOS.md](docs/06-BI-DICIONARIO-DE-DADOS.md).
 Operação da portaria (atalhos, QR, alertas, sem conexão) em [docs/07-OPERACAO-PORTARIA.md](docs/07-OPERACAO-PORTARIA.md).
+Revisão de segurança e LGPD em [docs/08-SEGURANCA-LGPD.md](docs/08-SEGURANCA-LGPD.md).
 
 ## Estrutura
 
@@ -168,13 +170,38 @@ storage/         uploads/, logs/, sessions/ (fora da web, precisa de escrita)
 docs/            Instalação, deploy e migração
 ```
 
-## Segurança (resumo)
+## Segurança e LGPD (resumo)
 
-- Prepared statements reais (PDO, sem emulação), CSRF em todo POST, saída escapada, CSP restritiva (sem inline), HSTS em HTTPS.
-- Sessão HttpOnly/SameSite/Secure, regenerada no login, com expiração por inatividade. Troca de senha obrigatória no 1º acesso.
-- Login com limite de 5 tentativas a cada 15 min por e-mail+IP. O formulário público tem limite por IP, honeypot e Turnstile opcional.
-- Uploads validados por *magic bytes* + `getimagesize`, com nome aleatório e gravados fora da pasta pública.
-- Exportações CSV protegidas contra injeção de fórmulas. A exportação com CPF completo fica auditada.
+- **Base:**
+  - prepared statements reais (PDO);
+  - CSRF em todo POST e saída escapada;
+  - CSP restritiva (sem inline, `object-src 'none'`), COOP/CORP e `noindex`;
+  - HSTS em HTTPS.
+- **Sessão:**
+  - HttpOnly/SameSite/Secure, regenerada no login;
+  - expira por inatividade e em no máximo 12 h;
+  - troca de senha encerra as outras sessões.
+- **Login:**
+  - senha de no mínimo 10 caracteres, sem senhas previsíveis;
+  - limite por e-mail+IP, por IP e por conta;
+  - troca obrigatória no 1º acesso.
+- **Instalação:**
+  - o instalador pergunta o usuário e a senha do banco;
+  - `docker/alterar-senha-banco.sh` faz a troca depois;
+  - código somente leitura no contêiner;
+  - backups cifrados com `docker/backup.chave`.
+- **Uploads:**
+  - validados por *magic bytes* + `getimagesize`;
+  - fora da pasta pública;
+  - **metadados (GPS/EXIF) removidos**.
+- **LGPD:**
+  - aviso de privacidade em `/privacidade`;
+  - relatório do titular e anonimização (admin);
+  - retenção automática mensal (visitantes 24 meses, fotos 12 meses, configurável);
+  - CPF cifrado e mascarado conforme o perfil;
+  - exportação em massa restrita.
+
+Revisão completa, inventário de dados e pendências em [docs/08-SEGURANCA-LGPD.md](docs/08-SEGURANCA-LGPD.md) (MD-TI-SIS-CBA-008).
 
 ## Requisitos
 

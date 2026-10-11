@@ -23,6 +23,15 @@
       <label class="campo"><span>Validade do link externo (horas)</span><input type="number" name="link_externo_validade_horas" min="1" max="720" value="<?= e($cfg['link_externo_validade_horas'] ?? '72') ?>"></label>
     </div>
   </section>
+  <section class="cartao">
+    <h2>Privacidade (LGPD)</h2>
+    <div class="grade-2 compacta">
+      <label class="campo"><span>Encarregado (DPO) — nome</span><input name="lgpd_encarregado_nome" maxlength="150" value="<?= e($cfg['lgpd_encarregado_nome'] ?? '') ?>"></label>
+      <label class="campo"><span>Encarregado (DPO) — e-mail</span><input type="email" name="lgpd_encarregado_email" maxlength="190" value="<?= e($cfg['lgpd_encarregado_email'] ?? '') ?>"><small>Aparece no <a href="<?= e(url('/privacidade')) ?>" target="_blank" rel="noopener">aviso de privacidade</a>.</small></label>
+      <label class="campo"><span>Anonimizar visitantes/terceiros sem acesso há (meses)</span><input type="number" name="lgpd_retencao_meses" min="6" max="120" value="<?= e($cfg['lgpd_retencao_meses'] ?? '24') ?>"></label>
+      <label class="campo"><span>Apagar fotos da portaria após (meses)</span><input type="number" name="lgpd_fotos_meses" min="1" max="120" value="<?= e($cfg['lgpd_fotos_meses'] ?? '12') ?>"><small>Aplicado mensalmente (cron <code>lgpd-retencao</code>).</small></label>
+    </div>
+  </section>
   <div class="form-acoes"><button class="btn btn-primario" type="submit">Salvar configurações</button></div>
 </form>
 

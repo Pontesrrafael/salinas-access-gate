@@ -35,9 +35,12 @@ final class AuthController extends Controller
         $cfg = App::config('seguranca');
         $chave = 'login:' . hash('sha256', $email . '|' . Http::clientIp());
         $chaveIp = 'login-ip:' . Http::clientIp();
+        // Por conta, de qualquer IP: freia tentativa distribuída contra um mesmo usuário
+        $chaveConta = 'login-conta:' . hash('sha256', $email);
 
         if (RateLimiter::tooMany($chave, $cfg['login_max'], $cfg['login_janela_min'])
-            || RateLimiter::tooMany($chaveIp, $cfg['login_max'] * 4, $cfg['login_janela_min'])) {
+            || RateLimiter::tooMany($chaveIp, $cfg['login_max'] * 4, $cfg['login_janela_min'])
+            || ($email !== '' && RateLimiter::tooMany($chaveConta, $cfg['login_max'] * 3, $cfg['login_janela_min']))) {
             Audit::log('auth', null, 'LOGIN_BLOQUEADO', ['email' => $email], null);
             $this->falha("Muitas tentativas. Aguarde {$cfg['login_janela_min']} minutos e tente novamente.", '/login');
         }
@@ -47,6 +50,9 @@ final class AuthController extends Controller
         if ($u === null) {
             RateLimiter::hit($chave);
             RateLimiter::hit($chaveIp);
+            if ($email !== '') {
+                RateLimiter::hit($chaveConta);
+            }
             Audit::log('auth', null, 'LOGIN_FALHA', ['login' => $email, 'motivo' => $r['erro']], null);
             $this->falha($r['erro'] ?? 'Usuário ou senha inválidos.', '/login');
         }
@@ -56,6 +62,7 @@ final class AuthController extends Controller
         }
 
         RateLimiter::clear($chave);
+        RateLimiter::clear($chaveConta);
         Auth::login($u);
         Audit::log('auth', $u['id'], 'LOGIN', ['origem' => $u['auth_origem'] ?? 'local'], $u['id']);
 
@@ -129,6 +136,7 @@ final class AuthController extends Controller
         ], 'id = ?', [$u['id']]);
         Audit::log('usuarios', $u['id'], 'TROCA_SENHA');
         Session::regenerate();
+        Session::set('login_em', time() + 1); // esta sessão continua; as demais do usuário são encerradas
         $this->ok('Senha alterada com sucesso.', '/painel');
     }
 }

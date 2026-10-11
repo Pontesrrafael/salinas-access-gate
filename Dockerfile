@@ -25,12 +25,17 @@ COPY docker/seguranca.conf /etc/apache2/conf-available/zz-seguranca.conf
 RUN a2enconf zz-seguranca
 
 WORKDIR /var/www/html
-COPY --chown=www-data:www-data . /var/www/html
+# Código pertence ao root e é só leitura para o Apache (www-data): uma falha na aplicação
+# não consegue alterar o próprio código. Só storage/ é gravável.
+COPY . /var/www/html
 RUN set -eux; \
     sed -i 's/\r$//' docker/*.sh; chmod +x docker/*.sh; \
+    rm -f .env docker/*.env; \
+    chown -R root:root /var/www/html; \
+    find /var/www/html -path /var/www/html/storage -prune -o -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +; \
+    chmod 755 docker/*.sh; \
     mkdir -p storage/uploads storage/logs storage/sessions storage/cache storage/importacao storage/certs; \
-    chown -R www-data:www-data storage; \
-    rm -f .env
+    chown -R www-data:www-data storage; chmod -R u+rwX,g+rX,o-rwx storage
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

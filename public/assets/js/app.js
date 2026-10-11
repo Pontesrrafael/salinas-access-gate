@@ -1098,6 +1098,8 @@
           f.nome.value = d.cadastro.nome || ''; f.cpf.value = d.cadastro.cpf || '';
           f.empresa.value = d.cadastro.empresa || ''; f.categoria.value = d.cadastro.categoria || 'visitante';
           f.dataset.solicitacao = d.solicitacao.id;
+          f.solicitacao_id.value = d.solicitacao.id;
+          $('#cpf-da-solicitacao').hidden = !(d.cadastro.cpf_na_solicitacao && !d.cadastro.cpf);
           $('#dlg-pessoa').showModal();
           toast('Primeira visita: confira os dados e conclua o cadastro rápido.', 'aviso');
         }
@@ -1241,7 +1243,7 @@
       const r = await api(f.dataset.endpoint, { method: 'POST', body: new FormData(f) });
       const sol = f.dataset.solicitacao || '';
       if (r.ok && r.data) {
-        f.closest('dialog').close(); f.reset(); delete f.dataset.solicitacao; toast('Cadastrado com sucesso.', 'sucesso'); aoCriar(r.data, sol);
+        f.closest('dialog').close(); f.reset(); delete f.dataset.solicitacao; if (f.solicitacao_id) { f.solicitacao_id.value = ''; } toast('Cadastrado com sucesso.', 'sucesso'); aoCriar(r.data, sol);
       } else if (r.status === 409 && r.data && r.data.id) {
         f.closest('dialog').close(); delete f.dataset.solicitacao; toast(r.data.erro, 'aviso'); aoCriar(r.data, sol);
       } else {

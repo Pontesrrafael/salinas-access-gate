@@ -6,3 +6,4 @@ storage/*/*
 docker/*.env
 docker/backups
 node_modules
+docker/backup.chave

@@ -171,9 +171,14 @@ final class Http
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: same-origin');
-        header('Permissions-Policy: geolocation=(), microphone=(), camera=(self)');
+        header('Permissions-Policy: geolocation=(), microphone=(), camera=(self), payment=(), usb=()');
+        header('Cross-Origin-Opener-Policy: same-origin');
+        header('Cross-Origin-Resource-Policy: same-origin');
+        header('X-Permitted-Cross-Domain-Policies: none');
+        header('X-Robots-Tag: noindex, nofollow'); // sistema interno: nada deve ir para buscadores
         $csp = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
-             . "frame-src https://challenges.cloudflare.com; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'";
+             . "frame-src https://challenges.cloudflare.com; connect-src 'self'; worker-src 'self'; object-src 'none'; "
+             . "form-action 'self'; base-uri 'self'; frame-ancestors 'none'";
         header('Content-Security-Policy: ' . $csp);
         if (self::isHttps()) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains');

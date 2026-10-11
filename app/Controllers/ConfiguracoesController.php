@@ -47,6 +47,10 @@ final class ConfiguracoesController extends Controller
             'alerta_permanencia_horas'    => (string) max(1, min(48, (int) Http::str('alerta_permanencia_horas', '8'))),
             'link_externo_validade_horas' => (string) max(1, min(720, (int) Http::str('link_externo_validade_horas', '72'))),
             'form_publico_ativo'          => Http::bool('form_publico_ativo') ? '1' : '0',
+            'lgpd_encarregado_nome'       => Http::nstr('lgpd_encarregado_nome', 150),
+            'lgpd_encarregado_email'      => filter_var(Http::str('lgpd_encarregado_email'), FILTER_VALIDATE_EMAIL) ?: null,
+            'lgpd_retencao_meses'         => (string) max(6, min(120, (int) Http::str('lgpd_retencao_meses', '24'))),
+            'lgpd_fotos_meses'            => (string) max(1, min(120, (int) Http::str('lgpd_fotos_meses', '12'))),
         ];
         foreach ($valores as $k => $v) {
             Settings::set($k, $v, $u['id']);

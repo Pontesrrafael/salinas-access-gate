@@ -27,6 +27,7 @@ return [
     'session' => [
         'nome'            => Env::get('SESSION_NAME', 'sag_sessao'),
         'idle_minutos'    => Env::int('SESSION_IDLE_MINUTES', 120),
+        'max_horas'       => Env::int('SESSION_MAX_HOURS', 12),   // duração máxima da sessão (um turno)
         'cookie_secure'   => Env::bool('SESSION_SECURE_COOKIE', false), // true em produção (HTTPS)
     ],
     'seguranca' => [
@@ -35,7 +36,7 @@ return [
         'bcrypt_cost'      => Env::int('BCRYPT_COST', 12),
         'login_max'        => Env::int('LOGIN_MAX_ATTEMPTS', 5),
         'login_janela_min' => Env::int('LOGIN_WINDOW_MINUTES', 15),
-        'senha_min'        => Env::int('PASSWORD_MIN_LENGTH', 8),
+        'senha_min'        => max(10, Env::int('PASSWORD_MIN_LENGTH', 10)),
         'trusted_proxies'  => array_filter(array_map('trim', explode(',', (string) Env::get('TRUSTED_PROXIES', '')))),
     ],
     'uploads' => [

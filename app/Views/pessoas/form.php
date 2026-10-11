@@ -135,6 +135,26 @@ $acao = $novo ? url('/pessoas') : url('/pessoas/' . $p['id']);
   <?php endif; ?>
 </section>
 
+<?php if (can('lgpd.gerir')): $impedimento = \App\Services\Lgpd::impedimento($p); ?>
+<section class="cartao">
+  <h2>Privacidade (LGPD)</h2>
+  <p class="dica">Pedidos do titular: atenda em até 15 dias (LGPD art. 19). Toda ação fica registrada na auditoria.</p>
+  <div class="grade-2 compacta">
+    <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/titular')) ?>" class="form-pilha">
+      <?= csrf_field() ?>
+      <label class="campo"><span>Relatório do titular (JSON)</span><input name="motivo" maxlength="300" placeholder="Protocolo / motivo do pedido" required minlength="5"></label>
+      <button class="btn btn-secundario" type="submit" data-livre><?= icon('download', 'icon icon-sm') ?> Baixar dados da pessoa</button>
+    </form>
+    <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/anonimizar')) ?>" class="form-pilha" data-confirmar="Anonimizar <?= e($p['nome']) ?>? Nome, CPF, contatos e fotos serão apagados de forma irreversível; o histórico de acesso fica sem identificação.">
+      <?= csrf_field() ?>
+      <label class="campo"><span>Anonimizar cadastro</span><input name="motivo" maxlength="300" placeholder="Ex.: pedido do titular, protocolo 2026/015" required minlength="5"<?= $impedimento ? ' disabled' : '' ?>></label>
+      <?php if ($impedimento): ?><p class="dica"><?= e($impedimento) ?></p><?php else: ?>
+      <button class="btn btn-perigo" type="submit"><?= icon('escudo', 'icon icon-sm') ?> Anonimizar (irreversível)</button><?php endif; ?>
+    </form>
+  </div>
+</section>
+<?php endif; ?>
+
 <?php if (can('pessoas.excluir')): ?>
 <section class="cartao zona-perigo">
   <h2>Excluir cadastro</h2>

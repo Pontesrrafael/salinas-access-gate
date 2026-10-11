@@ -173,6 +173,37 @@ final class PessoasController extends Controller
         $this->ok('Pessoa excluída.', '/pessoas');
     }
 
+    /** Relatório do titular (LGPD art. 18): JSON com todos os dados da pessoa. */
+    public function relatorioTitular(string $id): void
+    {
+        Auth::authorize('lgpd.gerir');
+        $this->uuidOu404($id);
+        $r = \App\Services\Lgpd::relatorioTitular($id) ?? Http::abort(404, 'Pessoa não encontrada.');
+        Audit::log('pessoas', $id, 'RELATORIO_TITULAR', ['motivo' => Http::nstr('motivo', 300)]);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="titular-' . substr($id, 0, 8) . '-' . date('Ymd') . '.json"');
+        header('Cache-Control: no-store');
+        echo json_encode($r, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    /** Anonimização a pedido do titular ou por decisão do encarregado (LGPD art. 16/18). */
+    public function anonimizar(string $id): void
+    {
+        $u = Auth::authorize('lgpd.gerir');
+        $this->uuidOu404($id);
+        $motivo = Http::nstr('motivo', 300);
+        if ($motivo === null || mb_strlen($motivo) < 5) {
+            $this->falha('Informe o motivo da anonimização (ex.: pedido do titular, protocolo nº ...).', '/pessoas/' . $id);
+        }
+        try {
+            $r = \App\Services\Lgpd::anonimizar($id, $motivo, $u['id']);
+        } catch (\RuntimeException $e) {
+            $this->falha($e->getMessage(), '/pessoas/' . $id);
+        }
+        $this->ok('Cadastro anonimizado: ' . $r['solicitacoes'] . ' solicitação(ões) e ' . $r['fotos_apagadas'] . ' foto(s) apagada(s). O histórico de acesso foi mantido sem identificação.', '/pessoas/' . $id);
+    }
+
     public function revelarCpf(string $id): void
     {
         Auth::authorize('pessoas.ver_cpf');
@@ -242,7 +273,8 @@ final class PessoasController extends Controller
 
     public function exportar(): void
     {
-        Auth::authorize('pessoas.ver');
+        // Exportação em massa de dados pessoais: só perfis de gestão (LGPD, minimização)
+        Auth::authorize('relatorios.ver');
         [$where, $params] = $this->filtros();
         $comCpf = Auth::can('pessoas.ver_cpf') && Http::bool('cpf');
         $rows = Database::all('SELECT * FROM pessoas p WHERE ' . $where . ' ORDER BY p.nome', $params);
