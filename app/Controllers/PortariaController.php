@@ -210,7 +210,9 @@ final class PortariaController extends Controller
             'pessoa_id'     => $pessoaId,
             'cadastro'      => $pessoaId ? null : [
                 'nome' => $s['visitante_nome'], 'empresa' => $s['empresa'], 'categoria' => $s['tipo'] === 'terceiro' ? 'terceiro' : 'visitante',
-                'cpf' => strlen($cpf) === 11 && Crypto::cpfValido($cpf) ? Crypto::formatCpf($cpf) : '',
+                // CPF completo só para quem pode ver CPF; para o porteiro o servidor usa o da solicitação no cadastro
+                'cpf' => strlen($cpf) === 11 && Crypto::cpfValido($cpf) ? (Auth::can('pessoas.ver_cpf') ? Crypto::formatCpf($cpf) : '') : '',
+                'cpf_na_solicitacao' => strlen($cpf) === 11 && Crypto::cpfValido($cpf),
             ],
         ], $erro ? 409 : 200);
     }
@@ -368,6 +370,14 @@ final class PortariaController extends Controller
         Auth::authorize('pessoas.criar');
         $nome = Http::nstr('nome', 200);
         $cpf = Http::str('cpf');
+        // Cadastro a partir do QR: usa o CPF informado na solicitação sem expô-lo ao navegador do porteiro
+        $solId = Http::str('solicitacao_id');
+        if ($cpf === '' && Uuid::valid($solId)) {
+            $doc = Crypto::cpfDigits((string) Database::value("SELECT visitante_doc FROM solicitacoes_acesso WHERE id = ? AND status = 'aprovada'", [$solId]));
+            if (strlen($doc) === 11 && Crypto::cpfValido($doc)) {
+                $cpf = $doc;
+            }
+        }
         $categoria = Http::str('categoria', 'visitante');
         if ($nome === null) {
             Http::json(['erro' => 'Nome obrigatório'], 422);

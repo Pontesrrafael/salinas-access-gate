@@ -118,6 +118,7 @@ final class UsuariosController extends Controller
             if ($senha !== null) {
                 $upd['senha_hash'] = Auth::hash($senha);
                 $upd['must_change_password'] = 1;
+                $upd['senha_alterada_em'] = date('Y-m-d H:i:s'); // derruba sessões abertas do usuário
             }
             Database::update('usuarios', $upd, 'id = ?', [$id]);
             $this->aplicarAreas($id, $areas);

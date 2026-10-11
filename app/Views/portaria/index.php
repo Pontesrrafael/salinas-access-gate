@@ -237,6 +237,8 @@
 <dialog id="dlg-pessoa" class="dialogo">
   <form id="form-rapido-pessoa" data-endpoint="<?= e(url('/api/pessoas/rapido')) ?>">
     <h2>Cadastro rápido — Pessoa</h2>
+    <input type="hidden" name="solicitacao_id" value="">
+    <p class="dica" id="cpf-da-solicitacao" hidden>O CPF informado na solicitação será usado (não é exibido).</p>
     <label class="campo"><span>Nome completo <span class="obrigatorio">*</span></span><input name="nome" required maxlength="200"></label>
     <div class="grade-2 compacta">
       <label class="campo"><span>CPF</span><input name="cpf" inputmode="numeric" maxlength="14" data-mascara="cpf"></label>

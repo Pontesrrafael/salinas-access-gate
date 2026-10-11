@@ -10,3 +10,4 @@ storage/importacao/
 storage/certs/*
 # Segredos do Docker (gerados por docker/instalar.sh) — nunca versionar
 docker/*.env
+docker/backup.chave

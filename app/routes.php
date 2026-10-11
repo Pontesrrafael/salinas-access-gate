@@ -72,6 +72,8 @@ $router->get('/pessoas/{id}', [PessoasController::class, 'editar']);
 $router->post('/pessoas/{id}', [PessoasController::class, 'atualizar']);
 $router->post('/pessoas/{id}/excluir', [PessoasController::class, 'excluir']);
 $router->post('/pessoas/{id}/cpf', [PessoasController::class, 'revelarCpf']);
+$router->post('/pessoas/{id}/titular', [PessoasController::class, 'relatorioTitular']);
+$router->post('/pessoas/{id}/anonimizar', [PessoasController::class, 'anonimizar']);
 $router->post('/pessoas/{id}/documentos', [PessoasController::class, 'adicionarDocumento']);
 $router->post('/pessoas/{id}/documentos/{doc}/excluir', [PessoasController::class, 'excluirDocumento']);
 $router->post('/pessoas/{id}/vinculo', [PessoasController::class, 'vincularUsuario']);
@@ -111,6 +113,9 @@ $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'sal
 // ---- Convite com QR ----
 $router->get('/solicitacoes/{id}/convite', [SolicitacoesController::class, 'convite']);
 $router->get('/convite/{id}/{assinatura}', [SolicitacoesController::class, 'conviteExterno']);
+
+// ---- Aviso de privacidade (LGPD, sem login) ----
+$router->get('/privacidade', [PublicoController::class, 'privacidade']);
 
 // ---- Formulário público (sem login) ----
 $router->get('/solicitar-acesso', [PublicoController::class, 'formPublico']);

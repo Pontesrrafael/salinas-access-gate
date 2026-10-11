@@ -53,25 +53,51 @@ Passo 'Configurando o .env'
 $envPath = Join-Path $raiz '.env'
 if (-not (Test-Path $envPath)) { Copy-Item (Join-Path $raiz '.env.example') $envPath }
 $envTxt = [System.IO.File]::ReadAllText($envPath)
-$senhaApp = ''
+$senhaApp = ''; $usuarioApp = ''
 if ($envTxt -match '(?m)^DB_PASSWORD=(.+)$' -and $Matches[1].Trim() -ne 'troque_esta_senha') { $senhaApp = $Matches[1].Trim() }
-if ($senhaApp -eq '') { $senhaApp = 'Sag' + [guid]::NewGuid().ToString('N').Substring(0, 20) }
+if ($envTxt -match '(?m)^DB_USERNAME=(.+)$') { $usuarioApp = $Matches[1].Trim() }
+if ($senhaApp -eq '') {
+    # 1ª instalação: pergunta usuário e senha do banco (Enter = padrão / senha gerada)
+    do {
+        $usuarioApp = Read-Host 'Usuário do banco para a aplicação [sag_app]'
+        if ($usuarioApp -eq '') { $usuarioApp = 'sag_app' }
+        $okUsuario = $usuarioApp -cmatch '^[a-z][a-z0-9_]{2,31}$' -and $usuarioApp -notin @('root', 'mysql', 'mariadb', 'sag_bi')
+        if (-not $okUsuario) { Write-Host 'Usuário inválido: 3 a 32 caracteres, minúsculas, números e _, começando por letra.' -ForegroundColor Yellow }
+    } until ($okUsuario)
+    do {
+        $s1 = Read-Host "Senha do usuário $usuarioApp (Enter = gerar automaticamente)" -AsSecureString
+        $t1 = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s1))
+        if ($t1 -eq '') { $senhaApp = 'Sag' + [guid]::NewGuid().ToString('N').Substring(0, 20); break }
+        $motivo = ''
+        if ($t1.Length -lt 12 -or $t1.Length -gt 64) { $motivo = 'use de 12 a 64 caracteres' }
+        elseif ($t1 -cnotmatch '^[A-Za-z0-9@%+=:,._!*~^()-]+$') { $motivo = 'use só letras, números e @ % + = : , . _ ! * ~ ^ ( ) -' }
+        elseif ($t1 -cnotmatch '[A-Z]' -or $t1 -cnotmatch '[a-z]' -or $t1 -notmatch '[0-9]') { $motivo = 'inclua maiúscula, minúscula e número' }
+        if ($motivo -ne '') { Write-Host "Senha recusada: $motivo." -ForegroundColor Yellow; continue }
+        $s2 = Read-Host 'Confirme a senha' -AsSecureString
+        $t2 = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s2))
+        if ($t1 -cne $t2) { Write-Host 'As senhas não conferem.' -ForegroundColor Yellow; continue }
+        $senhaApp = $t1
+    } until ($senhaApp -ne '')
+}
+if ($usuarioApp -eq '') { $usuarioApp = 'sag_app' }
 $valores = @{
     'APP_ENV' = 'local'; 'APP_DEBUG' = 'true'; 'APP_URL' = 'http://localhost:8080';
     'DB_HOST' = '127.0.0.1'; 'DB_PORT' = '3306'; 'DB_DATABASE' = 'salinas_access_gate';
-    'DB_USERNAME' = 'sag_app'; 'DB_PASSWORD' = $senhaApp
+    'DB_USERNAME' = $usuarioApp; 'DB_PASSWORD' = $senhaApp
 }
 foreach ($k in $valores.Keys) { $envTxt = [regex]::Replace($envTxt, "(?m)^$k=.*$", "$k=$($valores[$k])") }
 [System.IO.File]::WriteAllText($envPath, $envTxt, $utf8)
 Write-Host '.env pronto.'
 
-Passo 'Criando banco salinas_access_gate e usuário sag_app'
+Passo "Criando banco salinas_access_gate e usuário $usuarioApp"
+$u = $usuarioApp
 $sql = "CREATE DATABASE IF NOT EXISTS salinas_access_gate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; " +
-       "CREATE USER IF NOT EXISTS 'sag_app'@'localhost' IDENTIFIED BY '$senhaApp'; " +
-       "CREATE USER IF NOT EXISTS 'sag_app'@'127.0.0.1' IDENTIFIED BY '$senhaApp'; " +
-       "ALTER USER 'sag_app'@'localhost' IDENTIFIED BY '$senhaApp'; ALTER USER 'sag_app'@'127.0.0.1' IDENTIFIED BY '$senhaApp'; " +
-       "GRANT ALL PRIVILEGES ON salinas_access_gate.* TO 'sag_app'@'localhost'; GRANT ALL PRIVILEGES ON salinas_access_gate.* TO 'sag_app'@'127.0.0.1'; FLUSH PRIVILEGES;"
-& $mysql @rootArgs -e $sql
+       "CREATE USER IF NOT EXISTS '$u'@'localhost' IDENTIFIED BY '$senhaApp'; " +
+       "CREATE USER IF NOT EXISTS '$u'@'127.0.0.1' IDENTIFIED BY '$senhaApp'; " +
+       "ALTER USER '$u'@'localhost' IDENTIFIED BY '$senhaApp'; ALTER USER '$u'@'127.0.0.1' IDENTIFIED BY '$senhaApp'; " +
+       "GRANT ALL PRIVILEGES ON salinas_access_gate.* TO '$u'@'localhost'; GRANT ALL PRIVILEGES ON salinas_access_gate.* TO '$u'@'127.0.0.1'; FLUSH PRIVILEGES;"
+# SQL pela entrada padrão: a senha não aparece na lista de processos do Windows
+$sql | & $mysql @rootArgs
 if ($LASTEXITCODE -ne 0) { Falha 'Falha ao criar banco/usuário.' }
 Write-Host 'Banco ok.'
 

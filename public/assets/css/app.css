@@ -915,3 +915,10 @@ kbd { font-family: var(--mono); font-size: .78em; background: var(--superficie-2
 #det-presentes > summary h2::after { content: "▾"; font-size: .8em; color: var(--texto-3); margin-left: 4px; }
 #det-presentes:not([open]) > summary h2::after { content: "▸"; }
 #det-presentes:not([open]) > summary { margin-bottom: 0; }
+
+/* Aviso de privacidade */
+.texto-legal { line-height: 1.55; }
+.texto-legal h2 { font-size: 1rem; color: var(--verde); margin: 18px 0 6px; }
+.texto-legal ul { margin: 0 0 8px 20px; }
+.texto-legal p { margin: 0 0 8px; }
+.rodape a, .rodape-simples a { color: inherit; }

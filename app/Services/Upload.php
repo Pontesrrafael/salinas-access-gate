@@ -12,6 +12,7 @@ use RuntimeException;
  *  - tipo real verificado por finfo (não confia na extensão/MIME do navegador)
  *  - imagem validada com getimagesize
  *  - nome aleatório, gravado FORA da pasta pública (storage/uploads/AAAA/MM/)
+ *  - metadados (EXIF/GPS, XMP, IPTC) removidos; só a orientação é mantida
  */
 final class Upload
 {
@@ -83,6 +84,8 @@ final class Upload
             throw new RuntimeException('Falha ao gravar o arquivo enviado');
         }
         @chmod($dest, 0640);
+        Metadados::limpar($dest, $mime); // remove GPS/EXIF da foto (LGPD)
+        clearstatcache(true, $dest);
         return [
             'storage_path'  => $rel,
             'mime_type'     => $mime,

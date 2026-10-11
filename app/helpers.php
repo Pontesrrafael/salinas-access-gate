@@ -56,6 +56,17 @@ function old(array $old, string $key, mixed $default = ''): string
     return (string) ($old[$key] ?? $default ?? '');
 }
 
+/** Documento informado em solicitação: completo só para quem pode ver CPF (LGPD, minimização). */
+function mascarar_documento(?string $doc): string
+{
+    $doc = trim((string) $doc);
+    if ($doc === '' || \App\Core\Auth::can('pessoas.ver_cpf')) {
+        return $doc;
+    }
+    $d = preg_replace('/\D/', '', $doc) ?? '';
+    return strlen($d) >= 4 ? 'doc. ***' . substr($d, -2) : 'doc. ***';
+}
+
 function selected(mixed $a, mixed $b): string
 {
     return (string) $a === (string) $b ? ' selected' : '';

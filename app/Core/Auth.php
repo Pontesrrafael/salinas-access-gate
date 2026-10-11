@@ -43,6 +43,7 @@ final class Auth
         'auditoria.ver'            => ['admin', 'supervisor'],
         'usuarios.gerir'           => ['admin'],
         'configuracoes.gerir'      => ['admin'],
+        'lgpd.gerir'               => ['admin'],                 // relatório do titular e anonimização
     ];
 
     private static ?array $user = null;
@@ -118,11 +119,27 @@ final class Auth
             $uid = Session::get('uid');
             if (is_string($uid) && $uid !== '') {
                 $u = Database::one('SELECT * FROM usuarios WHERE id = ?', [$uid]);
-                if ($u && (int) $u['ativo'] === 1) {
+                $loginEm = (int) Session::get('login_em', 0);
+                $maxHoras = max(1, (int) (App::config('session')['max_horas'] ?? 12));
+                $motivo = null;
+                if (!$u || (int) $u['ativo'] !== 1) {
+                    $motivo = 'inativo';
+                } elseif ($u['senha_alterada_em'] !== null && strtotime($u['senha_alterada_em']) > $loginEm) {
+                    $motivo = 'senha alterada'; // troca/redefinição de senha encerra as outras sessões
+                } elseif ($loginEm > 0 && time() - $loginEm > $maxHoras * 3600) {
+                    $motivo = 'tempo máximo';
+                }
+                if ($motivo === null) {
                     unset($u['senha_hash']);
                     self::$user = $u;
                 } else {
                     Session::forget('uid');
+                    Session::regenerate();
+                    if ($motivo !== 'inativo') {
+                        Session::flash('aviso', $motivo === 'tempo máximo'
+                            ? "Sessão encerrada após {$maxHoras} h. Entre novamente."
+                            : 'Sua senha foi alterada. Entre novamente.');
+                    }
                 }
             }
         }
@@ -209,6 +226,12 @@ final class Auth
         }
         if (!preg_match('/[A-Za-z]/', $senha) || !preg_match('/\d/', $senha)) {
             return 'A senha deve conter letras e números.';
+        }
+        $simples = mb_strtolower(preg_replace('/[^a-z0-9]/i', '', $senha) ?? '');
+        foreach (['salinas', 'salinasgold', 'senha', 'password', 'admin', 'portaria', 'mineracao', '12345678', 'qwerty', 'abc123'] as $comum) {
+            if (str_starts_with($simples, $comum) && mb_strlen($simples) - mb_strlen($comum) <= 6) {
+                return 'Senha muito previsível (nome da empresa, "senha", "admin" ou sequência). Escolha outra.';
+            }
         }
         $usuarioEmail = $email !== '' ? explode('@', $email)[0] : '';
         if (mb_strlen($usuarioEmail) >= 4 && stripos($senha, $usuarioEmail) !== false) {

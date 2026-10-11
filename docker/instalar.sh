@@ -6,6 +6,9 @@
 #     gera os segredos na 1ª vez, sobe aplicação + MariaDB na porta SAG_PORTA,
 #     cria o 1º admin, o usuário de consulta do BI (sag_bi) e agenda tarefas diárias.
 #   - Reexecutar = atualizar: mantém segredos, banco e arquivos (volumes).
+#   - 1ª instalação: pergunta o usuário e a senha do banco da aplicação e a senha do root do MariaDB
+#     (Enter = gera senha forte). Sem terminal: SAG_DB_USUARIO, SAG_DB_SENHA, SAG_DB_ROOT_SENHA.
+#     Trocar depois: sudo bash /opt/salinas-access-gate/docker/alterar-senha-banco.sh
 #   - BI externo (opcional): SAG_BI_PORTA=3306 publica o MariaDB para o Power BI/Metabase
 #     (SAG_BI_REDE=0.0.0.0 por padrão; SAG_BI_PORTA=0 desliga). A escolha fica gravada no .env.
 # Documento: MD-TI-SIS-CBA-005 (docs/05-DEPLOY-DOCKER-UBUNTU.md)
@@ -19,6 +22,28 @@ ANT_BI_REDE="$(grep -sE '^SAG_BI_REDE=' "$DESTINO/.env" | cut -d= -f2 || true)"
 BI_PORTA="${SAG_BI_PORTA:-${ANT_BI_PORTA:-0}}"
 BI_REDE="${SAG_BI_REDE:-${ANT_BI_REDE:-0.0.0.0}}"
 ORIGEM="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+# Senha aceita: 12+ caracteres, maiúscula, minúscula e número; sem espaço, aspas, $, #, \ e `
+# (o valor vai para arquivos .env e para comandos SQL sem precisar de escape).
+senha_valida() {
+  local s="$1"
+  [ "${#s}" -ge 12 ] && [ "${#s}" -le 64 ] || { echo "use de 12 a 64 caracteres"; return 1; }
+  [[ "$s" =~ ^[A-Za-z0-9@%+=:,._!*~^()-]+$ ]] || { echo "use só letras, números e @ % + = : , . _ ! * ~ ^ ( ) -"; return 1; }
+  [[ "$s" =~ [A-Z] ]] && [[ "$s" =~ [a-z] ]] && [[ "$s" =~ [0-9] ]] || { echo "inclua maiúscula, minúscula e número"; return 1; }
+  return 0
+}
+# pedir_senha VAR "Rótulo": lê duas vezes sem eco; Enter vazio = gera senha aleatória
+pedir_senha() {
+  local __var="$1" rotulo="$2" s1 s2 motivo
+  while true; do
+    read -r -s -p "$rotulo (Enter = gerar automaticamente): " s1; echo
+    if [ -z "$s1" ]; then printf -v "$__var" '%s' ""; return 0; fi
+    if ! motivo="$(senha_valida "$s1")"; then aviso "Senha recusada: $motivo."; continue; fi
+    read -r -s -p "Confirme: " s2; echo
+    [ "$s1" = "$s2" ] || { aviso "As senhas não conferem. Tente de novo."; continue; }
+    printf -v "$__var" '%s' "$s1"; return 0
+  done
+}
 
 etapa() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 aviso() { printf '\033[1;33m[!] %s\033[0m\n' "$*"; }
@@ -65,22 +90,42 @@ fi
 etapa "Código em $DESTINO"
 mkdir -p "$DESTINO"
 if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete --exclude 'docker/app.env' --exclude 'docker/db.env' --exclude 'docker/bi.env' --exclude '.env' --exclude 'storage/' "$ORIGEM"/ "$DESTINO"/
+  rsync -a --delete --exclude 'docker/app.env' --exclude 'docker/db.env' --exclude 'docker/bi.env' --exclude 'docker/backup.chave' --exclude '.env' --exclude 'storage/' "$ORIGEM"/ "$DESTINO"/
 else
-  (cd "$ORIGEM" && tar --exclude='./docker/app.env' --exclude='./docker/db.env' --exclude='./docker/bi.env' --exclude='./.env' --exclude='./storage' -cf - .) | (cd "$DESTINO" && tar -xf -)
+  (cd "$ORIGEM" && tar --exclude='./docker/app.env' --exclude='./docker/db.env' --exclude='./docker/bi.env' --exclude='./docker/backup.chave' --exclude='./.env' --exclude='./storage' -cf - .) | (cd "$DESTINO" && tar -xf -)
 fi
 find "$DESTINO/docker" -name '*.sh' -exec sed -i 's/\r$//' {} + -exec chmod 750 {} +
+chown -R root:root "$DESTINO" && chmod 750 "$DESTINO/docker" 
 cd "$DESTINO"
 
 etapa "Segredos"
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if [ ! -f docker/app.env ]; then
   command -v openssl >/dev/null || apt-get install -y -qq openssl
-  SENHA_DB="$(openssl rand -hex 24)"; SENHA_ROOT="$(openssl rand -hex 24)"
+  USUARIO_DB="${SAG_DB_USUARIO:-}"; SENHA_DB="${SAG_DB_SENHA:-}"; SENHA_ROOT="${SAG_DB_ROOT_SENHA:-}"
+  if [ -t 0 ]; then
+    echo "Credenciais do banco de dados (MariaDB). Guarde-as no cofre de senhas."
+    if [ -z "$USUARIO_DB" ]; then
+      while true; do
+        read -r -p "Usuário do banco para a aplicação [sag_app]: " USUARIO_DB; USUARIO_DB="${USUARIO_DB:-sag_app}"
+        [[ "$USUARIO_DB" =~ ^[a-z][a-z0-9_]{2,31}$ ]] && [[ ! "$USUARIO_DB" =~ ^(root|mysql|mariadb|sag_bi|healthcheck)$ ]] && break
+        aviso "Usuário inválido: 3 a 32 caracteres, minúsculas, números e _, começando por letra (não use root/sag_bi)."
+      done
+    fi
+    [ -n "$SENHA_DB" ] || pedir_senha SENHA_DB "Senha do usuário $USUARIO_DB"
+    [ -n "$SENHA_ROOT" ] || pedir_senha SENHA_ROOT "Senha do root do MariaDB"
+  fi
+  USUARIO_DB="${USUARIO_DB:-sag_app}"
+  [[ "$USUARIO_DB" =~ ^[a-z][a-z0-9_]{2,31}$ ]] && [[ ! "$USUARIO_DB" =~ ^(root|mysql|mariadb|sag_bi|healthcheck)$ ]] || falha "SAG_DB_USUARIO inválido: $USUARIO_DB"
+  GERADAS=""
+  if [ -z "$SENHA_DB" ]; then SENHA_DB="$(openssl rand -hex 24)"; GERADAS="aplicação"; else motivo="$(senha_valida "$SENHA_DB")" || falha "SAG_DB_SENHA recusada: $motivo"; fi
+  if [ -z "$SENHA_ROOT" ]; then SENHA_ROOT="$(openssl rand -hex 24)"; GERADAS="${GERADAS:+$GERADAS e }root"; else motivo="$(senha_valida "$SENHA_ROOT")" || falha "SAG_DB_ROOT_SENHA recusada: $motivo"; fi
+  [ "$SENHA_DB" != "$SENHA_ROOT" ] || falha "A senha do root deve ser diferente da senha da aplicação."
+  umask 077
   cat > docker/db.env <<ENV
 MARIADB_ROOT_PASSWORD=$SENHA_ROOT
 MARIADB_DATABASE=salinas_access_gate
-MARIADB_USER=sag_app
+MARIADB_USER=$USUARIO_DB
 MARIADB_PASSWORD=$SENHA_DB
 ENV
   cat > docker/app.env <<ENV
@@ -93,7 +138,7 @@ DB_TIME_ZONE=-04:00
 DB_HOST=db
 DB_PORT=3306
 DB_DATABASE=salinas_access_gate
-DB_USERNAME=sag_app
+DB_USERNAME=$USUARIO_DB
 DB_PASSWORD=$SENHA_DB
 SESSION_NAME=sag_sessao
 SESSION_IDLE_MINUTES=120
@@ -104,11 +149,19 @@ CPF_INDEX_KEY=$(openssl rand -base64 32)
 LDAP_ENABLED=false
 ENV
   chmod 600 docker/app.env docker/db.env
-  echo "Segredos gerados em $DESTINO/docker/app.env e db.env (somente root)."
+  umask 022
+  unset SENHA_DB SENHA_ROOT
+  echo "Segredos gravados em $DESTINO/docker/app.env e db.env (somente root). Usuário do banco: $USUARIO_DB."
+  [ -n "$GERADAS" ] && echo "Senha(s) gerada(s) automaticamente ($GERADAS): consulte $DESTINO/docker/db.env e guarde no cofre."
   NOVO=1
 else
   echo "Segredos existentes mantidos (atualização)."
   NOVO=0
+fi
+if [ ! -f docker/backup.chave ]; then
+  # Chave dos backups cifrados (docker/backup.sh). Guarde no cofre junto com o app.env.
+  (umask 077; openssl rand -base64 48 > docker/backup.chave)
+  echo "Chave de backup criada em $DESTINO/docker/backup.chave (guarde no cofre)."
 fi
 if [ ! -f docker/bi.env ]; then
   command -v openssl >/dev/null || apt-get install -y -qq openssl
@@ -191,9 +244,10 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 5 0 * * *  root cd $DESTINO && docker compose exec -T app php bin/console.php expirar-solicitacoes >> /var/log/salinas-access-gate.log 2>&1
 30 1 * * * root $DESTINO/docker/backup.sh >> /var/log/salinas-access-gate.log 2>&1
+15 2 1 * * root cd $DESTINO && docker compose exec -T app php bin/console.php lgpd-retencao >> /var/log/salinas-access-gate.log 2>&1
 CRON
 chmod 644 /etc/cron.d/salinas-access-gate
-echo "Agendado: expiração de solicitações 00:05 e backup 01:30 (retenção 14 dias em /var/backups/salinas-access-gate)."
+echo "Agendado: expiração de solicitações 00:05, backup cifrado 01:30 (14 dias em /var/backups/salinas-access-gate) e retenção LGPD no dia 1 às 02:15."
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "$PORTA"/tcp comment 'Salinas Access Gate' >/dev/null && echo "UFW: porta $PORTA/tcp liberada."

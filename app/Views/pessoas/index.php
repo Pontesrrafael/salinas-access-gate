@@ -1,5 +1,5 @@
 <?php
-$acoes = '<a class="btn btn-secundario" href="' . e(url('/pessoas/exportar', array_filter($filtro))) . '">' . icon('download') . ' Exportar CSV</a>';
+$acoes = can('relatorios.ver') ? '<a class="btn btn-secundario" href="' . e(url('/pessoas/exportar', array_filter($filtro))) . '">' . icon('download') . ' Exportar CSV</a>' : '';
 if (can('pessoas.criar')) {
     $acoes .= '<a class="btn btn-ouro" href="' . e(url('/pessoas/nova')) . '">' . icon('mais') . ' Nova pessoa</a>';
 }

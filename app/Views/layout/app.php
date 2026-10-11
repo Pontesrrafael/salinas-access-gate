@@ -82,7 +82,7 @@ $menu = [
     <?php endforeach; ?>
     <?= $content ?>
   </main>
-  <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · Horário de Mato Grosso – UTC-4</footer>
+  <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · Horário de Mato Grosso – UTC-4 · <a href="<?= e(url('/privacidade')) ?>">Aviso de privacidade</a></footer>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="<?= e(asset('js/app.js')) ?>"></script>

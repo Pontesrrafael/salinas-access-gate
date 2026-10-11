@@ -23,7 +23,7 @@
     <label class="checkbox caixa-risco campo-largo"><input type="checkbox" name="atividade_risco" value="1"<?= checked(old($old, 'atividade_risco')) ?>>
       <span><strong>Vou executar atividade de risco</strong> (trabalho em altura, espaço confinado, elétrica, área de mina etc.)<br><small>Será exigida verificação do SSMA: ASO válido, documento de identificação e autorização.</small></span></label>
     <label class="checkbox campo-largo"><input type="checkbox" name="consentimento_lgpd" value="1" required>
-      <span>Autorizo o tratamento dos meus dados pessoais pela Salinas Gold Mineração LTDA exclusivamente para controle de acesso e segurança, conforme a LGPD (Lei 13.709/2018). <span class="obrigatorio">*</span></span></label>
+      <span>Li o <a href="<?= e(url('/privacidade')) ?>" target="_blank" rel="noopener">aviso de privacidade</a> e estou ciente de que meus dados serão usados para controle de acesso e segurança, conforme a LGPD (Lei 13.709/2018). <span class="obrigatorio">*</span></span></label>
   </div>
   <div class="hp" aria-hidden="true"><label>Não preencha<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
   <?php if ($turnstile): ?><div class="cf-turnstile" data-sitekey="<?= e($turnstile) ?>"></div><?php endif; ?>
