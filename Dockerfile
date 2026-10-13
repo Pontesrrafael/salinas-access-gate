@@ -9,7 +9,8 @@ ENV TZ=America/Cuiaba \
 # Extensões: pdo_mysql e ldap (AD opcional). sodium, mbstring, fileinfo, curl e (no PHP 8.5) OPcache já vêm na imagem oficial.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends tzdata libldap2-dev; \
+    apt-get install -y --no-install-recommends tzdata libldap2-dev libheif-examples libheif-plugin-libde265; \
+    (command -v heif-dec || command -v heif-convert); \
     docker-php-ext-configure ldap --with-libdir="lib/$(uname -m)-linux-gnu"; \
     docker-php-ext-install -j"$(nproc)" pdo_mysql ldap; \
     php -m | grep -qi "Zend OPcache" || docker-php-ext-install opcache; \

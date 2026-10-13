@@ -98,7 +98,7 @@ php bin\console.php verificar
 Dê dois cliques em `bin\INICIAR.bat`, ou rode:
 
 ```powershell
-php -d post_max_size=72M -d upload_max_filesize=8M -S localhost:8080 -t public public/index.php
+php -d post_max_size=110M -d upload_max_filesize=25M -S localhost:8080 -t public public/index.php
 ```
 
 Acesse **http://localhost:8080** e entre com o admin criado.
@@ -106,7 +106,7 @@ Acesse **http://localhost:8080** e entre com o admin criado.
 Para testar pelo celular ou tablet na mesma rede (câmera da portaria), use:
 
 ```powershell
-php -d post_max_size=72M -d upload_max_filesize=8M -S 0.0.0.0:8080 -t public public/index.php
+php -d post_max_size=110M -d upload_max_filesize=25M -S 0.0.0.0:8080 -t public public/index.php
 ```
 
 Depois acesse `http://<IP-do-notebook>:8080`. Atenção: em HTTP o navegador do celular pode abrir só a galeria, sem a câmera direta. A câmera direta funciona em HTTPS, ou seja, em produção.

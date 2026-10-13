@@ -1,6 +1,6 @@
 # Operação da Portaria — guia do porteiro e da TI
 
-**Documento:** MD-TI-SIS-CBA-007 · Rev. 00 · Salinas Access Gate
+**Documento:** MD-TI-SIS-CBA-007 · Rev. 01 · Salinas Access Gate
 **Público:** porteiros, Segurança Patrimonial, supervisores e TI
 **Horário de referência:** Horário de Mato Grosso – UTC-4
 
@@ -97,8 +97,30 @@ O QR **não dispensa** as demais regras (SSMA, documentos, alertas). Cada leitur
 | **Sair do sistema** | Apaga o cadastro local do posto. Se houver fila pendente, o sistema avisa antes |
 | **Quando ajuda** | Quando o caminho entre o posto e o servidor cai (rede, switch, servidor reiniciando). Com servidor e portaria na mesma LAN, a queda da internet não afeta |
 
-## 7. Validação desta revisão
+## 7. Fotos e anexos (celulares Samsung)
 
+| Item | Regra |
+|---|---|
+| **Formatos** | JPG, PNG, WEBP, **HEIC/HEIF** e **RAW (DNG)**. HEIC é o padrão da câmera Samsung com *Fotos de alta eficiência* ligado; DNG sai do modo **Pro** com *Cópias RAW* ligado |
+| **Tamanho** | Até **25 MB por foto** e **100 MB por entrada/saída**, no máximo 8 fotos. Configurável no `.env`: `UPLOAD_MAX_MB`, `UPLOAD_MAX_TOTAL_MB`, `UPLOAD_MAX_FILES` |
+| **HEIC** | O servidor converte para **JPEG**, já girado, para abrir em qualquer navegador. Usa o pacote `libheif`, que já vem na imagem Docker. O nome original do arquivo é guardado. Sem o conversor (XAMPP), o HEIC fica guardado como arquivo para baixar |
+| **RAW (DNG)** | Guardado como está, sem recodificar, e aparece no registro como **arquivo para baixar**. Abre em visualizadores de RAW (Lightroom, Galeria Samsung ou Windows Fotos com a extensão de imagem RAW) |
+| **Privacidade** | GPS, modelo do aparelho e outros metadados são removidos de todos os formatos. No RAW e no HEIC sem conversão, o bloco de GPS é esvaziado sem alterar a imagem |
+| **Conferência** | O tipo é conferido pelo conteúdo, não pela extensão. Um `.jpg` que na verdade é HEIC é aceito; um arquivo qualquer renomeado para `.heic` ou `.dng` é recusado |
+
+**Fotos guardadas no computador (rascunho e fila)**
+- **Anexou, ficou guardado:** cada foto anexada já fica salva no navegador do posto. Se a página fechar, recarregar ou a conexão cair antes de confirmar, as fotos voltam ao abrir a portaria de novo.
+- **Sem internet ou queda no meio do envio:** o registro e as fotos vão para a fila e sobem sozinhos quando a conexão volta. A faixa no topo mostra o progresso (*Enviando registro 1 de 3 — 45%*).
+- **Envio online:** o botão mostra o percentual (*Enviando fotos… 60%*), útil com fotos grandes em LTE (4G) ou Starlink.
+- **Sair do sistema:** a fila pendente é mantida e o sistema avisa antes de sair.
+
+> Dica para o posto: com o celular da portaria, prefira JPEG (*Câmera → Configurações → Formato da foto → Fotos de alta eficiência* desligado). Fica menor e sobe mais rápido. Use RAW só quando precisar de evidência com máxima qualidade.
+
+## 8. Validação desta revisão
+
+- **Fotos Samsung (Rev. 01):**
+  - formatos e limites: 18/18 (HEIC→JPEG sem GPS e girado, DNG sem GPS e íntegro, limites de 25/100 MB, arquivos disfarçados recusados);
+  - interface: 10/10 (rascunho após recarregar, fila offline com 3 formatos sincronizada, envio de 20 MB com progresso).
 - **Testes ponta a ponta:** 81/81. Atualizados para o alerta vermelho.
 - **Pacote Portaria:** 49/49. Cobrem:
   - saída rápida e em lote com veículo;

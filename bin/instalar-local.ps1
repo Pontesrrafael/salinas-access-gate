@@ -126,7 +126,7 @@ Passo 'Verificação final'
 & $php bin\console.php verificar
 
 Passo 'Iniciando o servidor em http://localhost:8080 (feche a janela do servidor para parar)'
-$argsServidor = @('-d', 'upload_max_filesize=8M', '-d', 'post_max_size=72M', '-d', 'max_file_uploads=20',
+$argsServidor = @('-d', 'upload_max_filesize=25M', '-d', 'post_max_size=110M', '-d', 'max_input_time=600', '-d', 'max_file_uploads=20',
           '-S', 'localhost:8080', '-t', 'public', 'public/index.php')
 Start-Process -FilePath $php -ArgumentList $argsServidor -WorkingDirectory $raiz
 Start-Sleep -Seconds 2

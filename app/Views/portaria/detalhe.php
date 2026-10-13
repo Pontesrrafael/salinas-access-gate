@@ -25,8 +25,14 @@
     <div class="fotos-grade">
       <?php foreach ($anexos as $a): ?>
         <figure class="foto-item">
-          <a href="<?= e(url('/anexos/' . $a['id'])) ?>" target="_blank" rel="noopener"><img src="<?= e(url('/anexos/' . $a['id'])) ?>" alt="<?= e(TIPOS_FOTO[$a['tipo_foto']] ?? 'Foto') ?>" loading="lazy"></a>
-          <figcaption><?= e(TIPOS_FOTO[$a['tipo_foto']] ?? $a['tipo_foto']) ?> · <?= (int) round(((int) $a['tamanho_bytes']) / 1024) ?> KB</figcaption>
+          <?php if (!$a['existe']): ?>
+            <div class="foto-arquivo"><?= icon('imagem', 'icon icon-lg') ?><span>Foto apagada pela política de retenção (LGPD)</span></div>
+          <?php elseif ($a['web']): ?>
+            <a href="<?= e(url('/anexos/' . $a['id'])) ?>" target="_blank" rel="noopener"><img src="<?= e(url('/anexos/' . $a['id'])) ?>" alt="<?= e(TIPOS_FOTO[$a['tipo_foto']] ?? 'Foto') ?>" loading="lazy"></a>
+          <?php else: ?>
+            <a class="foto-arquivo" href="<?= e(url('/anexos/' . $a['id'])) ?>"><?= icon('download', 'icon icon-lg') ?><span><?= e($a['mime_type'] === 'image/x-adobe-dng' ? 'RAW (DNG)' : 'HEIC') ?> — baixar</span></a>
+          <?php endif; ?>
+          <figcaption><?= e(TIPOS_FOTO[$a['tipo_foto']] ?? $a['tipo_foto']) ?> · <?= e(fmt_bytes((int) $a['tamanho_bytes'])) ?></figcaption>
         </figure>
       <?php endforeach; ?>
     </div>

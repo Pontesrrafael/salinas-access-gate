@@ -37,7 +37,7 @@
 
     <form method="post" action="<?= e(url('/portaria/registrar')) ?>" enctype="multipart/form-data" id="form-portaria"
           data-local="<?= e($local['id'] ?? '') ?>"
-          data-max-fotos="<?= (int) $uploadCfg['max_files'] ?>" data-max-mb="<?= (int) $uploadCfg['max_mb'] ?>"
+          data-max-fotos="<?= (int) $uploadCfg['max_files'] ?>" data-max-mb="<?= (int) $uploadCfg['max_mb'] ?>" data-max-total-mb="<?= (int) $uploadCfg['max_total_mb'] ?>"
           data-exigir-destino="<?= $exigirDestino ? '1' : '0' ?>">
       <?= csrf_field() ?>
       <input type="hidden" name="_idem" value="<?= e($idem) ?>">
@@ -118,12 +118,12 @@
       <!-- 5. Fotos -->
       <section class="cartao">
         <div class="cartao-cabecalho">
-          <h2 class="rotulo-caps">Fotos / anexos <small class="mudo normal" id="fotos-contador">(0/<?= (int) $uploadCfg['max_files'] ?> · JPG/PNG/WEBP · até <?= (int) $uploadCfg['max_mb'] ?> MB)</small></h2>
+          <h2 class="rotulo-caps">Fotos / anexos <small class="mudo normal" id="fotos-contador">(0/<?= (int) $uploadCfg['max_files'] ?> · JPG/PNG/WEBP/HEIC/RAW · até <?= (int) $uploadCfg['max_mb'] ?> MB cada, <?= (int) $uploadCfg['max_total_mb'] ?> MB no total)</small></h2>
           <div class="botoes">
             <label class="btn btn-secundario btn-sm"><?= icon('camera', 'icon icon-sm') ?> Câmera
-              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" id="foto-camera" class="oculto-acessivel"></label>
+              <input type="file" accept="image/*" capture="environment" id="foto-camera" class="oculto-acessivel"></label>
             <label class="btn btn-secundario btn-sm"><?= icon('imagem', 'icon icon-sm') ?> Galeria
-              <input type="file" accept="image/jpeg,image/png,image/webp" multiple id="foto-galeria" class="oculto-acessivel"></label>
+              <input type="file" accept="image/*,<?= e(\App\Services\Upload::EXTENSOES_ACEITAS) ?>" multiple id="foto-galeria" class="oculto-acessivel"></label>
           </div>
         </div>
         <input type="file" name="fotos[]" id="fotos-envio" multiple hidden>

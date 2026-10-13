@@ -154,7 +154,7 @@ final class Http
         }
         $titulos = [
             400 => 'Requisição inválida', 403 => 'Acesso negado', 404 => 'Página não encontrada',
-            405 => 'Método não permitido', 409 => 'Já processado', 410 => 'Link expirado',
+            405 => 'Método não permitido', 409 => 'Já processado', 410 => 'Link expirado', 413 => 'Envio muito grande',
             419 => 'Sessão expirada', 422 => 'Dados inválidos', 429 => 'Muitas tentativas',
             500 => 'Erro interno',
         ];

@@ -67,6 +67,11 @@ function mascarar_documento(?string $doc): string
     return strlen($d) >= 4 ? 'doc. ***' . substr($d, -2) : 'doc. ***';
 }
 
+function fmt_bytes(int $b): string
+{
+    return $b >= 1048576 ? number_format($b / 1048576, 1, ',', '.') . ' MB' : max(1, (int) round($b / 1024)) . ' KB';
+}
+
 function selected(mixed $a, mixed $b): string
 {
     return (string) $a === (string) $b ? ' selected' : '';

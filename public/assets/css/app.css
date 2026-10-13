@@ -922,3 +922,9 @@ kbd { font-family: var(--mono); font-size: .78em; background: var(--superficie-2
 .texto-legal ul { margin: 0 0 8px 20px; }
 .texto-legal p { margin: 0 0 8px; }
 .rodape a, .rodape-simples a { color: inherit; }
+
+/* Anexos que o navegador não exibe (HEIC sem conversão, RAW/DNG) */
+.foto-arquivo { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; aspect-ratio: 4 / 3; width: 100%;
+  background: var(--superficie-2); border: 1px dashed var(--borda-forte); border-radius: var(--raio); color: var(--texto-2); text-align: center; padding: 8px; text-decoration: none; }
+.foto-arquivo strong { font-size: 1.1rem; color: var(--verde); }
+.foto-arquivo span { font-size: .75rem; word-break: break-all; }
