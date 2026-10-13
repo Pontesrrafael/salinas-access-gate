@@ -10,18 +10,24 @@ namespace App\Services;
  */
 final class Metadados
 {
-    /** Limpa o arquivo no lugar. Retorna true se algo foi removido. */
-    public static function limpar(string $arquivo, string $mime): bool
+    /**
+     * Limpa o arquivo no lugar. Retorna true se algo foi removido.
+     * HEIC e RAW (DNG) não são reescritos: o bloco de GPS é esvaziado no próprio arquivo (mesmo tamanho).
+     * $manterOrientacao=false quando a imagem já foi girada (ex.: convertida de HEIC).
+     */
+    public static function limpar(string $arquivo, string $mime, bool $manterOrientacao = true): bool
     {
         $dados = @file_get_contents($arquivo);
         if ($dados === false) {
             return false;
         }
         $novo = match ($mime) {
-            'image/jpeg' => self::jpeg($dados),
-            'image/png'  => self::png($dados),
-            'image/webp' => self::webp($dados),
-            default      => null,
+            'image/jpeg'        => self::jpeg($dados, $manterOrientacao),
+            'image/png'         => self::png($dados),
+            'image/webp'        => self::webp($dados),
+            'image/heic'        => self::heic($dados),
+            'image/x-adobe-dng' => self::dng($dados),
+            default             => null,
         };
         if ($novo === null || $novo === $dados) {
             return false;
@@ -30,7 +36,7 @@ final class Metadados
     }
 
     /** JPEG: descarta APP1 (EXIF/XMP), APP12, APP13 (IPTC) e comentários; recria EXIF só com a orientação. */
-    public static function jpeg(string $d): ?string
+    public static function jpeg(string $d, bool $manterOrientacao = true): ?string
     {
         if (strncmp($d, "\xFF\xD8", 2) !== 0) {
             return null;
@@ -65,7 +71,7 @@ final class Metadados
             }
             $i += 2 + $len;
         }
-        if ($orientacao !== null && $orientacao !== 1) {
+        if ($manterOrientacao && $orientacao !== null && $orientacao !== 1) {
             // APP1 mínimo: TIFF big-endian, IFD0 com uma entrada (0x0112 Orientation, SHORT)
             $tiff = "MM\x00\x2A\x00\x00\x00\x08" . "\x00\x01" . "\x01\x12\x00\x03\x00\x00\x00\x01" . pack('n', $orientacao) . "\x00\x00" . "\x00\x00\x00\x00";
             $app1 = "Exif\0\0" . $tiff;
@@ -101,6 +107,58 @@ final class Metadados
             }
         }
         return null;
+    }
+
+    /**
+     * HEIC (padrão das câmeras Samsung com "Fotos de alta eficiência"): o EXIF fica num item interno
+     * ("Exif\0\0" + TIFF). Esvazia o diretório de GPS no lugar, sem mudar o tamanho nem os offsets do arquivo.
+     */
+    public static function heic(string $d): ?string
+    {
+        $alterou = false;
+        foreach (["Exif\0\0II*\0", "Exif\0\0MM\0*"] as $marca) {
+            $pos = 0;
+            while (($pos = strpos($d, $marca, $pos)) !== false) {
+                $alterou = self::tiffSemGps($d, $pos + 6) || $alterou;
+                $pos += 10;
+            }
+        }
+        return $alterou ? $d : null;
+    }
+
+    /** RAW/DNG (TIFF): esvazia o GPS numa cópia, sem mudar tamanho nem offsets. */
+    public static function dng(string $d): ?string
+    {
+        return self::tiffSemGps($d, 0) ? $d : null;
+    }
+
+    /**
+     * TIFF/DNG: zera a quantidade de entradas do diretório GPS (IFD apontado pela tag 0x8825 do IFD0).
+     * O arquivo continua válido (diretório vazio) e mantém o mesmo tamanho.
+     */
+    public static function tiffSemGps(string &$d, int $base): bool
+    {
+        $t = substr($d, $base, 8);
+        if (strlen($t) < 8 || !in_array(substr($t, 0, 4), ["II*\0", "MM\0*"], true)) {
+            return false;
+        }
+        $le = $t[0] === 'I';
+        $u16 = fn (int $o) => strlen($d) >= $o + 2 ? unpack($le ? 'v' : 'n', substr($d, $o, 2))[1] : 0;
+        $u32 = fn (int $o) => strlen($d) >= $o + 4 ? unpack($le ? 'V' : 'N', substr($d, $o, 4))[1] : 0;
+        $ifd = $base + $u32($base + 4);
+        $qtd = $u16($ifd);
+        for ($k = 0; $k < $qtd && $k < 512; $k++) {
+            $e = $ifd + 2 + $k * 12;
+            if ($u16($e) === 0x8825) {
+                $gps = $base + $u32($e + 8);
+                if ($gps + 2 <= strlen($d) && $u16($gps) > 0) {
+                    $d = substr_replace($d, "\0\0", $gps, 2);
+                    return true;
+                }
+                return false;
+            }
+        }
+        return false;
     }
 
     /** PNG: descarta eXIf, tEXt, zTXt, iTXt e tIME (os CRCs são por bloco, nada a recalcular). */

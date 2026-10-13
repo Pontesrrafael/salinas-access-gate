@@ -454,7 +454,12 @@ final class PortariaController extends Controller
               WHERE r.id = ?',
             [$id]
         ) ?? Http::abort(404, 'Registro não encontrado.');
-        $anexos = Database::all('SELECT id, tipo_foto, nome_arquivo, tamanho_bytes, created_at FROM registro_anexos WHERE registro_acesso_id = ?', [$id]);
+        $anexos = Database::all('SELECT id, tipo_foto, nome_arquivo, mime_type, tamanho_bytes, storage_path, created_at FROM registro_anexos WHERE registro_acesso_id = ?', [$id]);
+        foreach ($anexos as &$a) {
+            $a['web'] = in_array($a['mime_type'], Upload::MIMES_WEB, true);
+            $a['existe'] = Upload::caminho($a['storage_path']) !== null; // pode ter sido apagado pela retenção LGPD
+        }
+        unset($a);
         $this->view('portaria/detalhe', ['titulo' => 'Registro de acesso', 'r' => $r, 'anexos' => $anexos]);
     }
 
@@ -470,7 +475,9 @@ final class PortariaController extends Controller
         header('Content-Type: ' . $a['mime_type']);
         header('Content-Length: ' . filesize($path));
         header('Cache-Control: private, max-age=3600');
-        header('Content-Disposition: inline; filename="' . basename($path) . '"');
+        // Imagens web abrem no navegador; HEIC e RAW (DNG) são baixados com a extensão certa
+        $web = in_array($a['mime_type'], Upload::MIMES_WEB, true);
+        header('Content-Disposition: ' . ($web ? 'inline' : 'attachment') . '; filename="' . basename($path) . '"');
         readfile($path);
         exit;
     }

@@ -41,8 +41,9 @@ return [
     ],
     'uploads' => [
         'dir'        => Env::get('UPLOAD_DIR', dirname(__DIR__) . '/storage/uploads'),
-        'max_mb'     => Env::int('UPLOAD_MAX_MB', 8),
-        'max_files'  => Env::int('UPLOAD_MAX_FILES', 8),
+        'max_mb'       => Env::int('UPLOAD_MAX_MB', 25),        // por foto (RAW/DNG da Samsung chega a ~25 MB)
+        'max_files'    => Env::int('UPLOAD_MAX_FILES', 8),
+        'max_total_mb' => Env::int('UPLOAD_MAX_TOTAL_MB', 100), // soma das fotos de uma entrada/saída
     ],
     // Integração opcional com Active Directory / LDAP (desligada por padrão)
     'ldap' => [

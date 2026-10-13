@@ -100,7 +100,7 @@ php bin/console.php verificar
 
 ## 6. Limites de PHP
 
-O arquivo `public/.user.ini` já define `upload_max_filesize = 8M`, `post_max_size = 72M` e `max_file_uploads = 20` (até 8 fotos de 8 MB por registro).
+O arquivo `public/.user.ini` já define `upload_max_filesize = 25M`, `post_max_size = 110M` e `max_file_uploads = 20` (até 8 fotos de 25 MB, 100 MB por registro). Para converter fotos HEIC das câmeras Samsung em JPEG: `apt install libheif-examples libheif-plugin-libde265`.
 Ele é lido pelo PHP-FPM em até 5 minutos. Para aplicar na hora: `systemctl reload php8.3-fpm`.
 
 ## 7. Tarefas agendadas

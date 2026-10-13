@@ -27,7 +27,8 @@ try {
     // POST maior que post_max_size chega vazio: avisa em vez de acusar falha de CSRF
     if (Http::method() === 'POST' && empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
         Session::start();
-        Http::abort(400, 'O envio excedeu o tamanho máximo permitido pelo servidor (post_max_size). Reduza a quantidade ou o tamanho das fotos.');
+        $limite = (int) (App::config('uploads')['max_total_mb'] ?? 100);
+        Http::abort(413, "As fotos excedem o limite de {$limite} MB por movimentação (" . round((int) $_SERVER['CONTENT_LENGTH'] / 1048576, 1) . ' MB enviados). Reduza a quantidade ou o tamanho das fotos.');
     }
     if (Http::path() !== '/saude') {
         Session::start();

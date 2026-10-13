@@ -142,7 +142,7 @@ php bin/console.php gerar-chaves --gravar  # chaves do CPF (guarde em cofre!)
 php bin/console.php migrar                 # cria tabelas, triggers e views
 php bin/console.php criar-admin --email=ti@salinasgold.com.br --nome="TI Salinas"
 php bin/console.php verificar              # checklist do ambiente
-php -d post_max_size=72M -d upload_max_filesize=8M -S localhost:8080 -t public public/index.php
+php -d post_max_size=110M -d upload_max_filesize=25M -S localhost:8080 -t public public/index.php
 ```
 
 No Windows com XAMPP, basta dar dois cliques em `bin\INSTALAR-E-INICIAR.bat`. Guia completo do Windows em [docs/01-INSTALACAO-LOCAL-WINDOWS.md](docs/01-INSTALACAO-LOCAL-WINDOWS.md).

@@ -463,11 +463,12 @@
       if (db) { return Promise.resolve(db); }
       return new Promise((ok, erro) => {
         if (!window.indexedDB) { erro(new Error('IndexedDB indisponível')); return; }
-        const req = indexedDB.open('sag-portaria', 1);
+        const req = indexedDB.open('sag-portaria', 2);
         req.onupgradeneeded = () => {
           const d = req.result;
           if (!d.objectStoreNames.contains('fila')) { d.createObjectStore('fila', { keyPath: 'registro_id' }); }
           if (!d.objectStoreNames.contains('cache')) { d.createObjectStore('cache'); }
+          if (!d.objectStoreNames.contains('rascunho')) { d.createObjectStore('rascunho'); } // fotos anexadas antes de registrar
         };
         req.onsuccess = () => { db = req.result; ok(db); };
         req.onerror = () => erro(req.error);
@@ -488,6 +489,8 @@
       lerCache: () => op('cache', 'readonly', (o) => o.get('pacote')),
       gravarCache: (v) => op('cache', 'readwrite', (o) => o.put(v, 'pacote')),
       limparCache: () => op('cache', 'readwrite', (o) => o.delete('pacote')),
+      lerRascunho: () => op('rascunho', 'readonly', (o) => o.get('fotos')),
+      gravarRascunho: (v) => op('rascunho', 'readwrite', (o) => (v && v.length ? o.put(v, 'fotos') : o.delete('fotos'))),
     };
   })();
 
@@ -509,7 +512,19 @@
   const LOCAL = form.dataset.local;
   const MAX_FOTOS = parseInt(form.dataset.maxFotos, 10) || 8;
   const MAX_MB = parseInt(form.dataset.maxMb, 10) || 8;
-  const MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_TOTAL_MB = parseInt(form.dataset.maxTotalMb, 10) || 100;
+  // Formatos: JPG/PNG/WEBP (exibidos), HEIC (padrão Samsung "alta eficiência") e RAW/DNG (modo Pro).
+  // O navegador nem sempre informa o tipo de HEIC/DNG; a extensão desempata e o servidor confere o conteúdo.
+  const FORMATOS = { jpg: 'web', jpeg: 'web', png: 'web', webp: 'web', heic: 'HEIC', heif: 'HEIC', dng: 'RAW' };
+  const formatoDe = (file) => {
+    const t = (file.type || '').toLowerCase();
+    if (t === 'image/jpeg' || t === 'image/png' || t === 'image/webp') { return 'web'; }
+    if (t === 'image/heic' || t === 'image/heif') { return 'HEIC'; }
+    if (t === 'image/x-adobe-dng' || t === 'image/dng') { return 'RAW'; }
+    const ext = ((file.name || '').split('.').pop() || '').toLowerCase();
+    return FORMATOS[ext] || null;
+  };
+  const mb = (b) => (b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1).replace('.', ',') + ' MB');
   const QR_PADRAO = /SAG1\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.[A-Za-z0-9_-]{16}$/;
 
   const st = {
@@ -942,34 +957,72 @@
     st.fotos.forEach((f, i) => {
       const fig = document.createElement('figure');
       fig.className = 'foto-item';
-      fig.innerHTML = '<img alt="Prévia ' + (i + 1) + '"><button type="button" class="foto-remover" aria-label="Remover foto">&times;</button>' +
-        '<select name="fotos_tipo[]" form="form-portaria">' + opcoes + '</select><figcaption>' + Math.round(f.file.size / 1024) + ' KB</figcaption>';
-      fig.querySelector('img').src = f.url;
+      const fmt = formatoDe(f.file);
+      fig.innerHTML = (fmt === 'web' ? '<img alt="Prévia ' + (i + 1) + '">' : '<div class="foto-arquivo"><strong>' + esc(fmt) + '</strong><span>' + esc(f.file.name) + '</span></div>') +
+        '<button type="button" class="foto-remover" aria-label="Remover foto">&times;</button>' +
+        '<select name="fotos_tipo[]" form="form-portaria">' + opcoes + '</select><figcaption>' + esc(mb(f.file.size)) + '</figcaption>';
+      if (fmt === 'web') { fig.querySelector('img').src = f.url; }
       const sel = fig.querySelector('select'); sel.value = f.tipo;
       sel.addEventListener('change', () => { f.tipo = sel.value; });
       fig.querySelector('.foto-remover').addEventListener('click', () => {
-        URL.revokeObjectURL(f.url); st.fotos.splice(i, 1); sincronizarFotos();
+        URL.revokeObjectURL(f.url); st.fotos.splice(i, 1); sincronizarFotos(); salvarRascunho();
       });
       el.fotosGrade.appendChild(fig);
     });
     el.fotosVazio.hidden = st.fotos.length > 0;
-    el.fotosContador.textContent = '(' + st.fotos.length + '/' + MAX_FOTOS + ' · JPG/PNG/WEBP · até ' + MAX_MB + ' MB)';
+    const total = st.fotos.reduce((s, f) => s + f.file.size, 0);
+    el.fotosContador.textContent = '(' + st.fotos.length + '/' + MAX_FOTOS + ' · ' + mb(total) + ' de ' + MAX_TOTAL_MB + ' MB · JPG/PNG/WEBP/HEIC/RAW até ' + MAX_MB + ' MB cada)';
   }
   function adicionarFotos(files, tipo) {
     Array.from(files || []).forEach((file) => {
+      const total = st.fotos.reduce((s, f) => s + f.file.size, 0);
       if (st.fotos.length >= MAX_FOTOS) { toast('Máximo de ' + MAX_FOTOS + ' fotos por registro.', 'erro'); return; }
-      if (MIMES.indexOf(file.type) === -1) { toast('Formato inválido: ' + file.name + ' (use JPG, PNG ou WEBP).', 'erro'); return; }
-      if (file.size > MAX_MB * 1024 * 1024) { toast(file.name + ' excede ' + MAX_MB + ' MB.', 'erro'); return; }
+      if (!formatoDe(file)) { toast('Formato inválido: ' + file.name + ' (use JPG, PNG, WEBP, HEIC ou RAW/DNG).', 'erro'); return; }
+      if (file.size > MAX_MB * 1024 * 1024) { toast(file.name + ' tem ' + mb(file.size) + '; o limite é ' + MAX_MB + ' MB por foto.', 'erro'); return; }
+      if (total + file.size > MAX_TOTAL_MB * 1024 * 1024) { toast('As fotos passariam de ' + MAX_TOTAL_MB + ' MB nesta movimentação.', 'erro'); return; }
       st.fotos.push({ file: file, url: URL.createObjectURL(file), tipo: tipo });
     });
     sincronizarFotos();
+    salvarRascunho();
+  }
+
+  // Rascunho: cada foto anexada já fica guardada neste computador (IndexedDB). Se a página fechar,
+  // recarregar ou a conexão cair antes do registro, as fotos voltam ao abrir a portaria de novo.
+  function salvarRascunho() {
+    BancoLocal.gravarRascunho(st.fotos.map((f) => ({ file: f.file, tipo: f.tipo }))).catch(() => null);
+  }
+  async function restaurarRascunho() {
+    let r = null;
+    try { r = await BancoLocal.lerRascunho(); } catch (e) { r = null; }
+    if (!r || !r.length || st.fotos.length) { return; }
+    r.forEach((x) => { if (x.file) { st.fotos.push({ file: x.file, url: URL.createObjectURL(x.file), tipo: x.tipo || 'outra' }); } });
+    sincronizarFotos();
+    toast(r.length + ' foto(s) anexada(s) antes foram recuperadas deste computador.', 'aviso');
+  }
+
+  // Envio com barra de progresso (fotos grandes em LTE/Starlink). Status 0 = sem conexão ou tempo esgotado.
+  function enviar(fd, aoProgredir) {
+    return new Promise((ok) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', BASE + '/portaria/registrar');
+      x.withCredentials = true;
+      x.timeout = 15 * 60 * 1000;
+      x.setRequestHeader('Accept', 'application/json');
+      x.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      x.setRequestHeader('X-CSRF-Token', CSRF);
+      if (aoProgredir && x.upload) { x.upload.onprogress = (e) => { if (e.lengthComputable) { aoProgredir(Math.round(e.loaded * 100 / e.total)); } }; }
+      const fim = () => { let d = null; try { d = JSON.parse(x.responseText); } catch (e) { d = null; } ok({ status: x.status, data: d }); };
+      x.onload = fim;
+      x.onerror = x.ontimeout = x.onabort = () => ok({ status: 0, data: null });
+      x.send(fd);
+    });
   }
   $('#foto-camera').addEventListener('change', (e) => { adicionarFotos(e.target.files, 'pessoa'); e.target.value = ''; });
   $('#foto-galeria').addEventListener('change', (e) => { adicionarFotos(e.target.files, 'outra'); e.target.value = ''; });
 
   function limparFormulario() {
     st.fotos.forEach((f) => URL.revokeObjectURL(f.url));
-    st.fotos = []; sincronizarFotos();
+    st.fotos = []; sincronizarFotos(); salvarRascunho();
     if (st.veiculoId) { trocarVeiculo(false); }
     el.destino.value = ''; el.obs.value = '';
     el.respId.value = window.__respPadraoUsuario || '';
@@ -990,22 +1043,22 @@
     el.btnTexto.textContent = st.offline ? 'Guardando...' : 'Registrando...';
     const fd = new FormData(form);
     if (!st.offline) {
-      let r = null;
-      try {
-        r = await fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin',
-          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF } });
-      } catch (e) { r = null; }
-      if (r && r.ok) { window.location.href = BASE + '/portaria'; return; }
-      if (r && r.status === 422) {
-        let d = null; try { d = await r.json(); } catch (e) { d = null; }
+      const temFotos = st.fotos.length > 0;
+      const r = await enviar(fd, temFotos ? (pct) => { el.btnTexto.textContent = 'Enviando fotos… ' + pct + '%'; } : null);
+      if (r.status >= 200 && r.status < 300) {
+        try { await BancoLocal.gravarRascunho([]); } catch (e) { /* noop */ }
+        window.location.href = BASE + '/portaria'; return;
+      }
+      if (r.status === 422 || r.status === 400 || r.status === 413) {
+        const d = r.data;
         toast((d && d.erro) || 'Registro recusado.', 'erro');
         el.bloqueios.hidden = false;
         el.bloqueios.innerHTML = '<strong>Não registrado</strong><ul><li>' + esc((d && d.erro) || 'Registro recusado pelo servidor.') + '</li></ul>';
         analisar();
         return;
       }
-      if (r && (r.status === 401 || r.status === 403)) { precisaLogin = true; }
-      else { marcarOffline(true); }
+      if (r.status === 401 || r.status === 403) { precisaLogin = true; }
+      else { marcarOffline(true); toast('A conexão caiu durante o envio: o registro e as fotos ficam guardados e sobem quando a internet voltar.', 'aviso'); }
     }
     await guardarNaFila(fd);
   });
@@ -1049,23 +1102,25 @@
     try { fila = (await BancoLocal.fila()).filter((x) => !x.erro); } catch (e) { return; }
     if (!fila.length) { contarFila(); return; }
     sincronizando = true; precisaLogin = false; atualizarFaixa();
-    let enviados = 0;
+    let enviados = 0, n = 0;
     for (const item of fila) {
+      n++;
       const fd = new FormData();
       Object.keys(item.campos).forEach((k) => fd.append(k, item.campos[k]));
       fd.append('sincronizacao', '1');
       fd.append('offline_em', item.criado_em);
       (item.fotos || []).forEach((f) => { fd.append('fotos[]', f.blob, f.nome || 'foto.jpg'); fd.append('fotos_tipo[]', f.tipo || 'outra'); });
-      let r = null;
-      try {
-        r = await fetch(BASE + '/portaria/registrar', { method: 'POST', body: fd, credentials: 'same-origin',
-          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF } });
-      } catch (e) { marcarOffline(true); break; }
-      if (r.ok) { await BancoLocal.remover(item.registro_id); enviados++; continue; }
+      const comFotos = (item.fotos || []).length;
+      const r = await enviar(fd, (pct) => {
+        el.faixaTexto.textContent = 'Enviando registro ' + n + ' de ' + fila.length + (comFotos ? ' (' + comFotos + ' foto(s)) — ' + pct + '%' : '') + '…';
+        el.faixa.hidden = false;
+      });
+      if (r.status === 0) { marcarOffline(true); break; }
+      if (r.status >= 200 && r.status < 300) { await BancoLocal.remover(item.registro_id); enviados++; continue; }
       if (r.status === 401 || r.status === 403) { precisaLogin = true; break; }
-      if (r.status === 422) {
-        let d = null; try { d = await r.json(); } catch (e) { d = null; }
-        item.erro = (d && d.erro) || 'Recusado pelo servidor';
+      if (r.status === 422 || r.status === 400 || r.status === 413) {
+        const d = r.data;
+        item.erro = (d && d.erro) || (r.status === 413 ? 'Fotos maiores que o limite do servidor' : 'Recusado pelo servidor');
         await BancoLocal.enfileirar(item);
         continue;
       }
@@ -1265,5 +1320,8 @@
   }
   if (!navigator.onLine) { marcarOffline(true); }
   contarFila().then(() => { if (filaTamanho) { sincronizar(); } });
+  restaurarRascunho();
+  // Pede ao navegador para não descartar a fila/rascunho quando faltar espaço (quando suportado)
+  if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => null); }
   setTimeout(carregarCache, 1500);
 })();
