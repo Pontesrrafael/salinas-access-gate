@@ -15,6 +15,7 @@ $menu = [
     'Cadastros' => [
         ['/pessoas', 'Pessoas', 'pessoas', 'pessoas.ver'],
         ['/veiculos', 'Veículos', 'veiculo', 'veiculos.ver'],
+        ['/infleet', 'Infleet', 'veiculo', 'infleet.ver'],
         ['/locais', 'Locais', 'local', 'locais.gerir'],
     ],
     'Gestão' => [
@@ -37,7 +38,8 @@ $menu = [
   <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
   <meta name="theme-color" content="#024B37">
   <meta name="color-scheme" content="light dark">
-  <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>">
+  <?php foreach ($styles ?? [] as $style): ?><link rel="stylesheet" href="<?= e(asset($style)) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"><?php endforeach; ?>
 </head>
 <body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
 <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-hidden="true">
@@ -85,6 +87,7 @@ $menu = [
   <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · Horário de Mato Grosso – UTC-4</footer>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="<?= e(asset('js/app.js')) ?>"></script>
+<script src="<?= e(asset('js/app.js')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script>
+<?php foreach ($scripts ?? [] as $script): ?><script src="<?= e(asset($script)) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script><?php endforeach; ?>
 </body>
 </html>

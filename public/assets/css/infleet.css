@@ -1,0 +1,7 @@
+.infleet-mapa { height: 440px; min-height: 300px; border-radius: 8px; background: #e5ece8; margin-top: 12px; z-index: 0; }
+.infleet-mapa[hidden], #infleet-links-google[hidden] { display: none !important; }
+.infleet-mapa .leaflet-control { color: #222; }
+.infleet-mapa .leaflet-control a { color: #06553b; }
+.infleet-mapa .leaflet-bar a { color: #222; background: #fff; }
+.infleet-mapa .leaflet-control-attribution { background: #fff; color: #222; }
+@media (max-width: 640px) { .infleet-mapa { height: 340px; } }

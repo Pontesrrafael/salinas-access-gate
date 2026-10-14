@@ -32,6 +32,10 @@ jobs:
         run: find . -name '*.php' -not -path './storage/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
       - name: Scripts shell
         run: for f in docker/*.sh; do bash -n "$f"; done
+      - name: Cliente Infleet (respostas simuladas, sem token real)
+        run: php tests/infleet.php
+      - name: Mapas Infleet (Google e OpenStreetMap simulados)
+        run: node --test tests/infleet_maps.test.cjs
 
   docker:
     name: Instalação Docker + saúde

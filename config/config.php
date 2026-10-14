@@ -72,6 +72,18 @@ return [
         'group_porteiro'        => (string) Env::get('LDAP_GROUP_PORTEIRO', ''),
         'group_seg_patrimonial' => (string) Env::get('LDAP_GROUP_SEG_PATRIMONIAL', ''),
     ],
+    'infleet' => [
+        'enabled' => Env::bool('INFLEET_ENABLED', false),
+        'token' => (string) Env::get('INFLEET_TOKEN', ''),
+        'organization_id' => (string) Env::get('INFLEET_ORGANIZATION_ID', ''),
+        'timeout' => Env::int('INFLEET_TIMEOUT', 20),
+        'max_records' => Env::int('INFLEET_MAX_RECORDS', 10000),
+    ],
+    'google_maps' => [
+        'enabled' => Env::bool('GOOGLE_MAPS_ENABLED', false),
+        // Chave de navegador: restringir por domínio e exclusivamente à Maps JavaScript API.
+        'browser_key' => (string) Env::get('GOOGLE_MAPS_BROWSER_KEY', ''),
+    ],
     'turnstile' => [
         'site_key'   => Env::get('TURNSTILE_SITE_KEY', ''),
         'secret_key' => Env::get('TURNSTILE_SECRET_KEY', ''),

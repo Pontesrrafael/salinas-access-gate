@@ -8,6 +8,12 @@ namespace App\Core;
  */
 final class Http
 {
+    private static ?string $nonce = null;
+
+    public static function cspNonce(): string
+    {
+        return self::$nonce ??= base64_encode(random_bytes(24));
+    }
     public static function method(): string
     {
         return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
@@ -170,10 +176,22 @@ final class Http
     {
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
-        header('Referrer-Policy: same-origin');
+        $mapaInfleet = self::path() === '/infleet/percursos';
+        header('Referrer-Policy: ' . ($mapaInfleet ? 'strict-origin-when-cross-origin' : 'same-origin'));
         header('Permissions-Policy: geolocation=(), microphone=(), camera=(self)');
-        $csp = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
+        $tiles = $mapaInfleet ? ' https://tile.openstreetmap.org' : '';
+        $csp = "default-src 'self'; img-src 'self' data: blob:" . $tiles . "; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
              . "frame-src https://challenges.cloudflare.com; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'";
+        if ($mapaInfleet && (App::config('google_maps')['enabled'] ?? false) && trim((string) (App::config('google_maps')['browser_key'] ?? '')) !== '') {
+            $nonce = self::cspNonce();
+            // Nonce por resposta, conforme orientação Google; exceções limitadas à página de mapas.
+            $csp = "default-src 'self'; script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' https://maps.googleapis.com https://maps.gstatic.com 'unsafe-eval' blob:; "
+                . "style-src 'self' 'nonce-{$nonce}' https://fonts.googleapis.com; "
+                . "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com; "
+                . "connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.google.com data: blob:; "
+                . "font-src 'self' https://fonts.gstatic.com; frame-src https://*.google.com; worker-src blob:; "
+                . "form-action 'self'; base-uri 'self'; frame-ancestors 'none'";
+        }
         header('Content-Security-Policy: ' . $csp);
         if (self::isHttps()) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains');

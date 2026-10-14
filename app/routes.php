@@ -8,6 +8,7 @@ use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
 use App\Controllers\DashboardController;
 use App\Controllers\IndicadoresController;
+use App\Controllers\InfleetController;
 use App\Controllers\LocaisController;
 use App\Controllers\PessoasController;
 use App\Controllers\PortariaController;
@@ -21,6 +22,13 @@ use App\Controllers\VeiculosController;
 
 // ---- Saúde (monitoramento Zabbix/Uptime) ----
 $router->get('/saude', [PublicoController::class, 'saude']);
+
+// ---- Integração Infleet (opcional) ----
+$router->get('/infleet', [InfleetController::class, 'index']);
+$router->post('/infleet/sincronizar', [InfleetController::class, 'sincronizar']);
+$router->post('/infleet/motoristas/cadastrar', [InfleetController::class, 'cadastrarMotorista']);
+$router->get('/infleet/percursos', [InfleetController::class, 'percursos']);
+$router->get('/api/infleet/percursos', [InfleetController::class, 'dadosPercursos']);
 
 // ---- Autenticação ----
 $router->get('/', [AuthController::class, 'inicio']);

@@ -15,6 +15,8 @@ declare(strict_types=1);
  *   php bin/console.php ldap-buscar <termo>        Busca contas no AD
  *   php bin/console.php ldap-sincronizar           Sincroniza/desativa usuários do AD (agendar no cron)
  *   php bin/console.php ldap-vincular --email=<usuario local> --login=<usuario de rede>
+ *   php bin/console.php infleet-testar             Valida configuração e leitura da API
+ *   php bin/console.php infleet-sincronizar        Sincroniza veículos e motoristas (agendar no cron)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -298,6 +300,19 @@ switch ($cmd) {
         ], 'id = ?', [$u['id']]);
         Audit::log('usuarios', $u['id'], 'LDAP_VINCULO_CLI', ['login' => $e['login']], null);
         ok("{$u['email']} agora entra com o usuário de rede {$e['login']}.");
+        break;
+
+    case 'infleet-testar':
+        $infleet = new \App\Services\Infleet();
+        $infleet->verificar();
+        $veiculos = $infleet->veiculos();
+        $motoristas = $infleet->motoristas();
+        ok('API disponível: ' . count($veiculos) . ' veículos e ' . count($motoristas) . ' motoristas na organização configurada.');
+        break;
+
+    case 'infleet-sincronizar':
+        $r = (new \App\Services\InfleetSincronizacao())->executar();
+        ok("Sincronizados {$r['veiculos']} veículos e {$r['motoristas']} motoristas; {$r['pendencias']} vínculos pendentes.");
         break;
 
     case 'importar-supabase':

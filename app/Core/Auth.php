@@ -32,6 +32,8 @@ final class Auth
         'veiculos.criar'           => ['admin', 'supervisor', 'porteiro'],
         'veiculos.editar'          => ['admin', 'supervisor'],
         'veiculos.excluir'         => ['admin'],
+        'infleet.ver'              => ['admin', 'supervisor'],
+        'infleet.gerir'            => ['admin'],
         'locais.gerir'             => ['admin', 'supervisor'],
         'locais.excluir'           => ['admin'],
         'registros.ver'            => ['admin', 'supervisor', 'ssma', 'porteiro'],

@@ -113,6 +113,7 @@ No Windows com XAMPP, basta dar dois cliques em `bin\INSTALAR-E-INICIAR.bat`. Gu
 Deploy no Virtualmin em [docs/02-DEPLOY-VIRTUALMIN-UBUNTU.md](docs/02-DEPLOY-VIRTUALMIN-UBUNTU.md).
 Migração dos dados do Supabase em [docs/03-MIGRACAO-SUPABASE.md](docs/03-MIGRACAO-SUPABASE.md).
 Integração com Active Directory em [docs/04-INTEGRACAO-AD-LDAP.md](docs/04-INTEGRACAO-AD-LDAP.md).
+Integração opcional com Infleet (veículos, motoristas e percursos GPS) em [docs/06-INTEGRACAO-INFLEET.md](docs/06-INTEGRACAO-INFLEET.md).
 
 ## Estrutura
 
