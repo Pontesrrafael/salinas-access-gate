@@ -1,5 +1,5 @@
 <section class="cartao">
-  <form method="get" action="<?= e(url('/auditoria')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/auditoria')) ?>" class="filtros" data-tour="filtros">
     <label class="campo"><span>Entidade</span><select name="entidade"><option value="">Todas</option>
       <?php foreach ($entidades as $x): ?><option value="<?= e($x) ?>"<?= selected($f['entidade'], $x) ?>><?= e($x) ?></option><?php endforeach; ?></select></label>
     <label class="campo"><span>Ação</span><select name="acao"><option value="">Todas</option>

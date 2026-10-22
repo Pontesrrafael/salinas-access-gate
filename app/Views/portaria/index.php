@@ -8,7 +8,7 @@
     <!-- 1. Local e movimentação -->
     <section class="cartao">
       <div class="grade-2 compacta">
-        <form method="post" action="<?= e(url('/portaria/local')) ?>" id="form-local">
+        <form method="post" action="<?= e(url('/portaria/local')) ?>" id="form-local" data-tour="portaria-local">
           <?= csrf_field() ?>
           <label class="campo">
             <span class="rotulo-caps">Portaria / Local</span>
@@ -46,7 +46,7 @@
           <h2><?= icon('pessoas', 'icon icon-sm') ?> Buscar pessoa <span class="obrigatorio">*</span></h2>
           <?php if (can('pessoas.criar')): ?><button type="button" class="btn btn-secundario btn-sm" data-abrir="dlg-pessoa"><?= icon('mais', 'icon icon-sm') ?> Cadastro rápido</button><?php endif; ?>
         </div>
-        <div class="busca" id="busca-pessoa-box">
+        <div class="busca" id="busca-pessoa-box" data-tour="portaria-pessoa">
           <?= icon('busca', 'icon busca-icone') ?>
           <input type="search" id="busca-pessoa" class="alto" placeholder="Nome, CPF (11 dígitos), matrícula ou empresa" autocomplete="off" autofocus>
           <ul class="resultados" id="res-pessoa" hidden></ul>
@@ -62,7 +62,7 @@
           <h2><?= icon('veiculo', 'icon icon-sm') ?> Buscar veículo <small class="mudo">(opcional)</small></h2>
           <?php if (can('veiculos.criar')): ?><button type="button" class="btn btn-secundario btn-sm" data-abrir="dlg-veiculo"><?= icon('mais', 'icon icon-sm') ?> Novo veículo</button><?php endif; ?>
         </div>
-        <div class="busca" id="busca-veiculo-box">
+        <div class="busca" id="busca-veiculo-box" data-tour="portaria-veiculo">
           <?= icon('busca', 'icon busca-icone') ?>
           <input type="search" id="busca-veiculo" class="alto maiusculo" placeholder="Placa, modelo, TAG ou empresa" autocomplete="off">
           <ul class="resultados" id="res-veiculo" hidden></ul>

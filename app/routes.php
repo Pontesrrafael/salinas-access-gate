@@ -19,6 +19,7 @@ use App\Controllers\SolicitacoesController;
 use App\Controllers\SsmaController;
 use App\Controllers\UsuariosController;
 use App\Controllers\VeiculosController;
+use App\Controllers\TutoriaisController;
 
 // ---- Saúde (monitoramento Zabbix/Uptime) ----
 $router->get('/saude', [PublicoController::class, 'saude']);
@@ -39,6 +40,7 @@ $router->get('/trocar-senha', [AuthController::class, 'formTrocarSenha']);
 $router->post('/trocar-senha', [AuthController::class, 'trocarSenha']);
 
 // ---- Operação ----
+$router->get('/tutoriais', [TutoriaisController::class, 'index']);
 $router->get('/painel', [DashboardController::class, 'index']);
 $router->get('/indicadores', [IndicadoresController::class, 'index']);
 

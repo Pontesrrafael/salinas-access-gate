@@ -14,7 +14,7 @@ slot('acoes', '<button type="button" class="btn btn-ouro" data-abrir="dlg-nova">
 <?php endif; ?>
 
 <section class="cartao">
-  <form method="get" action="<?= e(url('/solicitacoes')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/solicitacoes')) ?>" class="filtros" data-tour="filtros">
     <input type="hidden" name="aba" value="<?= e($aba) ?>">
     <div class="botoes">
       <?php foreach ($abas as $k => $v): ?>

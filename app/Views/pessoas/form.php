@@ -105,7 +105,7 @@ $acao = $novo ? url('/pessoas') : url('/pessoas/' . $p['id']);
 <section class="cartao">
   <h2>Vínculo com usuário do sistema</h2>
   <p class="dica">Pessoa vinculada é sugerida como responsável interno quando o usuário opera a portaria.</p>
-  <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/vinculo')) ?>" class="filtros">
+  <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/vinculo')) ?>" class="filtros" data-tour="filtros">
     <?= csrf_field() ?>
     <label class="campo"><span>Usuário</span>
       <select name="usuario_id">

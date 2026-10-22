@@ -1,6 +1,6 @@
 <?php slot('acoes', '<a class="btn btn-ouro" href="' . e(url('/relatorios/csv', array_filter($f))) . '">' . icon('download') . ' Exportar CSV</a>'); ?>
 <section class="cartao">
-  <form method="get" action="<?= e(url('/relatorios')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/relatorios')) ?>" class="filtros" data-tour="filtros">
     <label class="campo"><span>Início</span><input type="date" name="inicio" value="<?= e($f['inicio']) ?>"></label>
     <label class="campo"><span>Fim</span><input type="date" name="fim" value="<?= e($f['fim']) ?>"></label>
     <label class="campo"><span>Local</span><select name="local_id"><option value="">Todos</option>

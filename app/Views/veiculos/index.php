@@ -1,6 +1,6 @@
 <?php if (can('veiculos.criar')) { slot('acoes', '<a class="btn btn-ouro" href="' . e(url('/veiculos/novo')) . '">' . icon('mais') . ' Novo veículo</a>'); } ?>
 <section class="cartao">
-  <form method="get" action="<?= e(url('/veiculos')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/veiculos')) ?>" class="filtros" data-tour="filtros">
     <label class="campo"><span>Buscar</span><input type="search" name="q" value="<?= e($q) ?>" placeholder="Placa, modelo, empresa ou TAG"></label>
     <label class="campo"><span>Situação</span>
       <select name="situacao">

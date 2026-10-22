@@ -8,7 +8,7 @@
 </section>
 
 <section class="cartao">
-  <form method="get" action="<?= e(url('/presenca')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/presenca')) ?>" class="filtros" data-tour="filtros">
     <label class="campo"><span>Local</span>
       <select name="local_id" data-autosubmit><option value="">Todos os locais</option>
         <?php foreach ($locais as $l): ?><option value="<?= e($l['id']) ?>"<?= selected($localId, $l['id']) ?>><?= e($l['nome']) ?></option><?php endforeach; ?>

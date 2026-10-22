@@ -2,8 +2,12 @@
 /** @var string $content */
 $u = usuario();
 $path = App\Core\Http::path();
+$tutorialAtual = App\Services\Tutoriais::daTela($path);
 $ativo = static fn (string $p): string => ($path === $p || str_starts_with($path, $p . '/')) ? ' ativo' : '';
 $menu = [
+    'Ajuda' => [
+        ['/tutoriais', 'Tutoriais', 'relatorio', null],
+    ],
     'Operação' => [
         ['/painel', 'Painel', 'painel', null],
         ['/indicadores', 'Indicadores', 'grafico', 'indicadores.ver'],
@@ -39,6 +43,7 @@ $menu = [
   <meta name="theme-color" content="#024B37">
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>">
+  <link rel="stylesheet" href="<?= e(asset('css/tutoriais.css')) ?>">
   <?php foreach ($styles ?? [] as $style): ?><link rel="stylesheet" href="<?= e(asset($style)) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"><?php endforeach; ?>
 </head>
 <body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
@@ -76,9 +81,12 @@ $menu = [
       <h1><?= e($titulo ?? '') ?></h1>
       <?php if (!empty($descricao)): ?><p><?= e($descricao) ?></p><?php endif; ?>
     </div>
-    <?php if (!empty($acoes)): ?><div class="topo-acoes"><?= $acoes /* HTML gerado pelo controller/view com e() */ ?></div><?php endif; ?>
+    <div class="topo-acoes" data-tour="acoes">
+      <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>">Como usar</button><?php endif; ?>
+      <?= $acoes ?? '' /* HTML da aplicação */ ?>
+    </div>
   </header>
-  <main class="conteudo">
+  <main class="conteudo" data-tour="conteudo">
     <?php foreach ($flash ?? [] as $f): ?>
       <div class="alerta alerta-<?= e($f['tipo']) ?>" role="status"><?= e($f['mensagem']) ?></div>
     <?php endforeach; ?>
@@ -87,7 +95,9 @@ $menu = [
   <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · Horário de Mato Grosso – UTC-4</footer>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<?= App\Core\View::partial('tutoriais/ajuda', ['tutorialAtual' => $tutorialAtual, 'u' => $u]) ?>
 <script src="<?= e(asset('js/app.js')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script>
+<script src="<?= e(asset('js/tutoriais.js')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script>
 <?php foreach ($scripts ?? [] as $script): ?><script src="<?= e(asset($script)) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script><?php endforeach; ?>
 </body>
 </html>

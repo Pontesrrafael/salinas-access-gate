@@ -1,0 +1,18 @@
+.tutorial-catalogo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}
+.tutorial-botoes{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tutorial-help{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,100%);height:100dvh;max-height:100dvh;max-width:100%;border:1px solid var(--borda);padding:0;background:var(--branco);color:var(--texto)}
+.tutorial-help[open]{display:flex;flex-direction:column}.tutorial-help::backdrop{background:#0008}
+.tutorial-cabecalho,.tutorial-rodape{padding:18px;border-bottom:1px solid var(--borda);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tutorial-cabecalho h2{margin:0;font-size:1.25rem;overflow-wrap:anywhere;flex:1}
+.tutorial-help-body{overflow:auto;padding:20px;flex:1;min-height:0;overflow-wrap:anywhere}
+.tutorial-help-body details{padding:12px 0;border-top:1px solid var(--borda)}.tutorial-help-body summary{cursor:pointer;font-weight:600}.tutorial-help-body li{margin:8px 0}
+.tutorial-rodape{border-top:1px solid var(--borda);border-bottom:0;font-size:.9rem}
+.tutorial-tour{position:fixed;inset:0;margin:0;width:100vw;height:100dvh;max-width:none;max-height:none;border:0;padding:0;background:transparent;color:var(--texto);overflow:hidden;pointer-events:none}
+.tutorial-tour::backdrop{background:transparent}.tutorial-tour[data-central]::backdrop{background:#0009}
+#tutorial-highlight{position:fixed;border:3px solid var(--ouro);border-radius:6px;box-shadow:0 0 0 9999px #0009;pointer-events:none}
+.tutorial-balloon{position:fixed;width:min(410px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:20px;border:1px solid var(--borda);border-radius:var(--raio);background:var(--branco);box-shadow:var(--sombra);pointer-events:auto;overflow-wrap:anywhere}
+.tutorial-balloon h2{font-size:1.2rem;margin:8px 0}.tutorial-balloon p{margin:8px 0 16px}.tutorial-balloon .btn{white-space:normal}
+.tutorial-invite{position:fixed;right:18px;bottom:18px;width:min(450px,calc(100vw - 36px));max-height:50dvh;overflow:auto;background:var(--branco);color:var(--texto);padding:18px;border:1px solid var(--borda);border-radius:var(--raio);box-shadow:var(--sombra);z-index:90}
+.tutorial-invite p{margin-top:0}body.modo-tv [data-tutorial-open],body.modo-tv .tutorial-invite{display:none}
+@media(max-width:600px){.tutorial-cabecalho,.tutorial-help-body,.tutorial-rodape{padding:12px}.tutorial-balloon{padding:14px}.tutorial-invite{bottom:8px}}
+@media(prefers-reduced-motion:reduce){.tutorial-help,.tutorial-tour,*[data-tour]{scroll-behavior:auto!important;transition:none!important}}

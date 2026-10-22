@@ -33,7 +33,7 @@
       <tbody>
       <?php foreach ($areas as $a): ?>
         <tr><td colspan="4">
-          <form method="post" action="<?= e(url('/configuracoes/areas/' . $a['id'])) ?>" class="filtros">
+          <form method="post" action="<?= e(url('/configuracoes/areas/' . $a['id'])) ?>" class="filtros" data-tour="filtros">
             <?= csrf_field() ?>
             <label class="campo"><span class="sr">Nome</span><input name="nome" required maxlength="120" value="<?= e($a['nome']) ?>"></label>
             <label class="campo"><span class="sr">Responsável</span>

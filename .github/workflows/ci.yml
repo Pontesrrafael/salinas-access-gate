@@ -34,6 +34,8 @@ jobs:
         run: for f in docker/*.sh; do bash -n "$f"; done
       - name: Cliente Infleet (respostas simuladas, sem token real)
         run: php tests/infleet.php
+      - name: Tutoriais (perfis, conteúdo e rotas)
+        run: php tests/tutoriais.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
         run: node --test tests/infleet_maps.test.cjs
 

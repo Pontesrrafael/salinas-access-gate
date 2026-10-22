@@ -6,7 +6,7 @@ if (can('pessoas.criar')) {
 slot('acoes', $acoes);
 ?>
 <section class="cartao">
-  <form method="get" action="<?= e(url('/pessoas')) ?>" class="filtros">
+  <form method="get" action="<?= e(url('/pessoas')) ?>" class="filtros" data-tour="filtros">
     <label class="campo"><span>Buscar</span><input type="search" name="q" value="<?= e($filtro['q']) ?>" placeholder="Nome, matrícula, empresa, e-mail ou CPF completo"></label>
     <label class="campo"><span>Categoria</span>
       <select name="categoria"><option value="">Todas</option>

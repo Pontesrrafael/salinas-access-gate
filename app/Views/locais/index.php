@@ -1,6 +1,6 @@
 <section class="cartao">
   <h2>Novo local</h2>
-  <form method="post" action="<?= e(url('/locais')) ?>" class="filtros">
+  <form method="post" action="<?= e(url('/locais')) ?>" class="filtros" data-tour="filtros">
     <?= csrf_field() ?>
     <label class="campo"><span>Nome <span class="obrigatorio">*</span></span><input name="nome" required maxlength="150"></label>
     <label class="campo"><span>Tipo</span><select name="tipo"><?php foreach (TIPOS_LOCAL as $k => $r): ?><option value="<?= e($k) ?>"><?= e($r) ?></option><?php endforeach; ?></select></label>

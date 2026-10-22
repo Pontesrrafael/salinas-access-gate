@@ -1,5 +1,5 @@
 <section class="cartao">
-  <form id="infleet-filtro" action="<?= e(url('/api/infleet/percursos')) ?>" method="get" class="filtros">
+  <form id="infleet-filtro" action="<?= e(url('/api/infleet/percursos')) ?>" method="get" class="filtros" data-tour="filtros">
     <label class="campo"><span>Veículo</span><select name="veiculo" required><option value="">Selecione</option>
       <?php foreach ($opcoes as $v): ?><option value="<?= e($v['id']) ?>"<?= selected($veiculo['id'] ?? '', $v['id']) ?>><?= e($v['placa'] . ' · ' . ($v['marca_modelo'] ?? '')) ?></option><?php endforeach; ?>
     </select></label>
