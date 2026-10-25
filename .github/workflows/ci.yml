@@ -36,6 +36,8 @@ jobs:
         run: php tests/infleet.php
       - name: Tutoriais (perfis, conteúdo e rotas)
         run: php tests/tutoriais.php
+      - name: Regras de segurança (RBAC e utilidades HTTP)
+        run: php tests/regras.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
         run: node --test tests/infleet_maps.test.cjs
 
