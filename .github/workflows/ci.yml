@@ -38,6 +38,8 @@ jobs:
         run: php tests/tutoriais.php
       - name: Regras de segurança (RBAC e utilidades HTTP)
         run: php tests/regras.php
+      - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
+        run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
         run: node --test tests/infleet_maps.test.cjs
 
@@ -58,6 +60,11 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8222$u")
             echo "$u -> $code"; [ "$code" != "200" ]
           done
+      - name: Migração 005 e retenção LGPD (simulação no MariaDB real)
+        run: |
+          cd /opt/salinas-access-gate
+          sudo docker compose exec -T app php bin/console.php aplicar-retencao --simular
+          curl -fsS http://127.0.0.1:8222/privacidade | grep -q 'Aviso de Privacidade'
       - name: Logs (em caso de falha)
         if: failure()
         run: sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml logs --tail=200

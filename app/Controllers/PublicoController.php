@@ -31,6 +31,14 @@ final class PublicoController extends Controller
         }
     }
 
+    /** Aviso de privacidade (LGPD arts. 9º e 41), público. */
+    public function privacidade(): void
+    {
+        $this->view('publico/privacidade', [
+            'titulo' => 'Aviso de Privacidade', 'largo' => true, 'cfg' => Settings::all(),
+        ], 'layout/simples');
+    }
+
     public function formPublico(): void
     {
         if (!Settings::bool('form_publico_ativo')) {
@@ -159,7 +167,7 @@ final class PublicoController extends Controller
             $this->falha('Informe o nome completo.', $volta);
         }
         if (!Http::bool('consentimento_lgpd')) {
-            $this->falha('É necessário concordar com o tratamento dos dados (LGPD).', $volta);
+            $this->falha('Confirme que leu o Aviso de Privacidade.', $volta);
         }
         if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->falha('E-mail inválido.', $volta);

@@ -10,6 +10,8 @@ declare(strict_types=1);
  *   php bin/console.php criar-admin --email=ti@salinasgold.com.br --nome="TI Salinas"
  *   php bin/console.php importar-supabase <pasta-com-csv> [--simular]
  *   php bin/console.php expirar-solicitacoes      (agendar diariamente no cron)
+ *   php bin/console.php aplicar-retencao [--simular]  Anonimiza/apaga dados vencidos (LGPD; agendar no cron)
+ *   php bin/console.php mfa-redefinir --email=usuario@salinasgold.com.br  Desliga o 2º fator (perda do celular)
  *   php bin/console.php redefinir-senha --email=usuario@salinasgold.com.br
  *   php bin/console.php ldap-testar                Testa conexão com o Active Directory
  *   php bin/console.php ldap-buscar <termo>        Busca contas no AD
@@ -254,6 +256,22 @@ switch ($cmd) {
         }
         Database::run('DELETE FROM rate_limits WHERE criado_em < (NOW() - INTERVAL 1 DAY)');
         ok("Solicitações expiradas: {$n1} por data, {$n2} links.");
+        break;
+
+    case 'aplicar-retencao':
+        $simular = isset($opts['simular']);
+        $r = \App\Services\Retencao::aplicar($simular);
+        ok(($simular ? 'Simulação (nada alterado): ' : 'Retenção aplicada: ')
+            . "{$r['fotos']} fotos, {$r['solicitacoes']} solicitações, {$r['cadastros']} cadastros, "
+            . "{$r['registros']} observações de registros, {$r['auditoria']} linhas de auditoria.");
+        break;
+
+    case 'mfa-redefinir':
+        $email = mb_strtolower(trim($opts['email'] ?? ''));
+        $u = Database::one('SELECT id FROM usuarios WHERE email = ?', [$email]) ?? err('Usuário não encontrado.');
+        Database::update('usuarios', ['mfa_ativo' => 0, 'mfa_segredo_enc' => null, 'mfa_ultimo_passo' => null, 'mfa_ativado_em' => null], 'id = ?', [$u['id']]);
+        Audit::log('usuarios', $u['id'], 'MFA_REDEFINIDO_CLI', [], null);
+        ok("Segundo fator desligado para {$email}. Ele deverá cadastrar de novo no próximo acesso.");
         break;
 
     case 'ldap-testar':

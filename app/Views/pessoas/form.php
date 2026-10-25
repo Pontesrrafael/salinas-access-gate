@@ -135,6 +135,18 @@ $acao = $novo ? url('/pessoas') : url('/pessoas/' . $p['id']);
   <?php endif; ?>
 </section>
 
+<?php if (can('lgpd.titular')): ?>
+<section class="cartao">
+  <h2>Direitos do titular (LGPD)</h2>
+  <p class="dica">Gera um arquivo com todos os dados desta pessoa (cadastro, documentos, acessos, solicitações e SSMA) para atender pedido de acesso do titular. A geração fica na auditoria.</p>
+  <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/dados-titular')) ?>" class="filtros">
+    <?= csrf_field() ?>
+    <label class="campo"><span>Protocolo do pedido</span><input name="protocolo" maxlength="100" placeholder="ex.: LGPD-2026-014"></label>
+    <button class="btn btn-secundario" type="submit"><?= icon('download', 'icon icon-sm') ?> Exportar dados do titular</button>
+  </form>
+</section>
+<?php endif; ?>
+
 <?php if (can('pessoas.excluir')): ?>
 <section class="cartao zona-perigo">
   <h2>Excluir cadastro</h2>

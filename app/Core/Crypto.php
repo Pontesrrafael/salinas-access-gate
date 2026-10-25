@@ -88,6 +88,31 @@ final class Crypto
         return '***.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-**';
     }
 
+    /** Cifra segredos curtos (ex.: MFA) com subchave derivada da chave do CPF. */
+    public static function encryptSegredo(string $texto): string
+    {
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        return $nonce . sodium_crypto_secretbox($texto, $nonce, self::subchave());
+    }
+
+    public static function decryptSegredo(?string $blob): ?string
+    {
+        if ($blob === null || $blob === '') {
+            return null;
+        }
+        $plain = sodium_crypto_secretbox_open(
+            substr($blob, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
+            substr($blob, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
+            self::subchave()
+        );
+        return $plain === false ? null : $plain;
+    }
+
+    private static function subchave(): string
+    {
+        return sodium_crypto_kdf_derive_from_key(SODIUM_CRYPTO_SECRETBOX_KEYBYTES, 1, 'sag_mfa_', self::key('cpf_key'));
+    }
+
     private static function key(string $name): string
     {
         static $cache = [];

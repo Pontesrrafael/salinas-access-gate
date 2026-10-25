@@ -22,6 +22,21 @@
       <label class="campo"><span>Validade do link externo (horas)</span><input type="number" name="link_externo_validade_horas" min="1" max="720" value="<?= e($cfg['link_externo_validade_horas'] ?? '72') ?>"></label>
     </div>
   </section>
+  <section class="cartao">
+    <h2>Privacidade (LGPD) e segurança</h2>
+    <p class="dica">Aparece no <a href="<?= e(url('/privacidade')) ?>" target="_blank" rel="noopener">Aviso de Privacidade</a>. A retenção é aplicada todo dia pelo comando <code>aplicar-retencao</code>.</p>
+    <div class="grade-2 compacta">
+      <label class="campo"><span>Encarregado (DPO)</span><input name="encarregado_nome" maxlength="150" value="<?= e($cfg['encarregado_nome'] ?? '') ?>"></label>
+      <label class="campo"><span>E-mail do Encarregado</span><input type="email" name="encarregado_email" maxlength="190" value="<?= e($cfg['encarregado_email'] ?? '') ?>"></label>
+      <label class="campo"><span>Fotos da portaria (dias)</span><input type="number" name="retencao_fotos_dias" min="7" max="3650" value="<?= e($cfg['retencao_fotos_dias'] ?? '180') ?>"></label>
+      <label class="campo"><span>Solicitações de acesso (meses)</span><input type="number" name="retencao_solicitacoes_meses" min="1" max="120" value="<?= e($cfg['retencao_solicitacoes_meses'] ?? '12') ?>"></label>
+      <label class="campo"><span>Observações dos registros (meses)</span><input type="number" name="retencao_registros_meses" min="6" max="240" value="<?= e($cfg['retencao_registros_meses'] ?? '24') ?>"></label>
+      <label class="campo"><span>Cadastros sem acesso — visitantes/terceiros (meses)</span><input type="number" name="retencao_cadastros_meses" min="6" max="240" value="<?= e($cfg['retencao_cadastros_meses'] ?? '24') ?>"></label>
+      <label class="campo"><span>Trilha de auditoria (meses)</span><input type="number" name="retencao_auditoria_meses" min="6" max="240" value="<?= e($cfg['retencao_auditoria_meses'] ?? '60') ?>">
+        <small>Mínimo de 6 meses (Marco Civil da Internet, art. 15).</small></label>
+      <label class="checkbox"><input type="checkbox" name="mfa_obrigatorio_admin" value="1"<?= checked($cfg['mfa_obrigatorio_admin'] ?? '1') ?>> <span>Exigir autenticação em dois fatores para Admin/TI<br><small>Vale para contas locais; contas do AD seguem a política da rede.</small></span></label>
+    </div>
+  </section>
   <div class="form-acoes"><button class="btn btn-primario" type="submit">Salvar configurações</button></div>
 </form>
 

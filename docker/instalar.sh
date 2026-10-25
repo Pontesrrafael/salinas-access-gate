@@ -149,10 +149,11 @@ cat > /etc/cron.d/salinas-access-gate <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 5 0 * * *  root cd $DESTINO && docker compose exec -T app php bin/console.php expirar-solicitacoes >> /var/log/salinas-access-gate.log 2>&1
+20 0 * * * root cd $DESTINO && docker compose exec -T app php bin/console.php aplicar-retencao >> /var/log/salinas-access-gate.log 2>&1
 30 1 * * * root $DESTINO/docker/backup.sh >> /var/log/salinas-access-gate.log 2>&1
 CRON
 chmod 644 /etc/cron.d/salinas-access-gate
-echo "Agendado: expiração de solicitações 00:05 e backup 01:30 (retenção 14 dias em /var/backups/salinas-access-gate)."
+echo "Agendado: expiração de solicitações 00:05, retenção LGPD 00:20 e backup 01:30 (retenção 14 dias em /var/backups/salinas-access-gate)."
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "$PORTA"/tcp comment 'Salinas Access Gate' >/dev/null && echo "UFW: porta $PORTA/tcp liberada."
@@ -163,4 +164,8 @@ echo "Acesse:      http://${IP:-IP_DO_SERVIDOR}:${PORTA}"
 echo "Saúde:       http://${IP:-IP_DO_SERVIDOR}:${PORTA}/saude"
 echo "Pasta:       $DESTINO   (logs: docker compose logs -f app)"
 [ "$NOVO" = 1 ] && aviso "Copie $DESTINO/docker/app.env para o cofre de senhas: sem as chaves CPF_* os CPFs ficam ilegíveis."
+if [ ! -s /etc/salinas-access-gate/backup.key ]; then
+  mkdir -p /etc/salinas-access-gate && (umask 077; openssl rand -base64 48 > /etc/salinas-access-gate/backup.key)
+  aviso "Chave dos backups criada em /etc/salinas-access-gate/backup.key — copie-a para o cofre de senhas."
+fi
 exit 0
