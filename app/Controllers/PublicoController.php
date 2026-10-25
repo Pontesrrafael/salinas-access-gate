@@ -65,7 +65,7 @@ final class PublicoController extends Controller
         $id = Uuid::v4();
         Database::insert('solicitacoes_acesso', [
             'id' => $id, ...$d, 'area_id' => $areaId, 'data_prevista' => $data,
-            'status' => 'pendente', 'origem' => 'publica', 'consentimento_lgpd' => 1,
+            'status' => $d['atividade_risco'] ? 'aguardando_ssma' : 'pendente', 'origem' => 'publica', 'consentimento_lgpd' => 1,
         ]);
         Audit::log('solicitacoes_acesso', $id, 'INSERT_PUBLICO', ['visitante_nome' => $d['visitante_nome'], 'area_id' => $areaId], null);
         $this->concluido();

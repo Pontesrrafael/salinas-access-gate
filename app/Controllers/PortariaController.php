@@ -13,6 +13,7 @@ use App\Core\Uuid;
 use App\Services\Portaria;
 use App\Services\Settings;
 use App\Services\Upload;
+use DomainException;
 use Throwable;
 
 final class PortariaController extends Controller
@@ -103,6 +104,8 @@ final class PortariaController extends Controller
         $pessoaId = Http::str('pessoa_id');
         $veiculoId = Http::str('veiculo_id') ?: null;
         $solicitacaoId = Http::str('solicitacao_id') ?: null;
+        // A confirmação deve vir explicitamente no POST, nunca de parâmetros da URL.
+        $confirmarSolicitacaoManual = ($_POST['confirmar_solicitacao_manual'] ?? null) === '1';
 
         $local = Uuid::valid($localId) ? Database::one('SELECT * FROM locais WHERE id = ? AND ativo = 1', [$localId]) : null;
         if (!$local) {
@@ -136,6 +139,9 @@ final class PortariaController extends Controller
             ]);
             $this->falha(($sentido === 'entrada' ? 'Entrada bloqueada: ' : 'Saída não permitida: ') . implode(' ', $analise['bloqueios']), '/portaria');
         }
+        if ($analise['solicitacao_manual'] && !$confirmarSolicitacaoManual) {
+            $this->falha('A solicitação selecionada não confere com a identificação da pessoa. Confirme explicitamente a seleção manual para registrar o acesso.', '/portaria');
+        }
         if ($sentido === 'entrada' && $analise['exige_solicitacao']) {
             $solicitacaoId = $solicitacaoId ?: $analise['solicitacao_sugerida'];
         } elseif ($sentido === 'saida') {
@@ -158,7 +164,54 @@ final class PortariaController extends Controller
         $registroId = Uuid::v4();
         $gravados = [];
         try {
-            Database::transaction(function () use ($registroId, $pessoaId, $veiculoId, $localId, $solicitacaoId, $sentido, $destino, $resp, $respNome, $u, $fotos, $tiposFoto, &$gravados): void {
+            Database::transaction(function () use ($registroId, $pessoaId, $veiculoId, $localId, $solicitacaoId, $confirmarSolicitacaoManual, $sentido, $destino, $resp, $respNome, $u, $fotos, $tiposFoto, &$gravados, &$analise): void {
+                // Bloqueia os cadastros mesmo sem histórico; todos os registros seguem esta ordem.
+                if (!Database::one('SELECT id FROM pessoas WHERE id = ? FOR UPDATE', [$pessoaId])) {
+                    throw new DomainException('Pessoa não encontrada. Atualize a tela antes de registrar novamente.');
+                }
+                if ($veiculoId !== null && !Database::one('SELECT id FROM veiculos WHERE id = ? FOR UPDATE', [$veiculoId])) {
+                    throw new DomainException('Veículo não encontrado. Atualize a tela antes de registrar novamente.');
+                }
+                if ($solicitacaoId !== null) {
+                    Database::one('SELECT id FROM solicitacoes_acesso WHERE id = ? FOR UPDATE', [$solicitacaoId]);
+                }
+
+                // Leituras com bloqueio veem o último estado confirmado, inclusive após aguardar outro porteiro.
+                $ultimaPessoa = Database::one(
+                    'SELECT sentido FROM registros_acesso WHERE pessoa_id = ? AND local_id = ?
+                      ORDER BY data_hora DESC, seq DESC LIMIT 1 FOR UPDATE',
+                    [$pessoaId, $localId]
+                );
+                $pessoaPresente = ($ultimaPessoa['sentido'] ?? null) === 'entrada';
+                if ($sentido === 'entrada' && $pessoaPresente) {
+                    throw new DomainException('Entrada bloqueada: a pessoa já está registrada como presente neste local. Atualize a tela.');
+                }
+                if ($sentido === 'saida' && !$pessoaPresente) {
+                    throw new DomainException('Saída não permitida: a pessoa não está registrada como presente neste local. Atualize a tela.');
+                }
+                if ($veiculoId !== null) {
+                    $ultimoVeiculo = Database::one(
+                        'SELECT sentido FROM registros_acesso WHERE veiculo_id = ? AND local_id = ?
+                          ORDER BY data_hora DESC, seq DESC LIMIT 1 FOR UPDATE',
+                        [$veiculoId, $localId]
+                    );
+                    $veiculoPresente = ($ultimoVeiculo['sentido'] ?? null) === 'entrada';
+                    if ($sentido === 'entrada' && $veiculoPresente) {
+                        throw new DomainException('Entrada bloqueada: o veículo já está registrado como presente neste local. Atualize a tela.');
+                    }
+                    if ($sentido === 'saida' && !$veiculoPresente) {
+                        throw new DomainException('Saída não permitida: o veículo não está registrado como presente neste local. Atualize a tela.');
+                    }
+                }
+
+                // Revalida também a solicitação após o bloqueio, pois ela pode ter sido vinculada por outro registro.
+                $analise = Portaria::analisar($pessoaId, $localId, $sentido, $veiculoId, $solicitacaoId);
+                if (isset($analise['erro']) || $analise['bloqueios']) {
+                    throw new DomainException($analise['erro'] ?? implode(' ', $analise['bloqueios']));
+                }
+                if ($analise['solicitacao_manual'] && !$confirmarSolicitacaoManual) {
+                    throw new DomainException('Confirme explicitamente a seleção manual da solicitação antes de registrar o acesso.');
+                }
                 Database::insert('registros_acesso', [
                     'id'                           => $registroId,
                     'pessoa_id'                    => $pessoaId,
@@ -183,6 +236,12 @@ final class PortariaController extends Controller
                         [$pessoaId, $solicitacaoId]
                     );
                 }
+                if ($analise['solicitacao_manual']) {
+                    Audit::log('solicitacoes_acesso', $solicitacaoId, 'SOLICITACAO_MANUAL', [
+                        'pessoa_id' => $pessoaId, 'local_id' => $localId, 'registro_acesso_id' => $registroId,
+                        'confirmar_solicitacao_manual' => 1,
+                    ], $u['id']);
+                }
                 foreach ($fotos as $i => $f) {
                     $meta = Upload::salvar($f);
                     $gravados[] = $meta['storage_path'];
@@ -203,6 +262,12 @@ final class PortariaController extends Controller
         } catch (Throwable $e) {
             foreach ($gravados as $rel) {
                 @unlink(Upload::dir() . '/' . $rel);
+            }
+            if ($e instanceof DomainException) {
+                Audit::log('portaria', $pessoaId, 'TENTATIVA_BLOQUEADA', [
+                    'sentido' => $sentido, 'local_id' => $localId, 'motivos' => [$e->getMessage()],
+                ]);
+                $this->falha($e->getMessage(), '/portaria');
             }
             throw $e;
         }

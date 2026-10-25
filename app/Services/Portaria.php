@@ -77,8 +77,7 @@ final class Portaria
         $nome = self::normalizar($pessoa['nome']);
         $candidatas = $outras = [];
         foreach ($livres as $s) {
-            $doc = Crypto::cpfDigits($s['visitante_doc']);
-            $confere = ($cpf !== '' && $doc !== '' && $doc === $cpf) || self::normalizar($s['visitante_nome']) === $nome;
+            $confere = self::confereIdentidade($s, $cpf, $nome);
             if ($confere) {
                 $candidatas[] = $s;
             } else {
@@ -114,7 +113,7 @@ final class Portaria
     /**
      * Análise completa usada pela tela (pré-visualização) e pelo POST (validação final).
      * @return array{pessoa:array,documentos:array,bloqueios:array,avisos:array,presente:?array,
-     *               exige_solicitacao:bool,solicitacoes:array,solicitacao_sugerida:?string}
+     *               exige_solicitacao:bool,solicitacoes:array,solicitacao_sugerida:?string,solicitacao_manual:bool}
      */
     public static function analisar(string $pessoaId, string $localId, string $sentido, ?string $veiculoId, ?string $solicitacaoId): array
     {
@@ -128,12 +127,17 @@ final class Portaria
         $sols = $exigeSol ? self::solicitacoesDoDia($p) : ['vinculadas' => [], 'candidatas' => [], 'outras' => []];
         $bloqueios = [];
         $avisos = [];
+        $solicitacaoManual = false;
 
         $veiculo = $veiculoId ? Database::one('SELECT * FROM veiculos WHERE id = ?', [$veiculoId]) : null;
         $local = $localId !== '' ? Database::one('SELECT * FROM locais WHERE id = ?', [$localId]) : null;
 
         // Sugestão automática: vinculada aprovada > candidata única
-        $aprovadasVinc = array_values(array_filter($sols['vinculadas'], fn ($s) => $s['status'] === 'aprovada'));
+        $cpf = $exigeSol ? (Crypto::decryptCpf($p['cpf_enc'] ?? null) ?? '') : '';
+        $nome = self::normalizar($p['nome']);
+        $aprovadasVinc = array_values(array_filter($sols['vinculadas'], fn ($s) =>
+            $s['status'] === 'aprovada' && self::confereIdentidade($s, $cpf, $nome)
+        ));
         $sugerida = $aprovadasVinc[0]['id'] ?? (count($sols['candidatas']) === 1 ? $sols['candidatas'][0]['id'] : null);
 
         if ($sentido === 'entrada') {
@@ -166,6 +170,10 @@ final class Portaria
                 } elseif ($sol['status'] !== 'aprovada') {
                     $bloqueios[] = 'A solicitação selecionada está "' . (STATUS_SOLICITACAO[$sol['status']] ?? $sol['status']) . '" — é necessário estar APROVADA.';
                 } else {
+                    $solicitacaoManual = !self::confereIdentidade($sol, $cpf, $nome);
+                    if ($solicitacaoManual) {
+                        $avisos[] = 'A solicitação selecionada não confere com a identificação da pessoa. Confirme explicitamente a seleção manual antes de registrar.';
+                    }
                     $ssma = self::ssma($sol);
                     if ($ssma !== null && !$ssma['apto']) {
                         $bloqueios[] = 'Bloqueado pelo SSMA: ' . $ssma['motivo'] . '.';
@@ -212,7 +220,18 @@ final class Portaria
             'exige_solicitacao'    => $exigeSol,
             'solicitacoes'         => $sols,
             'solicitacao_sugerida' => $sugerida,
+            'solicitacao_manual'   => $solicitacaoManual,
         ];
+    }
+
+    /** Documento informado impede correspondência somente pelo nome, mesmo se estiver malformado. */
+    private static function confereIdentidade(array $sol, string $cpf, string $nome): bool
+    {
+        if (trim((string) ($sol['visitante_doc'] ?? '')) !== '') {
+            $doc = Crypto::cpfDigits($sol['visitante_doc']);
+            return strlen($doc) === 11 && $cpf !== '' && $doc === $cpf;
+        }
+        return $nome !== '' && self::normalizar($sol['visitante_nome']) === $nome;
     }
 
     private static function normalizar(string $s): string
