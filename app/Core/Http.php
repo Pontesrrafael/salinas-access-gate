@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use RuntimeException;
+
 /**
  * Utilidades HTTP: entrada, redirecionamento, JSON, erros e caminho base.
  */
@@ -91,9 +93,13 @@ final class Http
     {
         $remote = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
         if (self::fromTrustedProxy() && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $first = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
-            if (filter_var($first, FILTER_VALIDATE_IP)) {
-                return $first;
+            $proxies = App::config('seguranca')['trusted_proxies'] ?? [];
+            foreach (array_reverse(explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR'])) as $part) {
+                $ip = trim($part);
+                if (in_array($ip, $proxies, true)) {
+                    continue;
+                }
+                return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : $remote;
             }
         }
         return $remote;
@@ -117,8 +123,12 @@ final class Http
     /** URL absoluta (usada em links externos de solicitação). */
     public static function absoluteUrl(string $path): string
     {
-        $base = App::config('app')['url'];
+        $app = App::config('app');
+        $base = rtrim((string) ($app['url'] ?? ''), '/');
         if ($base === '') {
+            if (($app['env'] ?? '') === 'production') {
+                throw new RuntimeException('APP_URL deve estar configurado em produção para gerar links absolutos.');
+            }
             $scheme = self::isHttps() ? 'https' : 'http';
             $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
             $base = $scheme . '://' . $host . self::basePath();
