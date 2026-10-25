@@ -851,3 +851,6 @@ body.modo-tv { font-size: 16px; }
 }
 .logo-central img.logo-escuro, .logo-central.vertical img.logo-escuro { height: 60px; }
 .chave-mfa { font-size: 1.15rem; letter-spacing: .08em; padding: 10px 12px; background: var(--fundo-suave, rgba(0,0,0,.05)); border-radius: 8px; display: inline-block; }
+.mfa-cadastro { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin: 12px 0; }
+.qr-mfa { width: 220px; max-width: 100%; margin: 0; padding: 8px; background: #fff; border-radius: 8px; }
+.qr-mfa svg { display: block; width: 100%; height: auto; }

@@ -679,3 +679,13 @@
   window.__respPadraoUsuario = el.respId.value || '';
   atualizarEstado();
 })();
+
+/* --- QR do cadastro da verificação em duas etapas (biblioteca local, sem enviar a chave a terceiros) --- */
+(function () {
+  const alvo = document.getElementById('qr-mfa');
+  if (!alvo || typeof window.qrcode !== 'function') { return; }
+  const qr = window.qrcode(0, 'M');
+  qr.addData(alvo.dataset.otpauth || '');
+  qr.make();
+  alvo.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 4, scalable: true, title: 'Código QR do Salinas Access Gate' });
+})();

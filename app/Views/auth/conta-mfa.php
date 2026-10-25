@@ -18,11 +18,20 @@
   <h2>Cadastrar</h2>
   <ol>
     <li>Instale um aplicativo autenticador no celular (Microsoft Authenticator, Google Authenticator ou Authy).</li>
-    <li>No aplicativo, escolha <strong>adicionar conta → digitar chave</strong> e informe a chave abaixo (tipo: baseada em tempo).
-      No próprio celular, você também pode tocar em <a href="<?= e($novo['uri']) ?>">abrir no autenticador</a>.</li>
+    <li>No aplicativo, escolha <strong>adicionar conta → ler código QR</strong> e aponte a câmera para o QR abaixo.</li>
     <li>Digite o código de 6 dígitos que aparecer e confirme.</li>
   </ol>
-  <p class="mono chave-mfa"><?= e($novo['segredo']) ?></p>
+  <div class="mfa-cadastro">
+    <figure class="qr-mfa" id="qr-mfa" data-otpauth="<?= e($novo['uri']) ?>" aria-label="Código QR para cadastrar no autenticador">
+      <noscript><p class="dica">Ative o JavaScript para ver o QR ou use a chave ao lado.</p></noscript>
+    </figure>
+    <div>
+      <p class="dica">Não consegue ler o QR? Escolha <strong>digitar chave</strong> (tipo: baseada em tempo) e informe:</p>
+      <p class="mono chave-mfa"><?= e($novo['segredo']) ?></p>
+      <p class="dica">No próprio celular, você também pode tocar em <a href="<?= e($novo['uri']) ?>">abrir no autenticador</a>.</p>
+    </div>
+  </div>
+  <script src="<?= e(asset('vendor/qrcode/qrcode.js')) ?>"></script>
   <p class="dica">Não compartilhe esta chave. Ela não será mostrada de novo depois da ativação.</p>
   <form method="post" action="<?= e(url('/conta/mfa')) ?>" class="filtros" autocomplete="off">
     <?= csrf_field() ?>
