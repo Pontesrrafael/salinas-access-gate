@@ -53,6 +53,8 @@ final class Auth
 
     private static ?array $user = null;
     private static bool $loaded = false;
+    /** Usuário atual é membro de alguma área de serviço (uma consulta por requisição). */
+    private static ?bool $membroArea = null;
 
     /**
      * Autentica por e-mail (conta local) ou usuário de rede (Active Directory, se habilitado).
@@ -100,6 +102,7 @@ final class Auth
         Database::update('usuarios', ['ultimo_login_em' => date('Y-m-d H:i:s')], 'id = ?', [$u['id']]);
         self::$user = null;
         self::$loaded = false;
+        self::$membroArea = null;
     }
 
     public static function logout(): void
@@ -107,6 +110,7 @@ final class Auth
         Session::destroy();
         self::$user = null;
         self::$loaded = true;
+        self::$membroArea = null;
     }
 
     public static function user(): ?array
@@ -152,7 +156,7 @@ final class Auth
     {
         $p = self::papel();
         if ($permissao === 'chamados.atender' && $p !== null && $p !== 'admin') {
-            return (bool) Database::value('SELECT 1 FROM servico_area_membros WHERE usuario_id = ? LIMIT 1', [self::id()]);
+            return self::$membroArea ??= (bool) Database::value('SELECT 1 FROM servico_area_membros WHERE usuario_id = ? LIMIT 1', [self::id()]);
         }
         return $p !== null && in_array($p, self::PERMISSOES[$permissao] ?? [], true);
     }

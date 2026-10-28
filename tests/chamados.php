@@ -139,8 +139,8 @@ foreach (['abrir', 'index', 'detalhe'] as $view) {
 }
 $html = View::partial('chamados/detalhe', chamadoViewFixture('detalhe', false));
 expect(!str_contains($html, 'Nota reservada de teste') && !str_contains($html, 'value="interno"'), 'Solicitante não recebe nota interna nem controle para criá-la.');
-expect(FormularioDinamico::validar([], [], []) === ['valores' => [], 'erros' => []], 'Stub permite chamados sem campos personalizados.');
-expect(FormularioDinamico::validar([['id' => 'x']], [], [])['erros'] !== [], 'Stub não ignora campos ainda não integrados.');
+expect(FormularioDinamico::validar([], [], [])['erros'] === [], 'Área sem campos personalizados não gera erro.');
+expect(FormularioDinamico::validar([['id' => 'x', 'rotulo' => 'Local', 'tipo' => 'texto', 'obrigatorio' => 1, 'opcoes' => []]], [], [])['erros'] !== [], 'Campo obrigatório vazio é recusado.');
 
 // Arquivos sintéticos locais; não consulta nem modifica arquivos do usuário.
 $dir = App::root('storage');
