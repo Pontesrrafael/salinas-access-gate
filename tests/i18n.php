@@ -47,11 +47,31 @@ $payload = I18n::response([
 i18nCheck($payload['pessoa']['nome'] === 'Pessoas' && $payload['pessoa']['id'] === 'Entrada' && $payload['pessoa']['categoria'] === 'visitante', 'Dados e enums da API foram traduzidos.');
 i18nCheck($payload['pessoa']['categoria_label'] === 'Visitor' && $payload['documentos'][0]['rotulo'] === 'Entry' && $payload['documentos'][0]['numero'] === 'Pessoas', 'API deve traduzir somente rótulos.');
 i18nCheck($payload['avisos'] === ['Entry'] && $payload['bloqueios'] === ['Texto não traduzido'], 'Avisos ou fallback alterados.');
-$_GET = ['q' => 'Entrada', 'lang' => 'en'];
+$_SERVER['REQUEST_URI'] = '/pessoas?q=Entrada&lang=en';
+$_GET = ['q' => 'Entrada', 'lang' => 'en', 'pagina' => '2', 'filtros' => ['ativos', 'visitantes'], 'especial' => '"><script>alert(1)</script>&'];
 $_POST = ['senha' => 'NAO_REENVIAR_POST'];
 $selector = seletor_idioma();
-i18nCheck(str_contains($selector, 'method="get"') && !str_contains($selector, 'NAO_REENVIAR_POST'), 'Seletor não deve enviar POST.');
-i18nCheck(str_contains($selector, 'value="Entrada"') && !str_contains($selector, 'value="Entry"'), 'Filtros do usuário não podem ser traduzidos.');
+i18nCheck(str_starts_with($selector, '<details class="seletor-idioma"><summary') && !str_contains($selector, '<form') && !str_contains($selector, '<select') && !str_contains($selector, 'NAO_REENVIAR_POST'), 'Seletor deve funcionar com links GET, sem formulário ou POST.');
+i18nCheck(!str_contains($selector, '<script') && !str_contains($selector, ' style=') && !str_contains($selector, ' onclick='), 'Seletor não pode acrescentar scripts ou estilos inline.');
+preg_match_all('/<a href="([^"]+)" lang="([^"]+)" hreflang="([^"]+)"([^>]*)>(.*?)<\/a>/', $selector, $options, PREG_SET_ORDER);
+i18nCheck(count($options) === 3 && substr_count($selector, 'aria-current="true"') === 1, 'Seletor deve ter três opções e somente um idioma atual.');
+$names = ['pt-BR' => 'Português (Brasil)', 'es' => 'Español (España)', 'en' => 'English (United States)'];
+$flags = ['pt-BR' => 'br', 'es' => 'es', 'en' => 'us'];
+foreach ($options as [, $href, $locale, $hreflang, $attrs, $body]) {
+    $href = html_entity_decode($href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    parse_str((string) parse_url($href, PHP_URL_QUERY), $params);
+    i18nCheck(parse_url($href, PHP_URL_PATH) === url('/pessoas') && $params === array_replace($_GET, ['lang' => $locale]), 'Link deve preservar rota e parâmetros, inclusive filtros e caracteres especiais.');
+    i18nCheck(substr_count($href, 'lang=') === 1 && $hreflang === $locale, 'Link deve ter lang único e identificar o idioma de destino.');
+    i18nCheck(str_contains($body, 'img/bandeiras/' . $flags[$locale] . '.svg?') && str_contains($body, 'alt="" width="20" height="15"'), 'Opção deve ter bandeira SVG decorativa de 20x15.');
+    i18nCheck(str_contains($body, $names[$locale]) && str_contains($attrs, 'aria-current="true"') === ($locale === 'en'), 'Nome no próprio idioma e marcação do idioma atual incorretos.');
+}
+foreach (['pt-BR' => 'PT-BR', 'es' => 'ES', 'en' => 'EN'] as $locale => $code) {
+    language(['lang' => $locale]);
+    $currentSelector = seletor_idioma();
+    i18nCheck(str_contains($currentSelector, '<summary aria-label="' . e(t('Alterar idioma') . ': ' . $names[$locale]) . '"><img src="' . e(asset('img/bandeiras/' . $flags[$locale] . '.svg')) . '" alt="" width="20" height="15"><span class="idioma-codigo">' . $code . '</span></summary>'), 'Resumo deve identificar o idioma atual mesmo quando o código fica oculto no celular.');
+    foreach ($names as $name) { i18nCheck(str_contains($currentSelector, $name), 'Nomes dos idiomas não podem ser traduzidos.'); }
+}
+language(['lang' => 'en']);
 (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
 (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'test-i18n', 'papel' => 'porteiro']);
 $filter = ['q' => 'Entrada', 'categoria' => '', 'situacao' => 'ativos'];
@@ -59,4 +79,10 @@ $row = ['id' => 'pessoa-id-original', 'nome' => 'Pessoas', 'empresa' => 'Entrada
 $html = View::partial('pessoas/index', ['filtro' => $filter, 'rows' => [$row], 'total' => 1, 'pagina' => 1, 'paginas' => 1]);
 i18nCheck(str_contains($html, '<strong>Pessoas</strong>') && str_contains($html, '>Entrada</td>'), 'Template traduziu nomes pessoais ou empresa.');
 i18nCheck(str_contains($html, 'value="visitante"') && str_contains($html, 'Visitor'), 'Template deve manter valores de opções e traduzir seus rótulos.');
-echo "I18n: {$checks} verificações passaram (idiomas, fallback, parâmetros, dados, enums e seletor GET).\n";
+$layout = View::partial('layout/app', ['titulo' => 'Pessoas', 'content' => '', 'acoes' => '<a href="/pessoas/nova">Nova pessoa</a>']);
+i18nCheck(substr_count($layout, '<details class="seletor-idioma">') === 1 && strpos($layout, '<details class="seletor-idioma">') > strpos($layout, 'class="topo-acoes"') && strpos($layout, '<details class="seletor-idioma">') < strpos($layout, '</header>'), 'Layout autenticado deve ter apenas um seletor, no topo.');
+i18nCheck(strpos($layout, '<details class="seletor-idioma">') > strpos($layout, 'Nova pessoa</a>'), 'Seletor deve ser o último item das ações do topo.');
+$simple = View::partial('layout/simples', ['content' => '']);
+i18nCheck(substr_count($simple, '<details class="seletor-idioma">') === 1 && strpos($simple, 'data-tema') < strpos($simple, '<details class="seletor-idioma">') && strpos($simple, '<details class="seletor-idioma">') < strpos($simple, '<main'), 'Layout simples deve ter seletor à direita do botão de tema, antes do conteúdo.');
+
+echo "I18n: {$checks} verificações passaram (idiomas, fallback, parâmetros, dados, enums, seletor GET e layouts).\n";

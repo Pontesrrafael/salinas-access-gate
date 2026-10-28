@@ -1,11 +1,21 @@
 /* Salinas Access Gate — identidade Salinas Gold (#024B37 / #FFCD00 / #C6D53E / #707070) */
 /* Tema claro (padrão). O tema escuro redefine só os tokens — ver fim do arquivo. */
-.seletor-idioma { display:flex; flex-wrap:wrap; align-items:center; gap:6px; max-width:100%; }
-.seletor-idioma label { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
-.seletor-idioma select { width:auto; max-width:100%; min-height:34px; }
-.sidebar-rodape .seletor-idioma { margin:10px 0; font-size:13px; }
-.sidebar-rodape .seletor-idioma label { color:inherit; }
+.seletor-idioma { position:relative; flex:none; margin-left:auto; }
+.seletor-idioma > summary { display:flex; align-items:center; justify-content:center; gap:8px; min-height:38px; margin:0; padding:8px 10px; border:1px solid var(--borda-forte); border-radius:6px; background:var(--branco); color:var(--verde); font-size:.86rem; font-weight:700; list-style:none; cursor:pointer; }
+.seletor-idioma > summary::-webkit-details-marker { display:none; }
+.seletor-idioma > summary::after { content:""; width:6px; height:6px; margin:0 2px 3px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.seletor-idioma[open] > summary::after { margin-top:4px; transform:rotate(225deg); }
+.seletor-idioma > summary:hover, .seletor-idioma[open] > summary { background:var(--verde-claro); border-color:var(--verde); }
+.seletor-idioma img { display:block; flex:none; width:20px; height:15px; object-fit:cover; }
+.idioma-opcoes { position:absolute; top:calc(100% + 6px); right:0; z-index:50; width:max-content; min-width:232px; max-width:calc(100vw - 32px); margin:0; padding:4px; list-style:none; background:var(--branco); color:var(--texto); border:1px solid var(--borda-forte); border-radius:var(--raio); box-shadow:var(--sombra); }
+.idioma-opcoes a { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; color:var(--texto); text-decoration:none; font-size:.9rem; }
+.idioma-opcoes a:hover, .idioma-opcoes a[aria-current="true"] { background:var(--verde-claro); color:var(--verde); }
+.idioma-opcoes a[aria-current="true"] { font-weight:700; }
+.seletor-idioma > summary:focus-visible, .idioma-opcoes a:focus-visible { outline:3px solid var(--ouro); outline-offset:2px; }
 .tela-simples .seletor-tema { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; max-width:calc(100% - 24px); }
+@media (max-width:599px) {
+  .seletor-idioma .idioma-codigo, .seletor-idioma > summary::after { display:none; }
+}
 :root {
   color-scheme: light;
   --raio: 8px;
@@ -114,7 +124,7 @@ small { font-size: .82em; }
 .topo-titulo { flex: 1; min-width: 0; }
 .topo h1 { font-size: 1.3rem; color: var(--verde); }
 .topo p { margin: 2px 0 0; color: var(--cinza); font-size: .88rem; }
-.topo-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.topo-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .btn-menu { display: none; cursor: pointer; color: var(--verde); }
 .conteudo { padding: 22px 28px 32px; flex: 1; width: 100%; max-width: 1440px; }
 .rodape { padding: 14px 28px; font-size: .78rem; color: var(--cinza); border-top: 1px solid var(--borda); }
@@ -694,9 +704,8 @@ body.modo-tv { font-size: 16px; }
 .logo-claro { display: var(--logo-claro); }
 .logo-escuro { display: var(--logo-escuro); }
 .tela-simples .seletor-tema { position: fixed; top: 12px; right: 12px; z-index:2; }
-.tela-simples .seletor-idioma label { color:#fff; }
 .seletor-tema .btn { background: rgba(255, 255, 255, .12); color: #fff; border-color: rgba(255, 255, 255, .3); }
-@media(max-width:600px) { .tela-simples .seletor-tema { position:relative; inset:auto; margin:0 auto 14px; } }
+@media(max-width:600px) { .tela-simples .seletor-tema { position:relative; inset:auto; align-self:flex-end; margin:0 0 14px; max-width:100%; } }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;

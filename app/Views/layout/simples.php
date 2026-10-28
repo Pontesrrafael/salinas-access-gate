@@ -15,7 +15,7 @@
   <?php if (!empty($turnstile)): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif; ?>
 </head>
 <body class="tela-simples">
-  <div class="seletor-tema"><?= seletor_idioma() ?> <?= botao_tema('btn btn-sm') ?></div>
+  <div class="seletor-tema"><?= botao_tema('btn btn-sm') ?> <?= seletor_idioma() ?></div>
   <main class="cartao-central<?= !empty($largo) ? ' largo' : '' ?>">
     <div class="logo-central<?= !empty($logoVertical) ? ' vertical' : '' ?>"><img class="logo-claro" src="<?= e(asset(!empty($logoVertical) ? 'img/logo-vertical.png' : 'img/logo-horizontal.png')) ?>" alt="Salinas Gold Mineração"><img class="logo-escuro" src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração"></div>
     <?php foreach ($flash ?? [] as $f): ?>
