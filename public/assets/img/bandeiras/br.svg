@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+  <title>Brasil</title>
+  <rect width="640" height="480" fill="#009b3a"/>
+  <polygon points="320,56 584,240 320,424 56,240" fill="#fedf00"/>
+  <circle cx="320" cy="240" r="112" fill="#002776"/>
+  <path d="M214,204 Q332,188 430,261 A112,112 0 0,1 421,288 Q325,214 209,228 A112,112 0 0,1 214,204 Z" fill="#ffffff"/>
+  <circle cx="352" cy="198" r="5" fill="#ffffff"/>
+  <circle cx="276" cy="264" r="6" fill="#ffffff"/>
+  <circle cx="316" cy="278" r="6" fill="#ffffff"/>
+  <circle cx="316" cy="306" r="5" fill="#ffffff"/>
+  <circle cx="360" cy="288" r="6" fill="#ffffff"/>
+</svg>
