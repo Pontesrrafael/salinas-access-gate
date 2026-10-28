@@ -10,6 +10,8 @@ use App\Core\Http;
 use App\Core\Uuid;
 use App\Services\Ldap;
 use App\Services\Settings;
+use App\Services\Chamados;
+use InvalidArgumentException;
 use RuntimeException;
 
 final class ConfiguracoesController extends Controller
@@ -39,7 +41,32 @@ final class ConfiguracoesController extends Controller
     public function salvar(): void
     {
         $u = Auth::authorize('configuracoes.gerir');
+        // Valida o bloco inteiro antes de persistir qualquer configuração.
+        try {
+            $calendario = Chamados::calendario([
+                'dias' => Http::input('horario_dias', []), 'inicio' => Http::str('horario_inicio'),
+                'fim' => Http::str('horario_fim'), 'feriados' => Http::str('feriados'),
+            ]);
+            $retencao = filter_var(Http::input('retencao_chamados_meses'), FILTER_VALIDATE_INT);
+            $fecharDias = filter_var(Http::input('chamados_fechar_dias'), FILTER_VALIDATE_INT);
+            if ($retencao === false || $retencao < 6 || $retencao > 240 || $fecharDias === false || $fecharDias < 0 || $fecharDias > 365) {
+                throw new InvalidArgumentException(t('Retenção: 6 a 240 meses. Fechamento automático: 0 a 365 dias.'));
+            }
+            foreach (['horario_comercial_ativo', 'email_ativo'] as $chave) {
+                if (!in_array(Http::input($chave, '0'), ['0', '1'], true)) {
+                    throw new InvalidArgumentException(t('Opção de chamados inválida.'));
+                }
+            }
+        } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/configuracoes'); }
         $valores = [
+            'horario_comercial_ativo'     => Http::bool('horario_comercial_ativo') ? '1' : '0',
+            'horario_dias'                => implode(',', $calendario['dias']),
+            'horario_inicio'              => $calendario['inicio'],
+            'horario_fim'                 => $calendario['fim'],
+            'feriados'                    => implode(',', $calendario['feriados']),
+            'retencao_chamados_meses'     => (string) $retencao,
+            'chamados_fechar_dias'        => (string) $fecharDias,
+            'email_ativo'                 => Http::bool('email_ativo') ? '1' : '0',
             'org_nome'                    => Http::nstr('org_nome', 200),
             'org_cnpj'                    => Http::nstr('org_cnpj', 20),
             'exigir_destino'              => Http::bool('exigir_destino') ? '1' : '0',
@@ -55,10 +82,10 @@ final class ConfiguracoesController extends Controller
             'retencao_auditoria_meses'    => (string) max(6, min(240, (int) Http::str('retencao_auditoria_meses', '60'))),
             'mfa_obrigatorio_admin'       => Http::bool('mfa_obrigatorio_admin') ? '1' : '0',
         ];
-        foreach ($valores as $k => $v) {
-            Settings::set($k, $v, $u['id']);
-        }
-        Audit::log('configuracoes', null, 'UPDATE', $valores);
+        Database::transaction(static function () use ($valores, $u): void {
+            foreach ($valores as $k => $v) { Settings::set($k, $v, $u['id']); }
+            Audit::log('configuracoes', null, 'UPDATE', $valores);
+        });
         $this->ok('Configurações salvas.', '/configuracoes');
     }
 

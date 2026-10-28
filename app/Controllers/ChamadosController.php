@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\{Audit, Auth, Database, Http, Session, Uuid};
-use App\Services\{Chamados, FormularioDinamico, Settings, Upload};
+use App\Services\{Chamados, FormularioDinamico, Notificacoes, Settings, Upload};
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Throwable;
@@ -85,8 +85,10 @@ final class ChamadosController extends Controller
         try {
             Database::transaction(function () use ($u, $categoria, $categoriaId, $areaId, $titulo, $descricao, $paraVoce, $beneficiario, $urgencia, $impacto, $files, $validacao, $campos, $id, &$salvos): void {
                 // Bloqueia o cadastro enquanto registra a demanda (não aceita uma categoria desativada entre GET e POST).
-                $ativa = Database::one('SELECT c.id FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 FOR UPDATE', [$categoriaId, $areaId]);
+                $ativa = Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 FOR UPDATE', [$categoriaId, $areaId]);
                 if (!$ativa) { throw new InvalidArgumentException(t('Selecione uma área e uma categoria ativas.')); }
+                $categoria = $ativa;
+                $calendario = Chamados::calendarioConfigurado($categoria);
                 $agora = new DateTimeImmutable();
                 Database::insert('chamados', [
                     'id' => $id, 'area_id' => $areaId, 'categoria_id' => $categoriaId,
@@ -94,8 +96,9 @@ final class ChamadosController extends Controller
                     'beneficiario_nome' => $paraVoce === '0' ? $beneficiario : null,
                     'recorrente' => Http::bool('recorrente') ? 1 : 0, 'urgencia' => $urgencia, 'impacto' => $impacto,
                     'prioridade' => Chamados::prioridade($urgencia, $impacto),
-                    'prazo_resposta' => Chamados::prazo($agora, isset($categoria['sla_resposta_min']) ? (int) $categoria['sla_resposta_min'] : null)?->format('Y-m-d H:i:s'),
-                    'prazo_solucao' => Chamados::prazo($agora, isset($categoria['sla_solucao_min']) ? (int) $categoria['sla_solucao_min'] : null)?->format('Y-m-d H:i:s'),
+                    'calendario_sla' => $calendario === null ? null : json_encode($calendario, JSON_THROW_ON_ERROR),
+                    'prazo_resposta' => Chamados::prazo($agora, isset($categoria['sla_resposta_min']) ? (int) $categoria['sla_resposta_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
+                    'prazo_solucao' => Chamados::prazo($agora, isset($categoria['sla_solucao_min']) ? (int) $categoria['sla_solucao_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
                     'created_at' => $agora->format('Y-m-d H:i:s'),
                 ]);
                 foreach ($campos as $campo) {
@@ -107,6 +110,7 @@ final class ChamadosController extends Controller
                 }
                 $this->salvarAnexos($files, $id, null, $u['id'], $salvos);
                 Audit::log('chamados', $id, 'criar', ['area_id' => $areaId, 'categoria_id' => $categoriaId]);
+                Notificacoes::chamado('criado', Database::one('SELECT * FROM chamados WHERE id = ?', [$id]), ['usuario_id' => $u['id']]);
             });
         } catch (Throwable $e) {
             $this->limparAnexos($salvos);
@@ -135,16 +139,27 @@ final class ChamadosController extends Controller
         }
         if (isset(Chamados::STATUS[$filtros['status']])) { $where[] = 'c.status = ?'; $params[] = $filtros['status']; }
         if (isset(Chamados::PRIORIDADES[$filtros['prioridade']])) { $where[] = 'c.prioridade = ?'; $params[] = (int) $filtros['prioridade']; }
-        // Mesmo cálculo do PHP: solução congela quando pendente e encerra ao solucionar.
-        $restante = '(TIMESTAMPDIFF(SECOND, COALESCE(c.solucionado_em, c.fechado_em, NOW()), c.prazo_solucao) + c.segundos_pendente + IF(c.status = \'pendente\', GREATEST(0, TIMESTAMPDIFF(SECOND, c.pendente_desde, NOW())), 0))';
-        $janela = 'GREATEST(0, TIMESTAMPDIFF(SECOND, c.created_at, c.prazo_solucao)) * 0.2';
-        if ($filtros['prazo'] === 'vencido') { $where[] = 'c.prazo_solucao IS NOT NULL AND ' . $restante . ' < 0'; }
-        if ($filtros['prazo'] === 'vencendo') { $where[] = 'c.prazo_solucao IS NOT NULL AND ' . $restante . ' BETWEEN 0 AND ' . $janela; }
-        if ($filtros['prazo'] === 'no_prazo') { $where[] = '(c.prazo_solucao IS NULL OR ' . $restante . ' > ' . $janela . ')'; }
+        // Calendários e feriados variam por chamado. O filtro usa a mesma regra dos selos,
+        // antes da paginação; lê lotes pequenos para não carregar a fila inteira em memória.
         $sqlWhere = $where ? implode(' AND ', $where) : '1 = 1';
         [$pagina, $limite, $offset] = $this->paginacao();
-        $total = (int) Database::value('SELECT COUNT(*) FROM chamados c WHERE ' . $sqlWhere, $params);
-        $lista = Database::all('SELECT c.*, a.nome AS area_nome, cat.nome AS categoria_nome, u.nome AS atendente_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id WHERE ' . $sqlWhere . ' ORDER BY c.created_at DESC, c.numero DESC LIMIT ' . $limite . ' OFFSET ' . $offset, $params);
+        $consulta = 'SELECT c.*, a.nome AS area_nome, cat.nome AS categoria_nome, u.nome AS atendente_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id WHERE ' . $sqlWhere . ' ORDER BY c.created_at DESC, c.numero DESC';
+        if (isset(Chamados::PRAZOS[$filtros['prazo']])) {
+            $agora = new DateTimeImmutable();
+            $total = 0; $lista = []; $cursor = 0;
+            do {
+                $lote = Database::all($consulta . ' LIMIT 200 OFFSET ' . $cursor, $params);
+                foreach ($lote as $item) {
+                    if (Chamados::situacaoSolucao($item, $agora) !== $filtros['prazo']) { continue; }
+                    if ($total >= $offset && count($lista) < $limite) { $lista[] = $item; }
+                    $total++;
+                }
+                $cursor += 200;
+            } while (count($lote) === 200);
+        } else {
+            $total = (int) Database::value('SELECT COUNT(*) FROM chamados c WHERE ' . $sqlWhere, $params);
+            $lista = Database::all($consulta . ' LIMIT ' . $limite . ' OFFSET ' . $offset, $params);
+        }
         $escopo = $u['papel'] === 'admin' ? '1 = 1' : 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = a.id AND m.usuario_id = ?)';
         $escopoParams = $u['papel'] === 'admin' ? [] : [$u['id']];
         if (!$fila) { $escopo = 'a.ativo = 1'; $escopoParams = []; }
@@ -154,7 +169,8 @@ final class ChamadosController extends Controller
             $categorias = Chamados::categoriasEmArvore(Database::all('SELECT id, nome, parent_id FROM servico_categorias WHERE area_id = ? ORDER BY ordem, nome', [$filtros['area_id']]));
             if ($fila) { $membros = $this->membros($filtros['area_id']); }
         }
-        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite') + ['titulo' => $fila ? t('Fila de atendimento') : t('Meus chamados')]);
+        $satisfacaoAreas = $fila ? Database::all('SELECT a.id, a.nome, AVG(s.nota) AS media, COUNT(s.chamado_id) AS avaliacoes FROM servico_areas a LEFT JOIN chamados c ON c.area_id = a.id LEFT JOIN chamado_satisfacao s ON s.chamado_id = c.id WHERE ' . $escopo . (Uuid::valid($filtros['area_id']) ? ' AND a.id = ?' : '') . ' GROUP BY a.id, a.nome ORDER BY a.nome', [...$escopoParams, ...(Uuid::valid($filtros['area_id']) ? [$filtros['area_id']] : [])]) : [];
+        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite', 'satisfacaoAreas') + ['titulo' => $fila ? t('Fila de atendimento') : t('Meus chamados')]);
     }
 
     private function membros(string $areaId): array
@@ -173,7 +189,8 @@ final class ChamadosController extends Controller
         $anexos = Database::all('SELECT a.id, a.nome_arquivo, a.tamanho_bytes, a.acompanhamento_id FROM chamado_anexos a LEFT JOIN chamado_acompanhamentos ac ON ac.id = a.acompanhamento_id WHERE a.chamado_id = ?' . ($atende ? '' : " AND (ac.id IS NULL OR ac.tipo <> 'interno')") . ' ORDER BY a.created_at, a.id', [$id]);
         $respostas = Database::all('SELECT rotulo, valor FROM chamado_respostas WHERE chamado_id = ? ORDER BY created_at, campo_id', [$id]);
         $membros = $atende ? $this->membros($c['area_id']) : [];
-        $this->view('chamados/detalhe', compact('c', 'atende', 'eventos', 'anexos', 'respostas', 'membros', 'u') + ['titulo' => t('Chamado #{numero}', ['numero' => $c['numero']])]);
+        $satisfacao = Database::one('SELECT nota, comentario, created_at FROM chamado_satisfacao WHERE chamado_id = ?', [$id]);
+        $this->view('chamados/detalhe', compact('c', 'atende', 'eventos', 'anexos', 'respostas', 'membros', 'u', 'satisfacao') + ['titulo' => t('Chamado #{numero}', ['numero' => $c['numero']])]);
     }
 
     private function evento(string $id, ?string $usuarioId, string $tipo, string $texto): string
@@ -209,6 +226,9 @@ final class ChamadosController extends Controller
                     Database::update('chamados', ['respondido_em' => date('Y-m-d H:i:s')], 'id = ?', [$id]);
                 }
                 Audit::log('chamados', $id, 'acompanhar', ['tipo' => $tipo]);
+                if ($tipo === 'comentario') {
+                    Notificacoes::chamado('comentario', $c, ['usuario_id' => $u['id'], 'texto' => $texto]);
+                }
             });
         } catch (Throwable $e) {
             $this->limparAnexos($salvos);
@@ -242,6 +262,7 @@ final class ChamadosController extends Controller
                 $nome = (string) Database::value('SELECT nome FROM usuarios WHERE id = ?', [$atendenteId]);
                 $this->evento($id, $u['id'], 'atribuicao', $nome);
                 Audit::log('chamados', $id, 'atribuir', ['de' => $c['atendente_id'], 'para' => $atendenteId]);
+                Notificacoes::chamado('atribuido', array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
             });
         } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/chamados/' . $id); }
         $this->ok(t('Atendente atualizado.'), '/chamados/' . $id);
@@ -249,6 +270,8 @@ final class ChamadosController extends Controller
 
     public function status(string $id): void
     {
+        // Reutiliza o POST protegido existente; não exige alteração nas rotas da equipe.
+        if (Http::str('acao') === 'avaliar') { $this->avaliar($id); return; }
         $u = $this->habilitado();
         $this->chamado($id, $u);
         $destino = Http::str('status');
@@ -272,9 +295,32 @@ final class ChamadosController extends Controller
                 if ($texto !== '') { $this->evento($id, $u['id'], $destino === 'solucionado' ? 'solucao' : 'comentario', $texto); }
                 $this->evento($id, $u['id'], 'status', $destino);
                 Audit::log('chamados', $id, match ($destino) { 'solucionado' => 'solucionar', 'fechado' => 'fechar', default => 'mudar_status' }, ['de' => $c['status'], 'para' => $destino]);
+                if (in_array($destino, ['solucionado', 'fechado'], true)) {
+                    Notificacoes::chamado($destino, array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
+                } elseif ($texto !== '') {
+                    Notificacoes::chamado('comentario', array_replace($c, $mudancas), ['usuario_id' => $u['id'], 'texto' => $texto]);
+                }
             });
         } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/chamados/' . $id); }
         $this->ok(t('Status atualizado.'), '/chamados/' . $id);
+    }
+
+    private function avaliar(string $id): void
+    {
+        $u = $this->habilitado();
+        try {
+            Database::transaction(function () use ($id, $u): void {
+                $c = $this->chamado($id, $u, true);
+                $jaAvaliou = (bool) Database::value('SELECT 1 FROM chamado_satisfacao WHERE chamado_id = ?', [$id]);
+                if (!Chamados::podeAvaliar($c, $u['id'], $jaAvaliou)) {
+                    throw new InvalidArgumentException(t('Somente o solicitante pode avaliar um chamado fechado, uma única vez.'));
+                }
+                $dados = Chamados::validarSatisfacao(Http::input('nota'), Http::str('comentario'));
+                Database::insert('chamado_satisfacao', $dados + ['chamado_id' => $id, 'respondido_por' => $u['id']]);
+                Audit::log('chamados', $id, 'avaliar', ['nota' => $dados['nota']]);
+            });
+        } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/chamados/' . $id); }
+        $this->ok(t('Avaliação registrada. Obrigado!'), '/chamados/' . $id);
     }
 
     private function salvarAnexos(array $files, string $id, ?string $eventoId, string $usuarioId, array &$salvos): void
