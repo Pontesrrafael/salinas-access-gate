@@ -1,6 +1,7 @@
 /* Ajuda e tours locais. Não faz requisições nem aciona controles de negócio. */
 (function () {
   'use strict';
+  const T = window.SAGI18n ? window.SAGI18n.t : (text, params = {}) => String(text).replace(/\{(\w+)\}/g, (match, key) => Object.prototype.hasOwnProperty.call(params, key) ? String(params[key]) : match);
   const configNode = document.getElementById('tutorial-config');
   if (!configNode || typeof HTMLDialogElement === 'undefined') { return; }
   const config = JSON.parse(configNode.textContent);
@@ -20,7 +21,7 @@
   const write = (key, value) => { const json = JSON.stringify(value); memory.set(key, json); try { if (storage) { storage.setItem(prefix + key, json); } } catch (_) { storage = null; } };
   const progressKey = m => m.id + ':v' + m.version;
   const progress = m => read(progressKey(m)) || { state: 'nao_iniciado' };
-  const statusNames = { nao_iniciado: 'Não iniciado', em_andamento: 'Em andamento', concluido: 'Concluído', dispensado: 'Dispensado' };
+  const statusNames = { nao_iniciado: T('Não iniciado'), em_andamento: T('Em andamento'), concluido: T('Concluído'), dispensado: T('Dispensado') };
   function refreshStatuses() {
     document.querySelectorAll('[data-tutorial-status]').forEach(el => {
       const m = catalog[el.dataset.tutorialStatus];
@@ -31,13 +32,14 @@
   const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden],dialog:not([open])');
   let invoker = null, active = null, steps = [], index = 0, target = null, waiting = false, epoch = 0;
   function restore() { if (invoker && invoker.isConnected && visible(invoker)) { invoker.focus({ preventScroll: true }); } }
-  function element(tag, value, parent, cls) { const el = document.createElement(tag); if (value) { el.textContent = value; } if (cls) { el.className = cls; } if (parent) { parent.append(el); } return el; }
+  // Aqui entram somente textos do tutorial e rótulos estáticos, nunca dados de cadastros.
+  function element(tag, value, parent, cls) { const el = document.createElement(tag); if (value) { el.textContent = T(value); } if (cls) { el.className = cls; } if (parent) { parent.append(el); } return el; }
   function button(label, parent, fn) { const b = element('button', label, parent, 'btn btn-secundario'); b.type = 'button'; b.addEventListener('click', fn); return b; }
   function openHelp(id, trigger) {
     const m = catalog[id]; if (!m || document.querySelector('dialog[open]:not(#tutorial-help):not(#tutorial-tour)')) { return; }
     if (tour.open) { finish('em_andamento'); }
     invoker = trigger || document.activeElement; invite.hidden = true;
-    document.getElementById('tutorial-help-title').textContent = m.title + ' — Como usar';
+    document.getElementById('tutorial-help-title').textContent = m.title + ' — ' + T('Como usar');
     body.replaceChildren(); element('p', m.summary, body);
     if (id === config.current) {
       const actions = element('div', '', body, 'tutorial-botoes');
@@ -101,11 +103,11 @@
     const s = steps[index]; target = s.target ? document.querySelector(s.target) : null;
     if (!visible(target)) { target = null; }
     if (target) { target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); }
-    document.getElementById('tutorial-counter').textContent = 'Passo ' + (index + 1) + ' de ' + steps.length;
+    document.getElementById('tutorial-counter').textContent = T('Passo {current} de {total}', { current: index + 1, total: steps.length });
     document.getElementById('tutorial-tour-title').textContent = s.title;
     document.getElementById('tutorial-tour-text').textContent = s.text;
     document.getElementById('tutorial-prev').disabled = index === 0;
-    document.getElementById('tutorial-next').textContent = index === steps.length - 1 ? 'Concluir' : 'Próximo';
+    document.getElementById('tutorial-next').textContent = T(index === steps.length - 1 ? 'Concluir' : 'Próximo');
     save(active, { state: 'em_andamento', step: s.id, suggested: true }); position();
   }
   function position() {

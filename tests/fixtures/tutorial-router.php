@@ -7,6 +7,18 @@ App\Core\Http::securityHeaders();
 $role = in_array($_GET['role'] ?? '', ['admin', 'porteiro', 'ssma', 'supervisor'], true) ? $_GET['role'] : 'admin';
 (new ReflectionProperty(App\Core\Auth::class, 'loaded'))->setValue(null, true);
 (new ReflectionProperty(App\Core\Auth::class, 'user'))->setValue(null, ['id' => 'fixture-' . $role, 'nome' => 'Usuário de teste', 'papel' => $role]);
+// Views reais com dados fictícios para conferir traduções sem banco/credenciais.
+$fixturePath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if ($fixturePath === '/login') {
+    App\Core\View::render('auth/login', ['titulo' => 'Entrar', 'old' => [], 'ldap' => !empty($_GET['ldap'])], 'layout/simples');
+    return;
+}
+if ($fixturePath === '/pessoas') {
+    $filtro = ['q' => $_GET['q'] ?? '', 'categoria' => '', 'situacao' => 'ativos'];
+    $rows = [['id' => 'pessoa-original', 'nome' => 'Pessoas', 'empresa' => 'Entrada', 'categoria' => 'visitante', 'usuario_id' => null, 'ativo' => 1, 'cpf_exibicao' => '000.***.***-00', 'matricula' => '', 'telefone_principal' => '', 'email_principal' => '', 'documentos' => []]];
+    App\Core\View::render('pessoas/index', ['titulo' => 'Pessoas', 'filtro' => $filtro, 'rows' => $rows, 'total' => 1, 'pagina' => 1, 'paginas' => 1]);
+    return;
+}
 $modulos = App\Services\Tutoriais::permitidos();
 $titulo = 'Ambiente de verificação';
 $content = str_starts_with($_SERVER['REQUEST_URI'], '/tutoriais')

@@ -6,6 +6,40 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Http;
 
+/** Texto de interface. Dados pessoais, IDs e valores de negócio não passam por esta função. */
+function t(string $source, array $params = []): string
+{
+    return \App\Core\I18n::t($source, $params);
+}
+
+/** Traduz somente o rótulo de uma enumeração conhecida, preservando o fallback. */
+function label_t(array $labels, mixed $key, string $fallback = ''): string
+{
+    return (is_string($key) || is_int($key)) && isset($labels[$key]) ? t($labels[$key]) : $fallback;
+}
+
+function seletor_idioma(): string
+{
+    $html = '<form method="get" action="' . e(url(Http::path())) . '" class="seletor-idioma">';
+    foreach ($_GET as $key => $value) {
+        if ($key !== 'lang' && is_string($key) && is_scalar($value)) {
+            $html .= '<input type="hidden" name="' . e($key) . '" value="' . e($value) . '">';
+        }
+    }
+    $html .= '<label>' . e(t('Idioma')) . ' <select name="lang" data-idioma aria-label="' . e(t('Idioma')) . '">';
+    foreach (\App\Core\I18n::LOCALES as $locale => $label) {
+        $html .= '<option value="' . e($locale) . '"' . selected($locale, \App\Core\I18n::current()) . '>' . e($label) . '</option>';
+    }
+    return $html . '</select></label><button type="submit" class="btn btn-secundario btn-sm">' . e(t('Alterar idioma')) . '</button></form>';
+}
+
+function scripts_idioma(): string
+{
+    $json = json_encode(['locale' => \App\Core\I18n::current(), 'messages' => \App\Core\I18n::messages()], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    return '<script id="i18n-config" type="application/json" nonce="' . e(Http::cspNonce()) . '">' . $json . '</script>'
+        . '<script src="' . e(asset('js/i18n.js')) . '" nonce="' . e(Http::cspNonce()) . '"></script>';
+}
+
 /** Escapa saída HTML (prevenção de XSS). */
 function e(mixed $v): string
 {
@@ -106,13 +140,13 @@ function tema_attr(): string
 function botao_tema(string $classe = 'nav-item'): string
 {
     $rot = ['' => 'Automático', 'escuro' => 'Escuro', 'claro' => 'Claro'][tema()];
-    return '<button type="button" class="' . e($classe) . '" data-tema title="Alternar tema (automático, escuro, claro)">'
-        . icon('tema') . '<span>Tema: ' . e($rot) . '</span></button>';
+    return '<button type="button" class="' . e($classe) . '" data-tema title="' . e(t('Alternar tema (automático, escuro, claro)')) . '">'
+        . icon('tema') . '<span>' . e(t('Tema: {tema}', ['tema' => t($rot)])) . '</span></button>';
 }
 
 function papel_label(?string $p): string
 {
-    return Auth::PAPEIS[$p ?? ''] ?? '—';
+    return isset(Auth::PAPEIS[$p ?? '']) ? t(Auth::PAPEIS[$p]) : '—';
 }
 
 const CATEGORIAS = ['colaborador' => 'Colaborador', 'visitante' => 'Visitante', 'terceiro' => 'Terceiro'];
@@ -155,7 +189,7 @@ function badge_status_solicitacao(string $status): string
         'pendente' => 'aviso', 'aprovada' => 'sucesso', 'recusada' => 'perigo',
         'realizada' => 'neutro', 'expirada' => 'neutro', 'aguardando_ssma' => 'info',
     ];
-    return badge(STATUS_SOLICITACAO[$status] ?? $status, $map[$status] ?? 'neutro');
+    return badge(label_t(STATUS_SOLICITACAO, $status, $status), $map[$status] ?? 'neutro');
 }
 
 /** Ícones SVG inline (sem dependência externa). */

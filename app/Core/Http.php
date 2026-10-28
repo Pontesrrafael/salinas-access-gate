@@ -145,6 +145,8 @@ final class Http
 
     public static function json(mixed $data, int $status = 200): never
     {
+        // Traduz apenas os campos de mensagem da resposta, nunca registros ou chaves da API.
+        if (is_array($data)) { $data = I18n::response($data); }
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');

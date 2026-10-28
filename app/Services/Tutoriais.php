@@ -67,6 +67,22 @@ final class Tutoriais
             ['id' => 'pessoa', 'target' => '[data-tour="portaria-pessoa"]', 'title' => 'Identificação da pessoa', 'text' => 'Pesquise e selecione a pessoa correta. O tour não digita nem seleciona registros.', 'onMissing' => 'skip'],
             ['id' => 'veiculo', 'target' => '[data-tour="portaria-veiculo"]', 'title' => 'Veículo opcional', 'text' => 'Pesquise a placa quando houver veículo. Para acesso a pé, deixe em branco.', 'onMissing' => 'skip'],
         ]);
+        foreach ($all as &$module) {
+            foreach (['title', 'summary', 'review'] as $key) { $module[$key] = \t($module[$key]); }
+            $module['capabilities'] = array_map('\t', $module['capabilities']);
+            $module['tips'] = array_map('\t', $module['tips']);
+            foreach ($module['procedures'] as &$procedure) {
+                foreach (['title', 'expectedResult', 'recovery'] as $key) { $procedure[$key] = \t($procedure[$key]); }
+                $procedure['steps'] = array_map('\t', $procedure['steps']);
+            }
+            unset($procedure);
+            foreach ($module['tour'] as &$step) {
+                $step['title'] = \t($step['title']);
+                $step['text'] = \t($step['text']);
+            }
+            unset($step);
+        }
+        unset($module);
         return $all;
     }
 }

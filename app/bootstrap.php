@@ -17,3 +17,4 @@ spl_autoload_register(static function (string $class): void {
 require __DIR__ . '/helpers.php';
 
 App\Core\App::boot(dirname(__DIR__));
+App\Core\I18n::init();
