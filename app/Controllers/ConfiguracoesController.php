@@ -46,6 +46,14 @@ final class ConfiguracoesController extends Controller
             'alerta_permanencia_horas'    => (string) max(1, min(48, (int) Http::str('alerta_permanencia_horas', '8'))),
             'link_externo_validade_horas' => (string) max(1, min(720, (int) Http::str('link_externo_validade_horas', '72'))),
             'form_publico_ativo'          => Http::bool('form_publico_ativo') ? '1' : '0',
+            'encarregado_nome'            => Http::nstr('encarregado_nome', 150),
+            'encarregado_email'           => filter_var(Http::str('encarregado_email'), FILTER_VALIDATE_EMAIL) ?: null,
+            'retencao_fotos_dias'         => (string) max(7, min(3650, (int) Http::str('retencao_fotos_dias', '180'))),
+            'retencao_solicitacoes_meses' => (string) max(1, min(120, (int) Http::str('retencao_solicitacoes_meses', '12'))),
+            'retencao_registros_meses'    => (string) max(6, min(240, (int) Http::str('retencao_registros_meses', '24'))),
+            'retencao_cadastros_meses'    => (string) max(6, min(240, (int) Http::str('retencao_cadastros_meses', '24'))),
+            'retencao_auditoria_meses'    => (string) max(6, min(240, (int) Http::str('retencao_auditoria_meses', '60'))),
+            'mfa_obrigatorio_admin'       => Http::bool('mfa_obrigatorio_admin') ? '1' : '0',
         ];
         foreach ($valores as $k => $v) {
             Settings::set($k, $v, $u['id']);

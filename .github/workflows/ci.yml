@@ -37,11 +37,13 @@ jobs:
       - name: Tutoriais (perfis, conteúdo e rotas)
         run: php tests/tutoriais.php && php tests/tutoriais_context.php
       - name: Idiomas (preferência, catálogos e dados preservados)
-        run: php tests/i18n.php && php tests/i18n_catalogs.php
+        run: php tests/i18n.php && php tests/i18n_catalogs.php && php tests/i18n_glossario.php
       - name: Idiomas no navegador (helper e interpolação segura)
         run: node --test tests/i18n_client.test.cjs
       - name: Regras de segurança (RBAC e utilidades HTTP)
         run: php tests/regras.php
+      - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
+        run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
         run: node --test tests/infleet_maps.test.cjs
 
@@ -62,6 +64,11 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8222$u")
             echo "$u -> $code"; [ "$code" != "200" ]
           done
+      - name: Migração 005 e retenção LGPD (simulação no MariaDB real)
+        run: |
+          cd /opt/salinas-access-gate
+          sudo docker compose exec -T app php bin/console.php aplicar-retencao --simular
+          curl -fsS http://127.0.0.1:8222/privacidade | grep -q 'Aviso de Privacidade'
       - name: Logs (em caso de falha)
         if: failure()
         run: sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml logs --tail=200

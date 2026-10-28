@@ -56,8 +56,21 @@ final class AuthController extends Controller
         }
 
         RateLimiter::clear($chave);
+
+        // Segundo fator (contas locais com TOTP ativo): a sessão só é criada depois do código
+        if (($u['auth_origem'] ?? 'local') === 'local' && (int) ($u['mfa_ativo'] ?? 0) === 1) {
+            Session::regenerate();
+            Session::set('mfa_pendente', ['uid' => $u['id'], 'em' => time()]);
+            Http::redirect('/login/mfa');
+        }
+        self::concluir($u, $u['auth_origem'] ?? 'local');
+    }
+
+    /** Cria a sessão e leva ao destino pedido antes do login (só caminhos internos). */
+    public static function concluir(array $u, string $origem): never
+    {
         Auth::login($u);
-        Audit::log('auth', $u['id'], 'LOGIN', ['origem' => $u['auth_origem'] ?? 'local'], $u['id']);
+        Audit::log('auth', $u['id'], 'LOGIN', ['origem' => $origem], $u['id']);
 
         if ((int) $u['must_change_password'] === 1) {
             Http::redirect('/trocar-senha');

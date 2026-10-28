@@ -298,7 +298,11 @@ details summary { cursor: pointer; font-size: .86rem; color: var(--verde); margi
 .titulo-central { text-align: center; color: var(--verde); font-size: 1.35rem; margin-bottom: 4px; }
 .subtitulo-central { text-align: center; color: var(--cinza); margin: 0 0 18px; font-size: .9rem; }
 .nota-central { text-align: center; font-size: .84rem; color: var(--cinza); margin: 14px 0 0; }
+.texto-legal h2 { font-size: 1rem; margin: 18px 0 6px; }
+.texto-legal p, .texto-legal li { font-size: .9rem; line-height: 1.5; }
+.texto-legal ul { padding-left: 1.2em; margin: 0; }
 .rodape-simples { color: rgba(255, 255, 255, .7); font-size: .78rem; margin-top: 18px; }
+.rodape-simples a { color: inherit; }
 .erro-pagina { text-align: center; }
 .erro-codigo { font-size: 3rem; font-weight: 800; color: var(--ouro); line-height: 1; }
 .erro-pagina h1 { color: var(--verde); margin: 8px 0; font-size: 1.3rem; }
@@ -854,3 +858,7 @@ body.modo-tv { font-size: 16px; }
   }
 }
 .logo-central img.logo-escuro, .logo-central.vertical img.logo-escuro { height: 60px; }
+.chave-mfa { font-size: 1.15rem; letter-spacing: .08em; padding: 10px 12px; background: var(--fundo-suave, rgba(0,0,0,.05)); border-radius: 8px; display: inline-block; }
+.mfa-cadastro { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin: 12px 0; }
+.qr-mfa { width: 220px; max-width: 100%; margin: 0; padding: 8px; background: #fff; border-radius: 8px; }
+.qr-mfa svg { display: block; width: 100%; height: auto; }

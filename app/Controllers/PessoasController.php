@@ -182,6 +182,50 @@ final class PessoasController extends Controller
         Http::json(['cpf' => Crypto::formatCpf(Crypto::decryptCpf($p['cpf_enc']))]);
     }
 
+    /**
+     * Relatório do titular (LGPD art. 18, I e II): tudo o que o sistema guarda sobre a pessoa, em JSON.
+     * Entregue pelo Encarregado após confirmar a identidade de quem pediu.
+     */
+    public function dadosTitular(string $id): void
+    {
+        $u = Auth::authorize('lgpd.titular');
+        $p = $this->carregar($id);
+        $protocolo = Http::nstr('protocolo', 100);
+        $pessoa = $p;
+        unset($pessoa['cpf_enc'], $pessoa['cpf_hash']);
+        $pessoa['cpf'] = Crypto::formatCpf(Crypto::decryptCpf($p['cpf_enc']));
+        $dados = [
+            'gerado_em'    => date('c'),
+            'gerado_por'   => $u['nome'],
+            'protocolo'    => $protocolo,
+            'controlador'  => \App\Services\Settings::get('org_nome') ?: 'Salinas Gold Mineração LTDA',
+            'aviso'        => Http::absoluteUrl('/privacidade'),
+            'pessoa'       => $pessoa,
+            'documentos'   => Database::all('SELECT tipo, numero, emissao, validade, observacoes, created_at FROM documentos WHERE pessoa_id = ? ORDER BY validade', [$id]),
+            'acessos'      => Database::all(
+                'SELECT r.data_hora, r.sentido, l.nome AS local, r.destino, r.responsavel_interno_nome, v.placa, r.observacoes,
+                        (SELECT COUNT(*) FROM registro_anexos a WHERE a.registro_acesso_id = r.id) AS fotos
+                   FROM registros_acesso r JOIN locais l ON l.id = r.local_id LEFT JOIN veiculos v ON v.id = r.veiculo_id
+                  WHERE r.pessoa_id = ? ORDER BY r.data_hora',
+                [$id]
+            ),
+            'solicitacoes' => Database::all(
+                'SELECT s.data_prevista, s.status, s.origem, s.visitante_nome, s.visitante_doc, s.empresa, s.contato_telefone,
+                        s.contato_email, s.motivo, s.atividade_risco, a.nome AS area, s.created_at
+                   FROM solicitacoes_acesso s LEFT JOIN areas a ON a.id = s.area_id WHERE s.pessoa_id = ? ORDER BY s.data_prevista',
+                [$id]
+            ),
+            'verificacoes_ssma' => Database::all('SELECT status, observacao, checklist, validade_ate, created_at FROM verificacoes_ssma WHERE pessoa_id = ? ORDER BY created_at', [$id]),
+            'usuario_sistema'   => Database::one('SELECT nome, email, papel, ativo, ultimo_login_em FROM usuarios WHERE pessoa_id = ?', [$id]),
+        ];
+        Audit::log('lgpd', $id, 'EXPORTACAO_TITULAR', ['protocolo' => $protocolo]);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="dados-titular-' . substr($id, 0, 8) . '-' . date('Ymd') . '.json"');
+        header('Cache-Control: no-store');
+        echo json_encode($dados, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     public function adicionarDocumento(string $id): void
     {
         Auth::authorize('documentos.gerir');

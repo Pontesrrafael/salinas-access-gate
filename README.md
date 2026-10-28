@@ -80,6 +80,14 @@ O sistema também emite avisos que não bloqueiam a operação: documento vencen
 `registros_acesso`, `registro_anexos`, `verificacoes_ssma` e `audit_log` são **imutáveis** (triggers `BEFORE UPDATE/DELETE`).
 Toda movimentação é auditada por trigger, inclusive o IP do cliente.
 
+## Privacidade (LGPD) e ISO 27001
+
+- **Aviso de Privacidade** público em `/privacidade` (base legal, Encarregado, compartilhamentos, prazos e direitos). O formulário pede ciência, não consentimento.
+- **Retenção e anonimização** diárias (`php bin/console.php aplicar-retencao`, agendado às 00:20): fotos, solicitações, cadastros de visitantes/terceiros sem acesso, observações de registros e auditoria antiga. Prazos em Configurações; `--simular` mostra o que seria feito.
+- **Direitos do titular:** Admin/TI exporta tudo o que o sistema tem sobre uma pessoa (JSON) na tela da pessoa; a exportação vai para a auditoria.
+- **Backup cifrado** (AES-256) sem as chaves do CPF; chave do backup em `/etc/salinas-access-gate/backup.key`; cópia externa com `SAG_BACKUP_REMOTO`.
+- **Verificação em duas etapas (TOTP)** para contas locais, obrigatória para Admin/TI (`mfa_obrigatorio_admin`). Redefinição: `php bin/console.php mfa-redefinir --email=...`.
+
 ## Perfis (RBAC)
 
 | Permissão | Admin/TI | Supervisor | SSMA | Porteiro |

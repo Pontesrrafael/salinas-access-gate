@@ -10,6 +10,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\IndicadoresController;
 use App\Controllers\InfleetController;
 use App\Controllers\LocaisController;
+use App\Controllers\MfaController;
 use App\Controllers\PessoasController;
 use App\Controllers\PortariaController;
 use App\Controllers\PresencaController;
@@ -38,6 +39,11 @@ $router->post('/login', [AuthController::class, 'login']);
 $router->post('/logout', [AuthController::class, 'logout']);
 $router->get('/trocar-senha', [AuthController::class, 'formTrocarSenha']);
 $router->post('/trocar-senha', [AuthController::class, 'trocarSenha']);
+$router->get('/login/mfa', [MfaController::class, 'formDesafio']);
+$router->post('/login/mfa', [MfaController::class, 'desafio']);
+$router->get('/conta/mfa', [MfaController::class, 'conta']);
+$router->post('/conta/mfa', [MfaController::class, 'ativar']);
+$router->post('/conta/mfa/desativar', [MfaController::class, 'desativar']);
 
 // ---- Operação ----
 $router->get('/tutoriais', [TutoriaisController::class, 'index']);
@@ -79,6 +85,7 @@ $router->get('/pessoas/{id}', [PessoasController::class, 'editar']);
 $router->post('/pessoas/{id}', [PessoasController::class, 'atualizar']);
 $router->post('/pessoas/{id}/excluir', [PessoasController::class, 'excluir']);
 $router->post('/pessoas/{id}/cpf', [PessoasController::class, 'revelarCpf']);
+$router->post('/pessoas/{id}/dados-titular', [PessoasController::class, 'dadosTitular']);
 $router->post('/pessoas/{id}/documentos', [PessoasController::class, 'adicionarDocumento']);
 $router->post('/pessoas/{id}/documentos/{doc}/excluir', [PessoasController::class, 'excluirDocumento']);
 $router->post('/pessoas/{id}/vinculo', [PessoasController::class, 'vincularUsuario']);
@@ -115,6 +122,7 @@ $router->post('/configuracoes/ldap/testar', [ConfiguracoesController::class, 'te
 $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'salvarArea']);
 
 // ---- Formulário público (sem login) ----
+$router->get('/privacidade', [PublicoController::class, 'privacidade']);
 $router->get('/solicitar-acesso', [PublicoController::class, 'formPublico']);
 $router->post('/solicitar-acesso', [PublicoController::class, 'enviarPublico']);
 $router->get('/solicitar-acesso/{token}', [PublicoController::class, 'formToken']);

@@ -20,8 +20,8 @@ Navegador ──HTTP :222──► [app] PHP 8.5 + Apache ──rede interna─�
 | Segredos | `docker/app.env` e `docker/db.env`, gerados na 1ª instalação com `chmod 600` |
 | Banco | Não fica exposto na rede. Só o container `app` alcança o MariaDB |
 | Migrações | Aplicadas automaticamente a cada início do container |
-| Agendamentos | `/etc/cron.d/salinas-access-gate`: expira solicitações às 00:05 e faz backup à 01:30 |
-| Backup | `/var/backups/salinas-access-gate`: banco, fotos e cópia do `app.env`, com retenção de 14 dias |
+| Agendamentos | `/etc/cron.d/salinas-access-gate`: expira solicitações às 00:05, aplica a retenção LGPD às 00:20 e faz backup à 01:30 |
+| Backup | `/var/backups/salinas-access-gate`: banco e fotos **cifrados** (AES-256), retenção de 14 dias. Chave em `/etc/salinas-access-gate/backup.key`. O `app.env` não vai no backup |
 
 ## 2. Pré-requisitos
 
@@ -107,14 +107,20 @@ sudo /opt/salinas-access-gate/docker/backup.sh   # backup sob demanda
 
 ## 6. Restauração
 
+Os backups são cifrados. Tenha a chave (`/etc/salinas-access-gate/backup.key` ou a cópia do cofre):
+
 ```bash
 cd /opt/salinas-access-gate
-gunzip -c /var/backups/salinas-access-gate/banco-AAAA-MM-DD-HHMM.sql.gz | \
+K=/etc/salinas-access-gate/backup.key
+B=/var/backups/salinas-access-gate
+sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:$K -in $B/banco-AAAA-MM-DD-HHMM.sql.gz.enc | gunzip | \
   sudo docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"'
-sudo docker compose exec -T app tar -xzf - -C /var/www/html/storage < /var/backups/salinas-access-gate/fotos-AAAA-MM-DD-HHMM.tar.gz
+sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:$K -in $B/fotos-AAAA-MM-DD-HHMM.tar.gz.enc | \
+  sudo docker compose exec -T app tar -xzf - -C /var/www/html/storage
 ```
 
-Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves `CPF_*`, **antes** de subir a aplicação.
+Em um servidor novo, restaure **antes** de subir a aplicação o `app.env` do cofre (chaves `CPF_*`) e a chave do backup.
+Teste a restauração a cada trimestre num servidor de homologação e registre o resultado (ISO 27001 A.8.13).
 
 ## 7. Riscos e limitações
 
@@ -122,8 +128,8 @@ Em um servidor novo, restaure também o `app.env`, que contém as mesmas chaves 
 |---|---|
 | HTTP sem criptografia na porta 222 | Uso restrito à rede interna. Para acesso externo, coloque um proxy reverso com HTTPS (Nginx/Traefik + Let's Encrypt) e use `SESSION_SECURE_COOKIE=true` |
 | Docker publica portas ignorando o UFW | Restrinja no Sophos o acesso à porta 222 à VLAN corporativa e às portarias |
-| Backup no próprio servidor | Copie `/var/backups/salinas-access-gate` para o NAS ou outro local fora do servidor (ex.: rsync noturno) |
-| Perda do `app.env` | Mantenha uma cópia no cofre. Cada backup também copia o arquivo |
+| Backup no próprio servidor | Defina `SAG_BACKUP_REMOTO` (destino do rsync, ex.: `backup@nas:/salinas/`) no cron para copiar os arquivos cifrados para fora do servidor |
+| Perda do `app.env` ou da chave do backup | Os dois ficam **só** no cofre de senhas da TI, nunca junto dos backups |
 
 ## 8. Validação desta revisão
 

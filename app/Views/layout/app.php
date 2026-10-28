@@ -68,6 +68,9 @@ $menu = [
     <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
     <?= seletor_idioma() ?>
     <?= botao_tema() ?>
+    <?php if (($u['auth_origem'] ?? 'local') === 'local'): ?>
+      <a class="nav-item<?= $ativo('/conta/mfa') ?>" href="<?= e(url('/conta/mfa')) ?>"><?= icon('escudo') ?><span><?= e(($u['mfa_ativo'] ?? 0) ? t('Duas etapas') : t('Duas etapas (desligada)')) ?></span></a>
+    <?php endif; ?>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
       <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span><?= e(t('Sair')) ?></span></button>

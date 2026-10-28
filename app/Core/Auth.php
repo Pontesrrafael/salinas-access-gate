@@ -26,6 +26,7 @@ final class Auth
         'pessoas.excluir'          => ['admin'],
         'pessoas.ver_cpf'          => ['admin', 'supervisor'],
         'pessoas.vincular_usuario' => ['admin'],
+        'lgpd.titular'             => ['admin'],
         'documentos.gerir'         => ['admin', 'supervisor', 'ssma'],
         'documentos.excluir'       => ['admin', 'ssma'],
         'veiculos.ver'             => ['admin', 'supervisor', 'ssma', 'porteiro'],
@@ -113,7 +114,7 @@ final class Auth
             if (is_string($uid) && $uid !== '') {
                 $u = Database::one('SELECT * FROM usuarios WHERE id = ?', [$uid]);
                 if ($u && (int) $u['ativo'] === 1) {
-                    unset($u['senha_hash']);
+                    unset($u['senha_hash'], $u['mfa_segredo_enc']);
                     self::$user = $u;
                 } else {
                     Session::forget('uid');
@@ -168,6 +169,16 @@ final class Auth
         }
         if ((int) $u['must_change_password'] === 1 && ($u['auth_origem'] ?? 'local') === 'local' && Http::path() !== '/trocar-senha') {
             Http::redirect('/trocar-senha');
+        }
+        // MFA obrigatório para Admin/TI com conta local (ISO 27001 A.8.5): cadastra antes de usar o sistema
+        if ($u['papel'] === 'admin' && ($u['auth_origem'] ?? 'local') === 'local' && (int) ($u['mfa_ativo'] ?? 0) !== 1
+            && \App\Services\Settings::bool('mfa_obrigatorio_admin')
+            && !in_array(Http::path(), ['/conta/mfa', '/trocar-senha'], true)) {
+            if (Http::isAjax()) {
+                Http::json(['erro' => 'Cadastre a verificação em duas etapas para continuar.'], 403);
+            }
+            Session::flash('aviso', 'Para Admin/TI a verificação em duas etapas é obrigatória. Cadastre-a para continuar.');
+            Http::redirect('/conta/mfa');
         }
         return $u;
     }

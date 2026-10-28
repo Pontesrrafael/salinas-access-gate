@@ -23,7 +23,7 @@
     <?php endforeach; ?>
     <?= $content ?>
   </main>
-  <p class="rodape-simples">Salinas Access Gate · Salinas Gold Mineração LTDA</p>
+  <p class="rodape-simples">Salinas Access Gate · Salinas Gold Mineração LTDA · <a href="<?= e(url('/privacidade')) ?>"><?= e(t('Aviso de Privacidade')) ?></a></p>
   <?= scripts_idioma() ?>
   <script src="<?= e(asset('js/app.js')) ?>"></script>
 </body>
