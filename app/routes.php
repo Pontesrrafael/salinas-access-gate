@@ -6,6 +6,7 @@ declare(strict_types=1);
 use App\Controllers\AuditoriaController;
 use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
+use App\Controllers\ChamadosController;
 use App\Controllers\DashboardController;
 use App\Controllers\IndicadoresController;
 use App\Controllers\InfleetController;
@@ -75,6 +76,17 @@ $router->get('/solicitacoes/{id}/link', [SolicitacoesController::class, 'copiarL
 $router->get('/ssma', [SsmaController::class, 'index']);
 $router->get('/ssma/{id}', [SsmaController::class, 'form']);
 $router->post('/ssma/{id}', [SsmaController::class, 'registrar']);
+
+// ---- Serviços por área (todo POST é protegido pelo CSRF do roteador) ----
+$router->get('/chamados/abrir', [ChamadosController::class, 'abrir']);
+$router->post('/chamados', [ChamadosController::class, 'criar']);
+$router->get('/chamados/meus', [ChamadosController::class, 'meus']);
+$router->get('/chamados/fila', [ChamadosController::class, 'fila']);
+$router->get('/chamados/anexos/{id}', [ChamadosController::class, 'anexo']);
+$router->get('/chamados/{id}', [ChamadosController::class, 'detalhe']);
+$router->post('/chamados/{id}/acompanhar', [ChamadosController::class, 'acompanhar']);
+$router->post('/chamados/{id}/atribuir', [ChamadosController::class, 'atribuir']);
+$router->post('/chamados/{id}/status', [ChamadosController::class, 'status']);
 
 // ---- Cadastros ----
 $router->get('/pessoas', [PessoasController::class, 'index']);

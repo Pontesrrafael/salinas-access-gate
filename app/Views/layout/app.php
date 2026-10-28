@@ -16,6 +16,11 @@ $menu = [
         ['/ssma', 'Verificação SSMA', 'escudo', 'ssma.verificar'],
         ['/presenca', 'Quem está no site', 'pessoas', 'registros.ver'],
     ],
+    'Serviços' => [
+        ['/chamados/abrir', 'Abrir chamado', 'mais', 'chamados.abrir'],
+        ['/chamados/meus', 'Meus chamados', 'solicit', 'chamados.abrir'],
+        ['/chamados/fila', 'Fila de atendimento', 'pessoas', 'chamados.atender'],
+    ],
     'Cadastros' => [
         ['/pessoas', 'Pessoas', 'pessoas', 'pessoas.ver'],
         ['/veiculos', 'Veículos', 'veiculo', 'veiculos.ver'],
