@@ -56,7 +56,7 @@ $n = static fn (string $k, int $padrao): int => (int) ($cfg[$k] ?? $padrao);
   </ul>
 
   <h2><?= e(t('Seus direitos')) ?></h2>
-  <p><?= e(t('Você pode pedir confirmação, acesso, correção, anonimização, informação sobre compartilhamento e revisão do tratamento (LGPD, art. 18) ao Encarregado. Também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).')) ?></p>
+  <p><?= e(t('Você pode pedir confirmação, acesso, correção, anonimização, informação sobre compartilhamento e revisão do tratamento (LGPD, art. 18) ao Encarregado. Também pode reclamar à Agência Nacional de Proteção de Dados (ANPD).')) ?></p>
 
   <h2><?= e(t('Segurança')) ?></h2>
   <p><?= e(t('CPF cifrado, acesso por perfil, autenticação em dois fatores para administradores, trilha de auditoria imutável e backups cifrados.')) ?></p>
