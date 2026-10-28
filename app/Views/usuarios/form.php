@@ -4,7 +4,7 @@ $val = static fn (string $k, string $d = '') => old($old, $k, $u[$k] ?? $d);
 $areasMarcadas = $old['areas'] ?? array_column(array_filter($areas, fn ($a) => !$novo && $a['responsavel_user_id'] === $u['id']), 'id');
 ?>
 <?php $origem = old($old, 'auth_origem', $u['auth_origem'] ?? 'local'); ?>
-<form method="post" action="<?= e($novo ? url('/usuarios') : url('/usuarios/' . $u['id'])) ?>" id="form-usuario">
+<form method="post" action="<?= e($novo ? url('/usuarios') : url('/usuarios/' . $u['id'])) ?>" id="form-usuario" data-tour="formulario">
   <?= csrf_field() ?>
   <?php if ($ldap || $origem === 'ldap'): ?>
   <section class="cartao">

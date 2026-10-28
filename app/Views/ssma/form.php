@@ -26,7 +26,7 @@
 </section>
 
 <section class="cartao">
-  <form method="post" action="<?= e(url('/ssma/' . $s['id'])) ?>" class="form-pilha">
+  <form method="post" action="<?= e(url('/ssma/' . $s['id'])) ?>" class="form-pilha" data-tour="formulario">
     <?= csrf_field() ?>
     <div>
       <span class="rotulo-caps"><?= e(t('Checklist (todos obrigatórios para "Apto")')) ?></span>

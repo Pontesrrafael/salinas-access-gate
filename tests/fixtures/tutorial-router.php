@@ -19,6 +19,24 @@ if ($fixturePath === '/pessoas') {
     App\Core\View::render('pessoas/index', ['titulo' => 'Pessoas', 'filtro' => $filtro, 'rows' => $rows, 'total' => 1, 'pagina' => 1, 'paginas' => 1]);
     return;
 }
+if (in_array($fixturePath, ['/pessoas/nova', '/pessoas/pessoa-ficticia'], true)) {
+    $p = $fixturePath === '/pessoas/nova' ? null : ['id' => 'pessoa-ficticia', 'nome' => 'Pessoa de teste', 'usuario' => null, 'ativo' => 1, 'categoria' => 'visitante'];
+    App\Core\View::render('pessoas/form', ['titulo' => 'Pessoa de teste', 'p' => $p, 'old' => [], 'docs' => [], 'usuariosLivres' => [], 'acessos' => []]);
+    return;
+}
+if ($fixturePath === '/veiculos/novo') {
+    App\Core\View::render('veiculos/form', ['titulo' => 'Novo veículo', 'v' => null, 'old' => []]);
+    return;
+}
+if ($fixturePath === '/usuarios/novo') {
+    App\Core\View::render('usuarios/form', ['titulo' => 'Novo usuário', 'u' => null, 'old' => [], 'areas' => [], 'pessoas' => [], 'ldap' => false]);
+    return;
+}
+if ($fixturePath === '/ssma/solicitacao-ficticia') {
+    $s = ['id' => 'solicitacao-ficticia', 'visitante_nome' => 'Pessoa de teste', 'data_prevista' => '2026-10-27', 'motivo' => 'Atividade de teste'];
+    App\Core\View::render('ssma/form', ['titulo' => 'Verificação SSMA', 's' => $s, 'pessoa' => null, 'docs' => [], 'checklist' => ['aso' => 'ASO'], 'old' => []]);
+    return;
+}
 $modulos = App\Services\Tutoriais::permitidos();
 $titulo = 'Ambiente de verificação';
 $content = str_starts_with($_SERVER['REQUEST_URI'], '/tutoriais')

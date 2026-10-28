@@ -82,7 +82,7 @@ $menu = [
       <h1><?= e(t($titulo ?? '')) ?></h1>
       <?php if (!empty($descricao)): ?><p><?= e(t($descricao)) ?></p><?php endif; ?>
     </div>
-    <div class="topo-acoes" data-tour="acoes">
+    <div class="topo-acoes"<?= !empty($acoes) ? ' data-tour="acoes"' : '' ?>>
       <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>"><?= e(t('Como usar')) ?></button><?php endif; ?>
       <?= $acoes ?? '' /* HTML da aplicação */ ?>
     </div>

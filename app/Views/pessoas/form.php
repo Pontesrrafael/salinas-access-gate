@@ -5,7 +5,7 @@ $dis = $podeEditar ? '' : ' disabled';
 $v = static fn (string $k) => old($old, $k, $p[$k] ?? '');
 $acao = $novo ? url('/pessoas') : url('/pessoas/' . $p['id']);
 ?>
-<form method="post" action="<?= e($acao) ?>">
+<form method="post" action="<?= e($acao) ?>" data-tour="formulario">
   <?= csrf_field() ?>
   <section class="cartao">
     <div class="cartao-cabecalho"><h2><?= e(t('Identificação')) ?></h2>
@@ -105,7 +105,7 @@ $acao = $novo ? url('/pessoas') : url('/pessoas/' . $p['id']);
 <section class="cartao">
   <h2><?= e(t('Vínculo com usuário do sistema')) ?></h2>
   <p class="dica"><?= e(t('Pessoa vinculada é sugerida como responsável interno quando o usuário opera a portaria.')) ?></p>
-  <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/vinculo')) ?>" class="filtros" data-tour="filtros">
+  <form method="post" action="<?= e(url('/pessoas/' . $p['id'] . '/vinculo')) ?>" class="filtros">
     <?= csrf_field() ?>
     <label class="campo"><span><?= e(t('Usuário')) ?></span>
       <select name="usuario_id">

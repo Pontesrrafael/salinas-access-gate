@@ -4,7 +4,7 @@ $podeEditar = $novo ? can('veiculos.criar') : can('veiculos.editar');
 $dis = $podeEditar ? '' : ' disabled';
 $val = static fn (string $k, string $d = '') => old($old, $k, $v[$k] ?? $d);
 ?>
-<form method="post" action="<?= e($novo ? url('/veiculos') : url('/veiculos/' . $v['id'])) ?>">
+<form method="post" action="<?= e($novo ? url('/veiculos') : url('/veiculos/' . $v['id'])) ?>" data-tour="formulario">
   <?= csrf_field() ?>
   <section class="cartao">
     <div class="grade-3">

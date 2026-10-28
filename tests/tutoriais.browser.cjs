@@ -25,13 +25,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('[data-tutorial-open]').first().evaluate(el => el === document.activeElement), true);
   await page.locator('[data-tutorial-open]').first().click();
-  await page.getByRole('button', { name: 'Reiniciar tour', exact: true }).click();
+  await page.getByRole('button', { name: /^(Fazer o tour|Reiniciar tour)$/, exact: true }).click();
   await page.locator('#tutorial-tour[open]').waitFor();
-  assert.match(await page.locator('#tutorial-counter').textContent(), /Passo 1 de 5/);
+  assert.match(await page.locator('#tutorial-counter').textContent(), /Passo 1 de 4/);
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowLeft');
   assert.match(await page.locator('#tutorial-counter').textContent(), /Passo 1/);
-  for (let i = 0; i < 5; i++) { await page.locator('#tutorial-next').click(); }
+  for (let i = 0; i < 4; i++) { await page.locator('#tutorial-next').click(); }
   assert.equal(await page.locator('#tutorial-tour').evaluate(el => el.open), false);
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('sag:tutoriais:fixture-porteiro:painel:v1')).state), 'concluido');
   await open('/painel', 'admin');
@@ -42,16 +42,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await open('/veiculos', 'admin');
   assert.equal(await page.locator('#tutorial-invite').isVisible(), false);
   await page.locator('[data-tutorial-open]').first().click();
-  await page.getByRole('button', { name: 'Reiniciar tour', exact: true }).click();
+  await page.getByRole('button', { name: /^(Fazer o tour|Reiniciar tour)$/, exact: true }).click();
   await page.locator('#tutorial-tour[open]').waitFor();
   await page.locator('#tutorial-skip').click();
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('sag:tutoriais:fixture-admin:veiculos:v1')).state), 'dispensado');
   await page.locator('[data-tutorial-open]').first().click();
-  await page.getByRole('button', { name: 'Reiniciar tour', exact: true }).click();
+  await page.getByRole('button', { name: /^(Fazer o tour|Reiniciar tour)$/, exact: true }).click();
   await page.locator('#tutorial-tour[open]').waitFor();
   await page.evaluate(() => document.querySelector('[data-tour="filtros"]').remove());
   await page.locator('#tutorial-next').click();
-  assert.match(await page.locator('#tutorial-counter').textContent(), /de 4/);
+  assert.match(await page.locator('#tutorial-counter').textContent(), /de 3/);
   await page.keyboard.press('Escape');
   await open('/tutoriais', 'porteiro');
   if (process.env.TUTORIAL_SCREENSHOTS) { await page.screenshot({ path: process.env.TUTORIAL_SCREENSHOTS + '/catalogo.png', fullPage: true }); }
@@ -68,7 +68,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const panel = await page.locator('#tutorial-help').boundingBox();
   if (process.env.TUTORIAL_SCREENSHOTS) { await page.screenshot({ path: process.env.TUTORIAL_SCREENSHOTS + '/ajuda-celular.png' }); }
   assert.ok(panel.x >= 0 && panel.width <= 375 && panel.height <= 667);
-  await page.getByRole('button', { name: 'Reiniciar tour', exact: true }).click();
+  await page.getByRole('button', { name: /^(Fazer o tour|Reiniciar tour)$/, exact: true }).click();
   await page.locator('#tutorial-tour[open]').waitFor();
   const balloon = await page.locator('#tutorial-balloon').boundingBox();
   if (process.env.TUTORIAL_SCREENSHOTS) { await page.screenshot({ path: process.env.TUTORIAL_SCREENSHOTS + '/tour-celular.png' }); }

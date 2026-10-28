@@ -35,7 +35,7 @@ jobs:
       - name: Cliente Infleet (respostas simuladas, sem token real)
         run: php tests/infleet.php
       - name: Tutoriais (perfis, conteúdo e rotas)
-        run: php tests/tutoriais.php
+        run: php tests/tutoriais.php && php tests/tutoriais_context.php
       - name: Idiomas (preferência, catálogos e dados preservados)
         run: php tests/i18n.php && php tests/i18n_catalogs.php
       - name: Idiomas no navegador (helper e interpolação segura)

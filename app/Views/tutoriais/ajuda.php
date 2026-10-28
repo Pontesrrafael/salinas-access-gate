@@ -1,5 +1,6 @@
 <?php
 $catalogo = App\Services\Tutoriais::permitidos();
+if ($tutorialAtual !== null) { $catalogo[$tutorialAtual['id']] = $tutorialAtual; }
 foreach ($catalogo as &$moduloAjuda) { $moduloAjuda['route'] = url($moduloAjuda['route']); }
 unset($moduloAjuda);
 $tutorialConfig = ['user' => $u['id'], 'current' => $tutorialAtual['id'] ?? null, 'catalog' => $catalogo, 'home' => url('/tutoriais')];
