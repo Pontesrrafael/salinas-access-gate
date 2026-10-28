@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+  <title>Estados Unidos</title>
+  <rect width="640" height="480" fill="#b22234"/>
+  <rect y="37" width="640" height="37" fill="#ffffff"/>
+  <rect y="111" width="640" height="37" fill="#ffffff"/>
+  <rect y="185" width="640" height="37" fill="#ffffff"/>
+  <rect y="259" width="640" height="37" fill="#ffffff"/>
+  <rect y="333" width="640" height="37" fill="#ffffff"/>
+  <rect y="407" width="640" height="37" fill="#ffffff"/>
+  <rect width="296" height="259" fill="#3c3b6e"/>
+  <circle cx="38" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="82" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="126" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="170" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="214" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="258" cy="37" r="7" fill="#ffffff"/>
+  <circle cx="60" cy="83" r="7" fill="#ffffff"/>
+  <circle cx="104" cy="83" r="7" fill="#ffffff"/>
+  <circle cx="148" cy="83" r="7" fill="#ffffff"/>
+  <circle cx="192" cy="83" r="7" fill="#ffffff"/>
+  <circle cx="236" cy="83" r="7" fill="#ffffff"/>
+  <circle cx="38" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="82" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="126" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="170" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="214" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="258" cy="129" r="7" fill="#ffffff"/>
+  <circle cx="60" cy="175" r="7" fill="#ffffff"/>
+  <circle cx="104" cy="175" r="7" fill="#ffffff"/>
+  <circle cx="148" cy="175" r="7" fill="#ffffff"/>
+  <circle cx="192" cy="175" r="7" fill="#ffffff"/>
+  <circle cx="236" cy="175" r="7" fill="#ffffff"/>
+  <circle cx="38" cy="222" r="7" fill="#ffffff"/>
+  <circle cx="82" cy="222" r="7" fill="#ffffff"/>
+  <circle cx="126" cy="222" r="7" fill="#ffffff"/>
+  <circle cx="170" cy="222" r="7" fill="#ffffff"/>
+  <circle cx="214" cy="222" r="7" fill="#ffffff"/>
+  <circle cx="258" cy="222" r="7" fill="#ffffff"/>
+</svg>

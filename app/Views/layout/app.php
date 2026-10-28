@@ -66,7 +66,6 @@ $menu = [
   <div class="sidebar-rodape">
     <div class="usuario-nome"><?= e($u['nome'] ?? '') ?></div>
     <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
-    <?= seletor_idioma() ?>
     <?= botao_tema() ?>
     <?php if (($u['auth_origem'] ?? 'local') === 'local'): ?>
       <a class="nav-item<?= $ativo('/conta/mfa') ?>" href="<?= e(url('/conta/mfa')) ?>"><?= icon('escudo') ?><span><?= e(($u['mfa_ativo'] ?? 0) ? t('Duas etapas') : t('Duas etapas (desligada)')) ?></span></a>
@@ -88,6 +87,7 @@ $menu = [
     <div class="topo-acoes"<?= !empty($acoes) ? ' data-tour="acoes"' : '' ?>>
       <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>"><?= e(t('Como usar')) ?></button><?php endif; ?>
       <?= $acoes ?? '' /* HTML da aplicação */ ?>
+      <?= seletor_idioma() ?>
     </div>
   </header>
   <main class="conteudo" data-tour="conteudo">

@@ -20,17 +20,27 @@ function label_t(array $labels, mixed $key, string $fallback = ''): string
 
 function seletor_idioma(): string
 {
-    $html = '<form method="get" action="' . e(url(Http::path())) . '" class="seletor-idioma">';
-    foreach ($_GET as $key => $value) {
-        if ($key !== 'lang' && is_string($key) && is_scalar($value)) {
-            $html .= '<input type="hidden" name="' . e($key) . '" value="' . e($value) . '">';
-        }
+    // Nomes no próprio idioma; as bandeiras são assets locais, inclusive no Windows.
+    $idiomas = [
+        'pt-BR' => ['br', 'Português (Brasil)', 'PT-BR'],
+        'es' => ['es', 'Español (España)', 'ES'],
+        'en' => ['us', 'English (United States)', 'EN'],
+    ];
+    $atual = \App\Core\I18n::current();
+    [$codigoBandeira, $nomeAtual, $codigoAtual] = $idiomas[$atual];
+    $bandeira = static fn (string $codigo): string => '<img src="' . e(asset('img/bandeiras/' . $codigo . '.svg')) . '" alt="" width="20" height="15">';
+    $html = '<details class="seletor-idioma"><summary aria-label="' . e(t('Alterar idioma') . ': ' . $nomeAtual) . '">'
+        . $bandeira($codigoBandeira) . '<span class="idioma-codigo">' . e($codigoAtual) . '</span></summary>'
+        . '<ul class="idioma-opcoes" aria-label="' . e(t('Idioma')) . '">';
+    // Mantém apenas a URL atual e seus filtros; nunca lê nem reenvia o POST de negócio.
+    $query = $_GET;
+    $path = Http::path();
+    foreach ($idiomas as $locale => [$codigo, $nome]) {
+        $query['lang'] = $locale;
+        $html .= '<li><a href="' . e(url($path, $query)) . '" lang="' . e($locale) . '" hreflang="' . e($locale) . '"'
+            . ($locale === $atual ? ' aria-current="true"' : '') . '>' . $bandeira($codigo) . '<span>' . e($nome) . '</span></a></li>';
     }
-    $html .= '<label>' . e(t('Idioma')) . ' <select name="lang" data-idioma aria-label="' . e(t('Idioma')) . '">';
-    foreach (\App\Core\I18n::LOCALES as $locale => $label) {
-        $html .= '<option value="' . e($locale) . '"' . selected($locale, \App\Core\I18n::current()) . '>' . e($label) . '</option>';
-    }
-    return $html . '</select></label><button type="submit" class="btn btn-secundario btn-sm">' . e(t('Alterar idioma')) . '</button></form>';
+    return $html . '</ul></details>';
 }
 
 function scripts_idioma(): string
