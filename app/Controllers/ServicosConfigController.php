@@ -284,6 +284,7 @@ final class ServicosConfigController extends Controller
             'sla_resposta_min' => $slaResposta,
             'sla_solucao_min'  => $slaSolucao,
             'urgencia_padrao'  => $urgencia,
+            'usar_horario_comercial' => Http::bool('usar_horario_comercial') ? 1 : 0,
             'ordem'            => $ordem,
         ];
 

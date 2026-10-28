@@ -113,6 +113,10 @@ final class Retencao
                 'sql'    => "UPDATE chamado_acompanhamentos SET texto = ? WHERE chamado_id IN ({$in})",
                 'params' => [self::TEXTO_REMOVIDO, ...$ids],
             ],
+            'satisfacao_update' => [
+                'sql'    => "UPDATE chamado_satisfacao SET comentario = NULL WHERE chamado_id IN ({$in})",
+                'params' => $ids,
+            ],
             'chamados_update' => [
                 'sql'    => "UPDATE chamados SET descricao = NULL, beneficiario_nome = NULL, anonimizado_em = NOW() WHERE id IN ({$in})",
                 'params' => $ids,

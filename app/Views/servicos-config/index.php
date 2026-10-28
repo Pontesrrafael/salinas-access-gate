@@ -240,6 +240,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
               <?php endforeach; ?>
             </select>
           </label>
+          <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1" checked> <span><?= e(t('SLA em horário comercial')) ?><br><small><?= e(t('Desmarque para contar 24 horas por dia, 7 dias por semana.')) ?></small></span></label>
         </div>
         <div class="grade-4">
           <label class="campo">
@@ -341,6 +342,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
                         <?php endforeach; ?>
                       </select>
                     </label>
+                    <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1"<?= checked($c['usar_horario_comercial'] ?? 1) ?>> <span><?= e(t('SLA em horário comercial')) ?></span></label>
                   </div>
                   <div class="grade-4">
                     <label class="campo">
