@@ -16,6 +16,7 @@ use RuntimeException;
 final class Upload
 {
     public const MIMES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    public const MIMES_CHAMADOS = [...self::MIMES, 'application/pdf' => 'pdf'];
 
     /**
      * Normaliza $_FILES[campo] (múltiplo) em lista.
@@ -43,36 +44,41 @@ final class Upload
     }
 
     /** Valida sem gravar. Retorna lista de erros (vazia = ok). */
-    public static function validar(array $files): array
+    public static function validar(array $files, bool $chamado = false): array
     {
         $cfg = App::config('uploads');
+        if ($chamado) { $cfg['max_mb'] = 4; }
         $erros = [];
         if (count($files) > $cfg['max_files']) {
-            $erros[] = "Máximo de {$cfg['max_files']} fotos por registro.";
+            $erros[] = $chamado ? t('Máximo de {quantidade} anexos por envio.', ['quantidade' => $cfg['max_files']]) : "Máximo de {$cfg['max_files']} fotos por registro.";
         }
         foreach ($files as $f) {
             $nome = mb_substr($f['name'], 0, 80);
             if ($f['error'] !== UPLOAD_ERR_OK) {
-                $erros[] = "Falha no envio de {$nome} (código {$f['error']}).";
+                $erros[] = $chamado ? t('Falha no envio do anexo: {nome}.', ['nome' => $nome]) : "Falha no envio de {$nome} (código {$f['error']}).";
                 continue;
             }
-            if ($f['size'] > $cfg['max_mb'] * 1024 * 1024) {
-                $erros[] = "{$nome} excede {$cfg['max_mb']} MB.";
+            if (!is_file($f['tmp_name']) || ($chamado && filesize($f['tmp_name']) > 4 * 1024 * 1024) || $f['size'] > $cfg['max_mb'] * 1024 * 1024) {
+                $erros[] = $chamado ? t('O anexo {nome} deve ter até 4 MB.', ['nome' => $nome]) : "{$nome} excede {$cfg['max_mb']} MB.";
                 continue;
             }
             $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
+            if (($chamado && $mime === 'application/pdf' && file_get_contents($f['tmp_name'], false, null, 0, 5) === '%PDF-')) { continue; }
             if (!isset(self::MIMES[$mime]) || @getimagesize($f['tmp_name']) === false) {
-                $erros[] = "Formato inválido: {$nome} (use JPG, PNG ou WEBP).";
+                $erros[] = $chamado ? t('Formato inválido: {nome}. Use PDF, JPG, PNG ou WEBP.', ['nome' => $nome]) : "Formato inválido: {$nome} (use JPG, PNG ou WEBP).";
             }
         }
         return $erros;
     }
 
     /** Grava o arquivo e retorna metadados. */
-    public static function salvar(array $f): array
+    public static function salvar(array $f, bool $chamado = false): array
     {
+        if ($chamado && (self::validar([$f], true) || (PHP_SAPI !== 'cli' && !is_uploaded_file($f['tmp_name'])))) {
+            throw new RuntimeException('Anexo inválido.');
+        }
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
-        $ext = self::MIMES[$mime] ?? throw new RuntimeException('Tipo de arquivo não permitido');
+        $ext = ($chamado ? self::MIMES_CHAMADOS : self::MIMES)[$mime] ?? throw new RuntimeException('Tipo de arquivo não permitido');
         $rel = date('Y/m') . '/' . Uuid::v4() . '.' . $ext;
         $dest = self::dir() . '/' . $rel;
         if (!is_dir(dirname($dest)) && !mkdir(dirname($dest), 0750, true) && !is_dir(dirname($dest))) {
@@ -100,7 +106,7 @@ final class Upload
     /** Caminho absoluto seguro (impede path traversal). */
     public static function caminho(string $rel): ?string
     {
-        if (!preg_match('#^\d{4}/\d{2}/[0-9a-f\-]{36}\.(jpg|png|webp)$#', $rel)) {
+        if (!preg_match('#^\d{4}/\d{2}/[0-9a-f\-]{36}\.(jpg|png|webp|pdf)$#', $rel)) {
             return null;
         }
         $p = self::dir() . '/' . $rel;

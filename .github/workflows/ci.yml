@@ -42,6 +42,8 @@ jobs:
         run: node --test tests/i18n_client.test.cjs
       - name: Regras de segurança (RBAC e utilidades HTTP)
         run: php tests/regras.php
+      - name: Chamados por área (prioridade, SLA, status, formulário dinâmico)
+        run: php tests/chamados.php && php tests/formulario_dinamico.php
       - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
         run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)

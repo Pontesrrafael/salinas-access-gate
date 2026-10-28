@@ -74,6 +74,7 @@ foreach (['pt-BR' => 'PT-BR', 'es' => 'ES', 'en' => 'EN'] as $locale => $code) {
 language(['lang' => 'en']);
 (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
 (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'test-i18n', 'papel' => 'porteiro']);
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, false); // sem banco: porteiro fora das áreas de serviço
 $filter = ['q' => 'Entrada', 'categoria' => '', 'situacao' => 'ativos'];
 $row = ['id' => 'pessoa-id-original', 'nome' => 'Pessoas', 'empresa' => 'Entrada', 'categoria' => 'visitante', 'usuario_id' => null, 'ativo' => 1, 'cpf_exibicao' => '123.***.***-00', 'matricula' => '', 'telefone_principal' => '', 'email_principal' => '', 'documentos' => []];
 $html = View::partial('pessoas/index', ['filtro' => $filter, 'rows' => [$row], 'total' => 1, 'pagina' => 1, 'paginas' => 1]);
