@@ -88,4 +88,15 @@ return [
         'site_key'   => Env::get('TURNSTILE_SITE_KEY', ''),
         'secret_key' => Env::get('TURNSTILE_SECRET_KEY', ''),
     ],
+    'smtp' => [
+        'host'       => (string) Env::get('SMTP_HOST', ''),
+        'porta'      => Env::int('SMTP_PORT', 587),
+        'usuario'    => (string) (Env::get('SMTP_USER') ?? Env::get('SMTP_USERNAME', '')),
+        'senha'      => (string) (Env::get('SMTP_PASS') ?? Env::get('SMTP_PASSWORD', '')),
+        'de_email'   => (string) (Env::get('SMTP_FROM_EMAIL') ?? Env::get('SMTP_FROM', 'noreply@salinasgold.com.br')),
+        'de_nome'    => (string) Env::get('SMTP_FROM_NAME', 'Salinas Access Gate'),
+        'seguranca'  => strtolower((string) (Env::get('SMTP_SECURITY') ?? Env::get('SMTP_ENCRYPTION', 'tls'))), // tls | ssl | nenhuma
+        'timeout'    => Env::int('SMTP_TIMEOUT', 10),
+        'tls_verify' => Env::bool('SMTP_TLS_VERIFY', true),
+    ],
 ];
