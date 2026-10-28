@@ -52,6 +52,7 @@ $n = static fn (string $k, int $padrao): int => (int) ($cfg[$k] ?? $padrao);
     <li><?= e(t('Solicitações de acesso: {n} meses.', ['n' => $n('retencao_solicitacoes_meses', 12)])) ?></li>
     <li><?= e(t('Registros de entrada e saída: {n} meses com observações; depois ficam só os dados mínimos.', ['n' => $n('retencao_registros_meses', 24)])) ?></li>
     <li><?= e(t('Cadastro de visitantes e terceiros sem acesso: {n} meses; depois é anonimizado.', ['n' => $n('retencao_cadastros_meses', 24)])) ?></li>
+    <li><?= e(t('Chamados de serviço: {n} meses após o fechamento; depois anexos e textos pessoais são removidos.', ['n' => $n('retencao_chamados_meses', 24)])) ?></li>
     <li><?= e(t('Trilha de auditoria: {n} meses.', ['n' => $n('retencao_auditoria_meses', 60)])) ?></li>
   </ul>
 

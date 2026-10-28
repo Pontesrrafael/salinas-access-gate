@@ -11,6 +11,8 @@ declare(strict_types=1);
  *   php bin/console.php importar-supabase <pasta-com-csv> [--simular]
  *   php bin/console.php expirar-solicitacoes      (agendar diariamente no cron)
  *   php bin/console.php aplicar-retencao [--simular]  Anonimiza/apaga dados vencidos (LGPD; agendar no cron)
+ *   php bin/console.php fechar-chamados           Fecha soluções antigas (agendar diariamente)
+ *   php bin/console.php enviar-emails             Processa até 50 e-mails da fila (agendar a cada 5 min)
  *   php bin/console.php mfa-redefinir --email=usuario@salinasgold.com.br  Desliga o 2º fator (perda do celular)
  *   php bin/console.php redefinir-senha --email=usuario@salinasgold.com.br
  *   php bin/console.php ldap-testar                Testa conexão com o Active Directory
@@ -256,6 +258,17 @@ switch ($cmd) {
         }
         Database::run('DELETE FROM rate_limits WHERE criado_em < (NOW() - INTERVAL 1 DAY)');
         ok("Solicitações expiradas: {$n1} por data, {$n2} links.");
+        break;
+
+    case 'fechar-chamados':
+        $total = \App\Services\Chamados::fecharAutomaticamente();
+        out('Chamados fechados automaticamente: ' . $total);
+        break;
+
+    case 'enviar-emails':
+        $r = \App\Services\Email::processarFila(50);
+        out('E-mails enviados: ' . $r['enviados'] . '; falhas: ' . $r['falhas']);
+        if ($r['falhas'] > 0) { exit(1); }
         break;
 
     case 'aplicar-retencao':

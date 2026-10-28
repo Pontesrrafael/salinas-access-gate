@@ -23,9 +23,11 @@ function chamadoFixture(): array
     ];
 }
 
-function chamadoViewFixture(string $view, bool $atende = true): array
+function chamadoViewFixture(string $view, bool $atende = true, string $status = 'pendente'): array
 {
     $c = chamadoFixture();
+    $c['status'] = $status;
+    $c['fechado_automaticamente'] = $status === 'fechado' ? 1 : 0;
     $u = ['id' => 'fixture-admin', 'papel' => 'admin', 'nome' => 'Pessoa de teste'];
     (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
     (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $u);
@@ -34,7 +36,7 @@ function chamadoViewFixture(string $view, bool $atende = true): array
     $membros = [['id' => 'fixture-admin', 'nome' => 'Pessoa de teste']];
     return match ($view) {
         'abrir' => ['titulo' => t('Abrir chamado'), 'areas' => $areas, 'areaId' => $c['area_id'], 'categorias' => $categorias, 'categoriaId' => $c['categoria_id'], 'categoria' => $categorias[0], 'campos' => [], 'old' => []],
-        'index' => ['titulo' => t('Fila de atendimento'), 'lista' => [$c], 'filtros' => array_fill_keys(['area_id', 'categoria_id', 'status', 'prioridade', 'atendente_id', 'prazo'], ''), 'fila' => true, 'areas' => $areas, 'categorias' => $categorias, 'membros' => $membros, 'total' => 1, 'pagina' => 1, 'limite' => 50],
+        'index' => ['titulo' => t('Fila de atendimento'), 'lista' => [$c], 'filtros' => array_fill_keys(['area_id', 'categoria_id', 'status', 'prioridade', 'atendente_id', 'prazo'], ''), 'fila' => true, 'areas' => $areas, 'categorias' => $categorias, 'membros' => $membros, 'total' => 1, 'pagina' => 1, 'limite' => 50, 'satisfacaoAreas' => [['nome' => 'Facilities', 'media' => 4.25, 'avaliacoes' => 4], ['nome' => 'SSMA', 'media' => null, 'avaliacoes' => 0]]],
         default => ['titulo' => t('Chamado #{numero}', ['numero' => 42]), 'c' => $c, 'u' => $u, 'atende' => $atende, 'eventos' => [
             ['id' => 'ev-1', 'tipo' => 'comentario', 'texto' => '<img src=x onerror=alert(1)>', 'usuario_nome' => 'Pessoa', 'created_at' => $c['created_at']],
             ...($atende ? [['id' => 'ev-2', 'tipo' => 'interno', 'texto' => 'Nota reservada de teste', 'usuario_nome' => 'Pessoa', 'created_at' => $c['created_at']]] : []),
@@ -49,9 +51,26 @@ if (PHP_SAPI === 'cli-server') {
     if (str_starts_with($path, '/assets/')) { return false; }
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') { http_response_code(405); return; }
     \App\Core\Http::securityHeaders();
+    if (($_GET['view'] ?? '') === 'configuracoes') {
+        View::render('configuracoes/index', configuracoesViewFixture());
+        return;
+    }
     $view = in_array($_GET['view'] ?? '', ['abrir', 'index', 'detalhe'], true) ? $_GET['view'] : 'detalhe';
-    View::render('chamados/' . $view, chamadoViewFixture($view));
+    $status = ($_GET['status'] ?? '') === 'fechado' ? 'fechado' : 'pendente';
+    View::render('chamados/' . $view, chamadoViewFixture($view, true, $status));
     return;
+}
+
+/** Configurações fictícias para verificar o bloco de chamados sem consultar o AD ou o banco. */
+function configuracoesViewFixture(): array
+{
+    chamadoViewFixture('index');
+    return [
+        'titulo' => t('Configurações'), 'cfg' => [], 'areas' => [], 'usuarios' => [],
+        'linkPublico' => 'http://127.0.0.1/solicitar-acesso',
+        'ldap' => ['enabled' => false, 'host' => '', 'base_dn' => '', 'bind_dn' => '', 'starttls' => true, 'tls_verify' => true, 'auto_provision' => false, 'sync_roles' => false],
+        'ldapExt' => false, 'ldapTeste' => null, 'ldapUsuarios' => 0,
+    ];
 }
 
 $checks = 0;
@@ -156,5 +175,77 @@ try {
     expect(Upload::validar([$file], true) !== [], 'Arquivo executável disfarçado é recusado.');
     expect(Upload::caminho('../../app/bootstrap.php') === null, 'Download bloqueia path traversal.');
 } finally { if (is_file($tmp)) { unlink($tmp); } }
+
+// Calendário puro, sem consultar configurações nem alterar SLAs antigos.
+$cal = Chamados::calendario(['dias' => '1,2,3,4,5', 'inicio' => '07:00', 'fim' => '17:00', 'feriados' => "2026-11-02\n2026-11-02"]);
+expect($cal['feriados'] === ['2026-11-02'], 'Feriados duplicados são normalizados.');
+foreach ([
+    ['2026-10-28 16:30:00', 90, '2026-10-29 08:00:00'],
+    ['2026-10-30 16:30:00', 90, '2026-11-03 08:00:00'],
+    ['2026-10-31 12:00:00', 60, '2026-11-03 08:00:00'],
+    ['2026-10-28 05:00:00', 60, '2026-10-28 08:00:00'],
+    ['2026-10-28 17:00:00', 60, '2026-10-29 08:00:00'],
+    ['2026-10-28 16:00:00', 60, '2026-10-28 17:00:00'],
+    ['2026-10-28 16:59:30', 1, '2026-10-29 07:00:30'],
+] as [$data, $minutos, $esperado]) {
+    expect(Chamados::prazo(new DateTimeImmutable($data), $minutos, $cal)?->format('Y-m-d H:i:s') === $esperado, 'SLA útil: ' . $data);
+}
+$semFeriado = array_replace($cal, ['feriados' => []]);
+expect(Chamados::prazo(new DateTimeImmutable('2026-10-30 16:30'), 90, $semFeriado)?->format('Y-m-d H:i') === '2026-11-02 08:00', 'Fim de semana sem feriado.');
+expect(Chamados::prazo(new DateTimeImmutable('2026-10-31 12:00'), 60)?->format('Y-m-d H:i') === '2026-10-31 13:00', 'Categoria 24x7 ignora dias sem expediente.');
+foreach ([['dias' => []], ['dias' => [0]], ['dias' => ['2x']], ['inicio' => '17:00'], ['inicio' => '22:00', 'fim' => '06:00'], ['fim' => '25:00'], ['feriados' => '2026-02-30'], ['feriados' => '01/01/2026']] as $invalido) {
+    rejeita(fn () => Chamados::calendario(array_replace($cal, $invalido)), 'Calendário inválido rejeitado.');
+}
+$sexta = new DateTimeImmutable('2026-10-30 16:00');
+$terca = new DateTimeImmutable('2026-11-03 08:00');
+expect(Chamados::segundosUteis($sexta, $terca, $cal) === 7200, 'Conta só expediente em intervalo com feriado.');
+expect(Chamados::segundosUteis($terca, $sexta, $cal) === -7200, 'Intervalo invertido preserva o sinal.');
+$c = array_replace(chamadoFixture(), [
+    'created_at' => '2026-10-30 16:00:00', 'prazo_solucao' => '2026-11-03 09:00:00',
+    'pendente_desde' => '2026-10-30 16:30:00', 'calendario_sla' => json_encode($cal),
+]);
+$agora = new DateTimeImmutable('2026-11-03 08:30');
+expect(Chamados::prazoSolucao($c, $agora)?->format('Y-m-d H:i:s') === '2026-11-03 11:00:00', 'Pausa soma somente segundos úteis.');
+$retomado = array_replace($c, Chamados::mudarStatus($c, 'atribuido', $agora));
+expect($retomado['segundos_pendente'] === 7200, 'Saída da pausa persiste segundos úteis.');
+expect(Chamados::prazoSolucao($retomado, $agora)?->format('Y-m-d H:i:s') === '2026-11-03 11:00:00', 'Pausa útil não conta duas vezes.');
+expect(Chamados::situacaoSolucao($c, $agora) === Chamados::situacaoSolucao($c, $agora->modify('+10 days')), 'Selo permanece congelado durante a pausa útil.');
+$limite = new DateTimeImmutable('2026-11-03 11:00');
+expect(Chamados::situacaoSolucao($retomado, $limite->modify('+1 second')) === 'vencido', 'SLA útil vence um segundo após o limite.');
+expect(Chamados::situacaoSolucao($retomado, new DateTimeImmutable('2026-11-03 10:24')) === 'vencendo', 'Janela de 20% usa orçamento de três horas úteis.');
+expect(Chamados::situacaoSolucao($retomado, new DateTimeImmutable('2026-11-03 10:23:59')) === 'no_prazo', 'Segundo anterior à janela útil.');
+$vencido = array_replace($c, ['pendente_desde' => '2026-11-03 10:00:00']);
+expect(Chamados::situacaoSolucao($vencido, new DateTimeImmutable('2026-11-10 10:00')) === 'vencido', 'Pausa não recupera SLA já vencido.');
+$semExpediente = array_replace($c, ['pendente_desde' => '2026-10-30 18:00:00']);
+expect(Chamados::prazoSolucao($semExpediente, new DateTimeImmutable('2026-11-02 12:00'))?->format('Y-m-d H:i:s') === '2026-11-03 09:00:00', 'Pausa fora do expediente não estende SLA.');
+
+$fechado = array_replace(chamadoFixture(), ['status' => 'fechado', 'anonimizado_em' => null]);
+expect(Chamados::podeAvaliar($fechado, $fechado['solicitante_id'], false), 'Solicitante pode avaliar fechado.');
+expect(!Chamados::podeAvaliar($fechado, 'outra-conta', false), 'Equipe e outros usuários não avaliam em nome do solicitante.');
+expect(!Chamados::podeAvaliar($fechado, $fechado['solicitante_id'], true), 'Segunda avaliação é recusada.');
+expect(!Chamados::podeAvaliar(chamadoFixture(), $fechado['solicitante_id'], false), 'Chamado ativo não recebe avaliação.');
+expect(!Chamados::podeAvaliar(array_replace($fechado, ['anonimizado_em' => '2026-10-28']), $fechado['solicitante_id'], false), 'Chamado retido não recebe novo texto pessoal.');
+for ($nota = 1; $nota <= 5; $nota++) { expect(Chamados::validarSatisfacao((string) $nota, ' ') === ['nota' => $nota, 'comentario' => null], 'Notas válidas e comentário opcional.'); }
+foreach ([0, 6, '1.5', 'x', null, [], true] as $nota) { rejeita(fn () => Chamados::validarSatisfacao($nota, ''), 'Nota inválida recusada.'); }
+rejeita(fn () => Chamados::validarSatisfacao(5, str_repeat('á', 2001)), 'Limite do comentário medido em caracteres.');
+expect(Chamados::validarSatisfacao(5, str_repeat('á', 2000))['nota'] === 5, 'Comentário no limite aceito.');
+$html = View::partial('chamados/detalhe', chamadoViewFixture('detalhe', false, 'fechado'));
+expect(substr_count($html, 'type="radio"') === 5 && str_contains($html, 'value="avaliar"'), 'Avaliação funciona por POST sem JavaScript.');
+$fixture = chamadoViewFixture('detalhe', true, 'fechado');
+$fixture['satisfacao'] = ['nota' => 5, 'comentario' => '<script>alert(1)</script>', 'created_at' => '2026-10-28 12:00'];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(!str_contains($html, 'type="radio"') && str_contains($html, '&lt;script&gt;alert(1)&lt;/script&gt;'), 'Nota existente exibida com texto escapado, sem novo formulário.');
+$fixture = chamadoViewFixture('detalhe', true, 'fechado');
+$fixture['u']['id'] = 'outro-atendente';
+expect(!str_contains(View::partial('chamados/detalhe', $fixture), 'type="radio"'), 'Atendente não recebe controles da pesquisa de outro solicitante.');
+expect(!Chamados::podeFecharAutomaticamente($fechado, new DateTimeImmutable('2030-01-01')), 'Fechamento automático não repete fechamento.');
+$solucionado = array_replace($fechado, ['status' => 'solucionado', 'solucionado_em' => '2026-10-28 10:00']);
+expect(!Chamados::podeFecharAutomaticamente($solucionado, new DateTimeImmutable('2026-10-30 09:59:59'), 2), 'Prazo personalizado respeita o segundo anterior.');
+expect(Chamados::podeFecharAutomaticamente($solucionado, new DateTimeImmutable('2026-10-30 10:00'), 2), 'Prazo personalizado fecha no limite.');
+expect(!Chamados::podeFecharAutomaticamente(array_replace($solucionado, ['solucionado_em' => null]), new DateTimeImmutable('2030-01-01')), 'Sem data da solução não fecha.');
+$html = View::partial('configuracoes/index', configuracoesViewFixture());
+expect(substr_count($html, 'name="horario_dias[]"') === 7, 'Configuração exibe os sete dias ISO.');
+expect(str_contains($html, 'name="retencao_chamados_meses" min="6"') && str_contains($html, 'name="email_ativo"'), 'Configurações de retenção e notificações disponíveis.');
+expect(!preg_match('/<(script|style)\b|\s(?:style|onchange|onclick)=/i', $html), 'Novas configurações compatíveis com CSP.');
 
 echo "Chamados: {$checks} verificações sem banco OK.\n";

@@ -4,6 +4,17 @@ slot('acoes', '<a class="btn btn-ouro" href="' . e(url('/chamados/abrir')) . '">
 $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
 ?>
 <div class="chamados">
+<?php if ($fila && !empty($satisfacaoAreas)): ?>
+<section class="cartao">
+  <h2><?= e(t('Satisfação por área')) ?></h2>
+  <p class="dica"><?= e(t('Histórico de avaliações da área, independente dos demais filtros da fila.')) ?></p>
+  <div class="grade-2">
+    <?php foreach ($satisfacaoAreas as $s): ?>
+      <div class="kpi"><span class="kpi-rotulo"><?= e($s['nome']) ?></span><strong class="kpi-valor"><?= $s['media'] === null ? '—' : e(number_format((float) $s['media'], 1, \App\Core\I18n::current() === 'en' ? '.' : ',', '')) ?> / 5</strong><small><?= e(t('{quantidade} avaliações', ['quantidade' => $s['avaliacoes']])) ?></small></div>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 <section class="cartao">
   <form method="get" action="<?= e(url($caminho)) ?>" class="filtros">
     <label class="campo"><span><?= e(t('Área de atendimento')) ?></span><select name="area_id"><option value=""><?= e(t('Todas')) ?></option><?php foreach ($areas as $area): ?><option value="<?= e($area['id']) ?>"<?= selected($filtros['area_id'], $area['id']) ?>><?= e($area['nome']) ?></option><?php endforeach; ?></select></label>

@@ -4,6 +4,7 @@ $agora = new DateTimeImmutable();
 $prazoSolucao = Chamados::prazoSolucao($c, $agora);
 $situacao = Chamados::situacaoSolucao($c, $agora);
 $solicitante = $c['solicitante_id'] === $u['id'];
+$satisfacao = $satisfacao ?? null;
 $anexosEvento = [];
 foreach ($anexos as $anexo) { $anexosEvento[$anexo['acompanhamento_id'] ?? ''][] = $anexo; }
 $linkAnexos = static function (array $items): string {
@@ -32,12 +33,34 @@ slot('acoes', '<a class="btn btn-secundario" href="' . e(url($atende ? '/chamado
   <div class="cartao-cabecalho"><h2><?= icon('relogio') ?> <?= e(t('Prazos de atendimento')) ?></h2><?php if ($c['status'] === 'pendente'): ?><?= badge(t('Relógio pausado'), 'aviso') ?><?php endif; ?></div>
   <div class="grade-2">
     <p><strong><?= e(t('Prazo de resposta')) ?></strong><span class="sub"><?= e($c['prazo_resposta'] ? fmt_data_hora($c['prazo_resposta']) : t('Sem SLA definido')) ?></span>
-    <?php if ($c['prazo_resposta']): $respostaSituacao = Chamados::situacaoPrazo(new DateTimeImmutable($c['created_at']), new DateTimeImmutable($c['prazo_resposta']), new DateTimeImmutable($c['respondido_em'] ?? $agora->format('Y-m-d H:i:s'))); ?><?= badge(t(Chamados::PRAZOS[$respostaSituacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$respostaSituacao]) ?><?php endif; ?>
+    <?php if ($c['prazo_resposta']): $respostaSituacao = Chamados::situacaoPrazo(new DateTimeImmutable($c['created_at']), new DateTimeImmutable($c['prazo_resposta']), new DateTimeImmutable($c['respondido_em'] ?? $agora->format('Y-m-d H:i:s')), Chamados::calendarioChamado($c)); ?><?= badge(t(Chamados::PRAZOS[$respostaSituacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$respostaSituacao]) ?><?php endif; ?>
     <?php if ($c['respondido_em']): ?><span class="sub"><?= e(t('Respondido em')) ?> <?= e(fmt_data_hora($c['respondido_em'])) ?></span><?php endif; ?></p>
     <p><strong><?= e(t('Prazo de solução')) ?></strong><span class="sub"><?= e($prazoSolucao ? fmt_data_hora($prazoSolucao->format('Y-m-d H:i:s')) : t('Sem SLA definido')) ?></span><?php if ($prazoSolucao): ?><?= badge(t(Chamados::PRAZOS[$situacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$situacao]) ?><?php endif; ?></p>
   </div>
-  <p class="dica"><?= e(t('Prazos em horas corridas (24x7). O prazo de solução pausa enquanto o chamado estiver pendente.')) ?></p>
+  <p class="dica"><?= e(Chamados::calendarioChamado($c) === null ? t('SLA em horas corridas (24x7).') : t('SLA em horário comercial, descontando dias sem expediente e feriados.')) ?> <?= e(t('O prazo de solução pausa enquanto o chamado estiver pendente.')) ?></p>
 </section>
+<?php if ($c['status'] === 'fechado'): ?>
+<section class="cartao">
+  <h2><?= e(t('Satisfação com o atendimento')) ?></h2>
+  <?php if (!empty($c['fechado_automaticamente'])): ?><p class="dica"><?= e(t('Chamado fechado automaticamente após o prazo de aprovação.')) ?></p><?php endif; ?>
+  <?php if ($satisfacao): ?>
+    <p><strong><?= e(t('{nota} de 5 estrelas', ['nota' => $satisfacao['nota']])) ?></strong><span class="sub"><?= e(fmt_data_hora($satisfacao['created_at'])) ?></span></p>
+    <?php if ($satisfacao['comentario']): ?><p class="chamado-texto"><?= e($satisfacao['comentario']) ?></p><?php endif; ?>
+  <?php elseif (Chamados::podeAvaliar($c, $u['id'], false)): ?>
+    <form method="post" action="<?= e(url('/chamados/' . $c['id'] . '/status')) ?>" class="form-pilha">
+      <?= csrf_field() ?><input type="hidden" name="acao" value="avaliar">
+      <fieldset><legend><?= e(t('Como foi o atendimento?')) ?></legend>
+        <?php for ($nota = 1; $nota <= 5; $nota++): ?>
+          <label class="checkbox"><input type="radio" name="nota" value="<?= $nota ?>" required> <span aria-hidden="true"><?= str_repeat('★', $nota) ?></span><span><?= e(t('{nota} de 5 estrelas', ['nota' => $nota])) ?></span></label>
+        <?php endfor; ?>
+      </fieldset>
+      <label class="campo"><span><?= e(t('Comentário opcional')) ?></span><textarea name="comentario" rows="3" maxlength="2000"></textarea></label>
+      <p class="dica"><?= e(t('A avaliação é única e fica visível para a equipe da área.')) ?></p>
+      <div class="form-acoes"><button type="submit" class="btn btn-primario"><?= e(t('Enviar avaliação')) ?></button></div>
+    </form>
+  <?php else: ?><p class="mudo"><?= e(t('Sem avaliação registrada.')) ?></p><?php endif; ?>
+</section>
+<?php endif; ?>
 <?php if ($atende && !in_array($c['status'], ['solucionado', 'fechado'], true)): ?>
 <section class="cartao">
   <h2><?= e(t('Atribuir atendimento')) ?></h2>

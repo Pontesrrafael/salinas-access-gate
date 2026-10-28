@@ -37,6 +37,27 @@
       <label class="checkbox"><input type="checkbox" name="mfa_obrigatorio_admin" value="1"<?= checked($cfg['mfa_obrigatorio_admin'] ?? '1') ?>> <span><?= e(t('Exigir autenticação em dois fatores para Admin/TI')) ?><br><small><?= e(t('Vale para contas locais; contas do AD seguem a política da rede.')) ?></small></span></label>
     </div>
   </section>
+  <section class="cartao">
+    <h2><?= e(t('Chamados')) ?></h2>
+    <p class="dica"><?= e(t('O calendário vale para novos chamados de categorias com SLA em horário comercial.')) ?></p>
+    <div class="grade-2 compacta">
+      <label class="checkbox"><input type="checkbox" name="horario_comercial_ativo" value="1"<?= checked($cfg['horario_comercial_ativo'] ?? '1') ?>> <?= e(t('Ativar horário comercial no SLA')) ?></label>
+      <label class="checkbox"><input type="checkbox" name="email_ativo" value="1"<?= checked($cfg['email_ativo'] ?? '0') ?>> <?= e(t('Ativar notificações por e-mail')) ?></label>
+      <label class="campo"><span><?= e(t('Início do expediente')) ?></span><input type="time" name="horario_inicio" required value="<?= e($cfg['horario_inicio'] ?? '07:00') ?>"></label>
+      <label class="campo"><span><?= e(t('Fim do expediente')) ?></span><input type="time" name="horario_fim" required value="<?= e($cfg['horario_fim'] ?? '17:00') ?>"></label>
+    </div>
+    <fieldset><legend><?= e(t('Dias úteis')) ?></legend>
+      <?php $diasSelecionados = explode(',', $cfg['horario_dias'] ?? '1,2,3,4,5'); ?>
+      <?php foreach ([1 => t('Segunda-feira'), 2 => t('Terça-feira'), 3 => t('Quarta-feira'), 4 => t('Quinta-feira'), 5 => t('Sexta-feira'), 6 => t('Sábado'), 7 => t('Domingo')] as $dia => $rotulo): ?>
+        <label class="checkbox"><input type="checkbox" name="horario_dias[]" value="<?= $dia ?>"<?= checked(in_array((string) $dia, $diasSelecionados, true)) ?>> <?= e($rotulo) ?></label>
+      <?php endforeach; ?>
+    </fieldset>
+    <label class="campo"><span><?= e(t('Feriados')) ?></span><textarea name="feriados" rows="3" maxlength="50000"><?= e($cfg['feriados'] ?? '') ?></textarea><small><?= e(t('Datas AAAA-MM-DD separadas por vírgula ou linha.')) ?></small></label>
+    <div class="grade-2 compacta">
+      <label class="campo"><span><?= e(t('Retenção de chamados fechados (meses)')) ?></span><input type="number" name="retencao_chamados_meses" min="6" max="240" required value="<?= e($cfg['retencao_chamados_meses'] ?? '24') ?>"></label>
+      <label class="campo"><span><?= e(t('Fechar chamados solucionados após (dias)')) ?></span><input type="number" name="chamados_fechar_dias" min="0" max="365" required value="<?= e($cfg['chamados_fechar_dias'] ?? '7') ?>"><small><?= e(t('Zero desativa o fechamento automático.')) ?></small></label>
+    </div>
+  </section>
   <div class="form-acoes"><button class="btn btn-primario" type="submit"><?= e(t('Salvar configurações')) ?></button></div>
 </form>
 

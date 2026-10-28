@@ -150,6 +150,8 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 5 0 * * *  root cd $DESTINO && docker compose exec -T app php bin/console.php expirar-solicitacoes >> /var/log/salinas-access-gate.log 2>&1
 20 0 * * * root cd $DESTINO && docker compose exec -T app php bin/console.php aplicar-retencao >> /var/log/salinas-access-gate.log 2>&1
+30 0 * * * root cd $DESTINO && docker compose exec -T app php bin/console.php fechar-chamados >> /var/log/salinas-access-gate.log 2>&1
+*/5 * * * * root cd $DESTINO && docker compose exec -T app php bin/console.php enviar-emails >> /var/log/salinas-access-gate.log 2>&1
 30 1 * * * root $DESTINO/docker/backup.sh >> /var/log/salinas-access-gate.log 2>&1
 CRON
 chmod 644 /etc/cron.d/salinas-access-gate
