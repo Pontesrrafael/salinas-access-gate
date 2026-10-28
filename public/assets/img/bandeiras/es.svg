@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+  <title>España</title>
+  <rect width="640" height="480" fill="#c60b1e"/>
+  <rect y="120" width="640" height="240" fill="#ffc400"/>
+  <rect x="150" y="196" width="10" height="82" fill="#b0b0b0"/>
+  <rect x="240" y="196" width="10" height="82" fill="#b0b0b0"/>
+  <path d="M174,190 L200,170 L226,190 Z" fill="#c60b1e"/>
+  <path d="M170,194 H230 V250 C230,275 200,292 200,292 C200,292 170,275 170,250 Z" fill="#ad1519"/>
+  <rect x="178" y="202" width="19" height="22" fill="#ffc400"/>
+  <rect x="203" y="202" width="19" height="22" fill="#ffffff"/>
+  <rect x="178" y="230" width="19" height="22" fill="#ffffff"/>
+  <rect x="203" y="230" width="19" height="22" fill="#ffc400"/>
+  <circle cx="200" cy="227" r="7" fill="#005bbb"/>
+</svg>
