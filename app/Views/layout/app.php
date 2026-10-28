@@ -30,13 +30,13 @@ $menu = [
     ],
 ];
 ?><!doctype html>
-<html lang="pt-BR"<?= tema_attr() ?>>
+<html lang="<?= e(App\Core\I18n::current()) ?>"<?= tema_attr() ?>>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
   <meta name="base-url" content="<?= e(url('/')) ?>">
-  <title><?= e(($titulo ?? 'Painel') . ' — Salinas Access Gate') ?></title>
+  <title><?= e(t($titulo ?? 'Painel') . ' — Salinas Access Gate') ?></title>
   <link rel="icon" href="<?= e(asset('img/favicon-32.png')) ?>" type="image/png" sizes="32x32">
   <link rel="icon" href="<?= e(asset('img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
@@ -57,45 +57,47 @@ $menu = [
     <?php foreach ($menu as $grupo => $itens):
         $visiveis = array_filter($itens, fn ($i) => $i[3] === null || can($i[3]));
         if (!$visiveis) { continue; } ?>
-      <div class="nav-grupo"><?= e($grupo) ?></div>
+      <div class="nav-grupo"><?= e(t($grupo)) ?></div>
       <?php foreach ($visiveis as [$href, $label, $ic]): ?>
-        <a class="nav-item<?= $ativo($href) ?>" href="<?= e(url($href)) ?>"><?= icon($ic) ?><span><?= e($label) ?></span></a>
+        <a class="nav-item<?= $ativo($href) ?>" href="<?= e(url($href)) ?>"><?= icon($ic) ?><span><?= e(t($label)) ?></span></a>
       <?php endforeach; ?>
     <?php endforeach; ?>
   </nav>
   <div class="sidebar-rodape">
     <div class="usuario-nome"><?= e($u['nome'] ?? '') ?></div>
-    <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · Seg. Patrimonial' : '' ?></div>
+    <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
+    <?= seletor_idioma() ?>
     <?= botao_tema() ?>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
-      <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span>Sair</span></button>
+      <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span><?= e(t('Sair')) ?></span></button>
     </form>
   </div>
 </aside>
 <label for="menu-toggle" class="menu-overlay" aria-hidden="true"></label>
 <div class="principal">
   <header class="topo">
-    <label for="menu-toggle" class="btn-menu" aria-label="Abrir menu"><?= icon('menu') ?></label>
+    <label for="menu-toggle" class="btn-menu" aria-label="<?= e(t('Abrir menu')) ?>"><?= icon('menu') ?></label>
     <div class="topo-titulo">
-      <h1><?= e($titulo ?? '') ?></h1>
-      <?php if (!empty($descricao)): ?><p><?= e($descricao) ?></p><?php endif; ?>
+      <h1><?= e(t($titulo ?? '')) ?></h1>
+      <?php if (!empty($descricao)): ?><p><?= e(t($descricao)) ?></p><?php endif; ?>
     </div>
-    <div class="topo-acoes" data-tour="acoes">
-      <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>">Como usar</button><?php endif; ?>
+    <div class="topo-acoes"<?= !empty($acoes) ? ' data-tour="acoes"' : '' ?>>
+      <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>"><?= e(t('Como usar')) ?></button><?php endif; ?>
       <?= $acoes ?? '' /* HTML da aplicação */ ?>
     </div>
   </header>
   <main class="conteudo" data-tour="conteudo">
     <?php foreach ($flash ?? [] as $f): ?>
-      <div class="alerta alerta-<?= e($f['tipo']) ?>" role="status"><?= e($f['mensagem']) ?></div>
+      <div class="alerta alerta-<?= e($f['tipo']) ?>" role="status"><?= e(t($f['mensagem'])) ?></div>
     <?php endforeach; ?>
     <?= $content ?>
   </main>
-  <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · Horário de Mato Grosso – UTC-4</footer>
+  <footer class="rodape">Salinas Access Gate · Salinas Gold Mineração LTDA · <?= e(t('Horário de Mato Grosso – UTC-4')) ?></footer>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <?= App\Core\View::partial('tutoriais/ajuda', ['tutorialAtual' => $tutorialAtual, 'u' => $u]) ?>
+<?= scripts_idioma() ?>
 <script src="<?= e(asset('js/app.js')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script>
 <script src="<?= e(asset('js/tutoriais.js')) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script>
 <?php foreach ($scripts ?? [] as $script): ?><script src="<?= e(asset($script)) ?>" nonce="<?= e(App\Core\Http::cspNonce()) ?>"></script><?php endforeach; ?>

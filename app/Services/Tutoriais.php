@@ -21,10 +21,55 @@ final class Tutoriais
         }
         foreach (self::permitidos() as $m) {
             if ($path === $m['route'] || str_starts_with($path, $m['route'] . '/')) {
+                if ($path !== $m['route'] && in_array($m['id'], ['pessoas', 'veiculos', 'usuarios', 'ssma'], true)) {
+                    return self::formulario($m);
+                }
                 return $m;
             }
         }
         return null;
+    }
+
+    /** O formulário mantém as permissões do módulo, mas não ensina controles da listagem. */
+    private static function formulario(array $m): array
+    {
+        $m['context'] = $m['id'] . '-formulario';
+        $m['summary'] = \t('Confira os dados desta tela antes de salvar. Os campos disponíveis dependem da sua permissão.');
+        // Conteúdo independente: reordenar a listagem não muda as instruções do formulário.
+        $procedures = [
+            'pessoas' => [
+                'Confira Nome completo e Categoria. Complete documento, empresa e contatos conforme necessário.',
+                'No cadastro existente, os perfis autorizados mantêm documentos e validades.',
+                'Revise os dados antes de Cadastrar ou Salvar alterações. Se a tela estiver somente para consulta, use Voltar.',
+            ],
+            'veiculos' => [
+                'Confira placa e tipo do veículo.',
+                'Complete marca/modelo, cor, empresa e TAG quando utilizada.',
+                'Informe comissionamento e validade conforme a condição real. Revise antes de Cadastrar ou salvar.',
+                'Se a tela estiver somente para consulta, use Voltar.',
+            ],
+            'usuarios' => [
+                'Confira nome, e-mail e origem da conta. Para Active Directory, selecione a conta de rede quando a integração estiver disponível.',
+                'Defina o perfil com as permissões necessárias.',
+                'Revise os vínculos por área e a marcação Segurança Patrimonial antes de salvar.',
+                'Oriente o usuário a utilizar sua conta individual.',
+            ],
+            'ssma' => [
+                'Confira a atividade, identificação, ASO e os requisitos exibidos no checklist.',
+                'Para Apto, atenda aos itens exigidos. Para Não Apto, informe a justificativa.',
+                'Revise e confirme a decisão. A autorização de acesso continua sob responsabilidade do autorizador.',
+            ],
+        ];
+        $steps = array_map('\t', $procedures[$m['id']]);
+        $m['procedures'][0]['title'] = \t('Conferir e salvar');
+        $m['procedures'][0]['steps'] = $steps;
+        $m['capabilities'] = [\t('Conferir os dados apresentados'), \t('Salvar somente após revisar e conforme a permissão')];
+        $m['tour'] = [['id' => 'introducao', 'title' => $m['title'], 'text' => $m['summary']]];
+        foreach ($steps as $n => $text) {
+            $m['tour'][] = ['id' => 'formulario-' . $n, 'target' => '[data-tour="formulario"]', 'title' => \t('Conferir e salvar'), 'text' => $text, 'onMissing' => 'fallback-center'];
+        }
+        $m['tour'][] = ['id' => 'ajuda', 'target' => '[data-tutorial-open]', 'title' => \t('Ajuda sempre disponível'), 'text' => \t('O tour apenas apresenta a tela. Ele não preenche nem confirma operações.'), 'onMissing' => 'fallback-center'];
+        return $m;
     }
 
     public static function todos(): array
@@ -67,6 +112,22 @@ final class Tutoriais
             ['id' => 'pessoa', 'target' => '[data-tour="portaria-pessoa"]', 'title' => 'Identificação da pessoa', 'text' => 'Pesquise e selecione a pessoa correta. O tour não digita nem seleciona registros.', 'onMissing' => 'skip'],
             ['id' => 'veiculo', 'target' => '[data-tour="portaria-veiculo"]', 'title' => 'Veículo opcional', 'text' => 'Pesquise a placa quando houver veículo. Para acesso a pé, deixe em branco.', 'onMissing' => 'skip'],
         ]);
+        foreach ($all as &$module) {
+            foreach (['title', 'summary', 'review'] as $key) { $module[$key] = \t($module[$key]); }
+            $module['capabilities'] = array_map('\t', $module['capabilities']);
+            $module['tips'] = array_map('\t', $module['tips']);
+            foreach ($module['procedures'] as &$procedure) {
+                foreach (['title', 'expectedResult', 'recovery'] as $key) { $procedure[$key] = \t($procedure[$key]); }
+                $procedure['steps'] = array_map('\t', $procedure['steps']);
+            }
+            unset($procedure);
+            foreach ($module['tour'] as &$step) {
+                $step['title'] = \t($step['title']);
+                $step['text'] = \t($step['text']);
+            }
+            unset($step);
+        }
+        unset($module);
         return $all;
     }
 }

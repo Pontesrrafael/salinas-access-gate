@@ -17,7 +17,7 @@ $urlTv = url('/indicadores', [...$qs, 'tv' => 1]);
 $urlNormal = url('/indicadores', $qs);
 
 if (!$modoTv) {
-    slot('acoes', '<a class="btn btn-ouro" href="' . e($urlTv) . '">' . icon('tv') . ' Modo TV</a>');
+    slot('acoes', '<a class="btn btn-ouro" href="' . e($urlTv) . '">' . icon('tv') . ' ' . e(t('Modo TV')) . '</a>');
 }
 $dadosConteudo = array_intersect_key(get_defined_vars(), array_flip([
     'f', 'periodoTxt', 'localNome', 'resumo', 'anterior', 'permanencia', 'presenca', 'serie', 'porHora',
@@ -28,53 +28,53 @@ $dadosConteudo = array_intersect_key(get_defined_vars(), array_flip([
 <header class="tv-topo">
   <img src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração" class="tv-logo" width="150" height="50">
   <div class="tv-titulo">
-    <h1>Controle de Acesso · Indicadores</h1>
-    <p><?= e($localNome ?? 'Todos os locais') ?></p>
+    <h1><?= e(t('Controle de Acesso · Indicadores')) ?></h1>
+    <p><?= e($localNome ?? t('Todos os locais')) ?></p>
   </div>
   <div class="tv-relogio" id="tv-relogio" aria-live="off"><?= e(date('H:i')) ?></div>
   <div class="tv-acoes">
     <?= botao_tema('btn btn-secundario btn-sm') ?>
-    <button type="button" class="btn btn-secundario btn-sm" data-tela-cheia><?= icon('tela-cheia') ?> Tela cheia</button>
-    <a class="btn btn-secundario btn-sm" href="<?= e($urlNormal) ?>"><?= icon('x') ?> Sair do Modo TV</a>
+    <button type="button" class="btn btn-secundario btn-sm" data-tela-cheia><?= icon('tela-cheia') ?> <?= e(t('Tela cheia')) ?></button>
+    <a class="btn btn-secundario btn-sm" href="<?= e($urlNormal) ?>"><?= icon('x') ?> <?= e(t('Sair do Modo TV')) ?></a>
   </div>
 </header>
 <?php endif; ?>
 
-<?php if ($modoTv): ?><details class="tv-filtros"><summary><?= icon('config', 'icon icon-sm') ?> Filtros e atualização</summary><?php endif; ?>
+<?php if ($modoTv): ?><details class="tv-filtros"><summary><?= icon('config', 'icon icon-sm') ?> <?= e(t('Filtros e atualização')) ?></summary><?php endif; ?>
 <form class="cartao filtros filtros-indicadores" method="get" action="<?= e(url('/indicadores')) ?>" id="form-indicadores">
   <?php if ($modoTv): ?><input type="hidden" name="tv" value="1"><?php endif; ?>
-  <label class="campo">Período
+  <label class="campo"><?= e(t('Período')) ?>
     <select name="periodo" id="ind-periodo">
       <?php foreach (Indicadores::PRESETS as $k => $rot): ?>
-        <option value="<?= e($k) ?>"<?= selected($k, $f['preset']) ?>><?= e($rot) ?></option>
+        <option value="<?= e($k) ?>"<?= selected($k, $f['preset']) ?>><?= e(t($rot)) ?></option>
       <?php endforeach; ?>
     </select>
   </label>
-  <label class="campo">A partir de
+  <label class="campo"><?= e(t('A partir de')) ?>
     <input type="datetime-local" name="desde" id="ind-desde" value="<?= e($fmtLocal($f['ini'])) ?>" max="<?= e(date('Y-m-d\TH:i')) ?>">
   </label>
-  <label class="campo">Até <small>(vazio = agora)</small>
+  <label class="campo"><?= e(t('Até')) ?> <small><?= e(t('(vazio = agora)')) ?></small>
     <input type="datetime-local" name="ate" id="ind-ate" value="<?= e($f['preset'] === 'personalizado' ? (string) ($_GET['ate'] ?? '') : '') ?>" max="<?= e(date('Y-m-d\TH:i')) ?>">
   </label>
-  <label class="campo">Local
+  <label class="campo"><?= e(t('Local')) ?>
     <select name="local">
-      <option value="">Todos os locais</option>
+      <option value=""><?= e(t('Todos os locais')) ?></option>
       <?php foreach ($locais as $l): ?>
         <option value="<?= e($l['id']) ?>"<?= selected($l['id'], $f['localId']) ?>><?= e($l['nome']) ?></option>
       <?php endforeach; ?>
     </select>
   </label>
-  <label class="campo">Atualização automática
+  <label class="campo"><?= e(t('Atualização automática')) ?>
     <select name="atualizar" id="ind-atualizar">
       <?php foreach (Indicadores::ATUALIZACOES as $s => $rot): ?>
-        <option value="<?= $s ?>"<?= selected($s, $atualizar ?? Indicadores::ATUALIZACAO_PADRAO) ?>><?= e($rot) ?></option>
+        <option value="<?= $s ?>"<?= selected($s, $atualizar ?? Indicadores::ATUALIZACAO_PADRAO) ?>><?= e(t($rot)) ?></option>
       <?php endforeach; ?>
     </select>
   </label>
   <div class="filtros-botoes">
-    <button type="submit" class="btn btn-primario"><?= icon('busca') ?> Aplicar</button>
+    <button type="submit" class="btn btn-primario"><?= icon('busca') ?> <?= e(t('Aplicar')) ?></button>
   </div>
-  <p class="ind-status" id="ind-status" role="status"><?= icon('atualizar', 'icon icon-sm') ?> <span>Atualizado às <?= e(substr($geradoEm, -8)) ?></span></p>
+  <p class="ind-status" id="ind-status" role="status"><?= icon('atualizar', 'icon icon-sm') ?> <span><?= e(t('Atualizado às')) ?> <?= e(substr($geradoEm, -8)) ?></span></p>
 </form>
 <?php if ($modoTv): ?></details><?php endif; ?>
 

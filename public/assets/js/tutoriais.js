@@ -1,6 +1,7 @@
 /* Ajuda e tours locais. Não faz requisições nem aciona controles de negócio. */
 (function () {
   'use strict';
+  const T = window.SAGI18n ? window.SAGI18n.t : (text, params = {}) => String(text).replace(/\{(\w+)\}/g, (match, key) => Object.prototype.hasOwnProperty.call(params, key) ? String(params[key]) : match);
   const configNode = document.getElementById('tutorial-config');
   if (!configNode || typeof HTMLDialogElement === 'undefined') { return; }
   const config = JSON.parse(configNode.textContent);
@@ -18,9 +19,9 @@
   const memory = new Map();
   const read = key => { try { return JSON.parse((storage ? storage.getItem(prefix + key) : memory.get(key)) || 'null'); } catch (_) { return null; } };
   const write = (key, value) => { const json = JSON.stringify(value); memory.set(key, json); try { if (storage) { storage.setItem(prefix + key, json); } } catch (_) { storage = null; } };
-  const progressKey = m => m.id + ':v' + m.version;
+  const progressKey = m => (m.context || m.id) + ':v' + m.version;
   const progress = m => read(progressKey(m)) || { state: 'nao_iniciado' };
-  const statusNames = { nao_iniciado: 'Não iniciado', em_andamento: 'Em andamento', concluido: 'Concluído', dispensado: 'Dispensado' };
+  const statusNames = { nao_iniciado: T('Não iniciado'), em_andamento: T('Em andamento'), concluido: T('Concluído'), dispensado: T('Dispensado') };
   function refreshStatuses() {
     document.querySelectorAll('[data-tutorial-status]').forEach(el => {
       const m = catalog[el.dataset.tutorialStatus];
@@ -30,22 +31,31 @@
   function save(m, value) { write(progressKey(m), { ...progress(m), ...value }); refreshStatuses(); }
   const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden],dialog:not([open])');
   let invoker = null, active = null, steps = [], index = 0, target = null, waiting = false, epoch = 0;
-  function restore() { if (invoker && invoker.isConnected && visible(invoker)) { invoker.focus({ preventScroll: true }); } }
-  function element(tag, value, parent, cls) { const el = document.createElement(tag); if (value) { el.textContent = value; } if (cls) { el.className = cls; } if (parent) { parent.append(el); } return el; }
+  function restore() {
+    if (document.querySelector('dialog[open]')) { return; }
+    const contextual = document.querySelector('[data-tutorial-open="' + config.current + '"]');
+    const el = invoker && invoker !== document.body && invoker.isConnected && visible(invoker) && !invoker.closest('#tutorial-invite') ? invoker : contextual;
+    if (visible(el)) { el.focus(); }
+  }
+  // Aqui entram somente textos do tutorial e rótulos estáticos, nunca dados de cadastros.
+  function element(tag, value, parent, cls) { const el = document.createElement(tag); if (value) { el.textContent = T(value); } if (cls) { el.className = cls; } if (parent) { parent.append(el); } return el; }
   function button(label, parent, fn) { const b = element('button', label, parent, 'btn btn-secundario'); b.type = 'button'; b.addEventListener('click', fn); return b; }
   function openHelp(id, trigger) {
     const m = catalog[id]; if (!m || document.querySelector('dialog[open]:not(#tutorial-help):not(#tutorial-tour)')) { return; }
     if (tour.open) { finish('em_andamento'); }
     invoker = trigger || document.activeElement; invite.hidden = true;
-    document.getElementById('tutorial-help-title').textContent = m.title + ' — Como usar';
+    document.getElementById('tutorial-help-title').textContent = m.title + ' — ' + T('Como usar');
     body.replaceChildren(); element('p', m.summary, body);
     if (id === config.current) {
       const actions = element('div', '', body, 'tutorial-botoes');
-      button(progress(m).state === 'em_andamento' ? 'Retomar tour' : 'Fazer o tour', actions, () => start(id, false));
-      button('Reiniciar tour', actions, () => start(id, true));
+      const state = progress(m).state;
+      button(state === 'em_andamento' ? 'Retomar tour' : state === 'nao_iniciado' ? 'Fazer o tour' : 'Reiniciar tour', actions, () => start(id, false));
+      if (state === 'em_andamento') { button('Reiniciar tour', actions, () => start(id, true)); }
     } else if (id !== 'registros') {
       const a = element('a', 'Abrir módulo e fazer o tour', body, 'btn btn-secundario');
       const url = new URL(m.route, location.href); url.searchParams.set('tutorial', id); url.searchParams.set('tour', '1'); a.href = url.href;
+    } else {
+      element('p', 'Para fazer este tour, abra um registro pela data e hora em Relatórios.', body, 'dica');
     }
     element('h3', 'O que você pode fazer aqui', body);
     const ul = element('ul', '', body); m.capabilities.forEach(c => element('li', c, ul));
@@ -58,37 +68,28 @@
     });
     element('h3', 'Dicas e permissões', body); m.tips.forEach(t => element('p', t, body));
     element('p', m.review, body, 'dica');
-    element('p', 'Progresso salvo por usuário e versão apenas neste navegador. Concluir o tour não comprova treinamento formal ou aceite de política.', body, 'dica');
+    element('p', storage ? 'Progresso salvo por usuário e versão apenas neste navegador. Concluir o tour não comprova treinamento formal ou aceite de política.' : 'O navegador não permite salvar o progresso. A ajuda continua disponível, mas o progresso será perdido ao sair desta página.', body, 'dica');
     preference.checked = (read('preferencias') || {}).suggest !== false;
+    preference.disabled = !storage;
     if (!help.open) { help.showModal(); } body.scrollTop = 0;
     help.querySelector('[data-tutorial-close]').focus();
   }
-  // Espera alterações reais do DOM, com prazo máximo apenas como saída de segurança.
-  function locate(selector) {
-    if (!selector) { return Promise.resolve(null); }
-    const find = () => { const el = document.querySelector(selector); return visible(el) ? el : null; };
-    if (find()) { return Promise.resolve(find()); }
-    return new Promise(resolve => {
-      let timer; const observer = new MutationObserver(() => { const el = find(); if (el) { done(el); } });
-      const done = el => { observer.disconnect(); clearTimeout(timer); resolve(el); };
-      observer.observe(document.querySelector('main') || document.body, { subtree: true, childList: true, attributes: true });
-      timer = setTimeout(() => done(find()), 1500);
-    });
-  }
-  async function start(id, restart) {
+  // As telas são renderizadas no servidor. Alvos opcionais ausentes são omitidos imediatamente.
+  function start(id, restart) {
     if (waiting || id !== config.current || !catalog[id] || document.querySelector('dialog[open]:not(#tutorial-help):not(#tutorial-tour)')) { return; }
     waiting = true; const token = ++epoch; active = catalog[id]; invite.hidden = true;
     if (!help.open) { invoker = document.activeElement; } else { help.close(); }
     const found = [];
     for (const step of active.tour) {
-      const el = await locate(step.target);
-      if (step.target && !el && step.onMissing === 'skip') { continue; }
-      found.push({ ...step, el });
+      const el = step.target ? document.querySelector(step.target) : null;
+      if (step.target && !visible(el) && step.onMissing === 'skip') { continue; }
+      found.push(step);
     }
     waiting = false; if (token !== epoch) { return; }
     steps = found;
     if (!steps.length) { openHelp(id, invoker); return; }
-    const resume = restart ? -1 : steps.findIndex(s => s.id === progress(active).step);
+    const saved = progress(active);
+    const resume = !restart && saved.state === 'em_andamento' ? steps.findIndex(s => s.id === saved.step) : -1;
     index = resume >= 0 ? resume : 0;
     tour.showModal(); showStep(); document.getElementById('tutorial-next').focus();
   }
@@ -100,12 +101,20 @@
     if (!steps.length) { finish('em_andamento'); openHelp(active.id, invoker); return; }
     const s = steps[index]; target = s.target ? document.querySelector(s.target) : null;
     if (!visible(target)) { target = null; }
-    if (target) { target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); }
-    document.getElementById('tutorial-counter').textContent = 'Passo ' + (index + 1) + ' de ' + steps.length;
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      // Um alvo grande usa explicação central; não desloca o usuário para o meio do formulário.
+      if (rect.height < window.innerHeight * .65 && rect.width < window.innerWidth - 24) {
+        target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+      }
+    }
+    document.getElementById('tutorial-counter').textContent = T('Passo {current} de {total}', { current: index + 1, total: steps.length });
     document.getElementById('tutorial-tour-title').textContent = s.title;
     document.getElementById('tutorial-tour-text').textContent = s.text;
-    document.getElementById('tutorial-prev').disabled = index === 0;
-    document.getElementById('tutorial-next').textContent = index === steps.length - 1 ? 'Concluir' : 'Próximo';
+    const prev = document.getElementById('tutorial-prev'), wasFocused = document.activeElement === prev;
+    prev.disabled = index === 0;
+    if (index === 0 && wasFocused) { document.getElementById('tutorial-next').focus(); }
+    document.getElementById('tutorial-next').textContent = T(index === steps.length - 1 ? 'Concluir' : 'Próximo');
     save(active, { state: 'em_andamento', step: s.id, suggested: true }); position();
   }
   function position() {
@@ -150,13 +159,13 @@
   const search = document.getElementById('tutorial-search');
   if (search) { search.addEventListener('input', () => { let count = 0; document.querySelectorAll('[data-tutorial-card]').forEach(card => { card.hidden = !card.textContent.toLocaleLowerCase('pt-BR').includes(search.value.trim().toLocaleLowerCase('pt-BR')); if (!card.hidden) { count++; } }); document.getElementById('tutorial-empty').hidden = count !== 0; }); }
   const m = catalog[config.current];
-  document.getElementById('tutorial-invite-tour').addEventListener('click', () => start(config.current, true));
+  document.getElementById('tutorial-invite-tour').addEventListener('click', () => start(config.current, false));
   document.getElementById('tutorial-invite-help').addEventListener('click', ev => openHelp(config.current, ev.currentTarget));
-  document.getElementById('tutorial-invite-dismiss').addEventListener('click', () => { invite.hidden = true; if (m) { save(m, { state: 'dispensado', suggested: true }); } });
+  document.getElementById('tutorial-invite-dismiss').addEventListener('click', ev => { invoker = ev.currentTarget; invite.hidden = true; if (m) { save(m, { state: 'dispensado', suggested: true }); } restore(); });
   refreshStatuses();
   const query = new URLSearchParams(location.search);
   if (m && query.get('tutorial') === m.id && query.get('tour') === '1' && !document.body.classList.contains('modo-tv')) {
-    const clean = new URL(location.href); clean.searchParams.delete('tutorial'); clean.searchParams.delete('tour'); history.replaceState(null, '', clean.href); start(m.id, true);
+    const clean = new URL(location.href); clean.searchParams.delete('tutorial'); clean.searchParams.delete('tour'); history.replaceState(null, '', clean.href); start(m.id, false);
   } else if (m && storage && !progress(m).suggested && (read('preferencias') || {}).suggest !== false && !document.querySelector('dialog[open]') && !document.body.classList.contains('modo-tv')) {
     save(m, { suggested: true }); invite.hidden = false;
   }
