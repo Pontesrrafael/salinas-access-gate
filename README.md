@@ -139,6 +139,17 @@ docs/            Instalação, deploy e migração
 - Login com limite de 5 tentativas a cada 15 min por e-mail+IP. O formulário público tem limite por IP, honeypot e Turnstile opcional.
 - Uploads validados por *magic bytes* + `getimagesize`, com nome aleatório e gravados fora da pasta pública.
 - Exportações CSV protegidas contra injeção de fórmulas. A exportação com CPF completo fica auditada.
+- IP real via `X-Forwarded-For` lido da direita para a esquerda apenas de `TRUSTED_PROXIES`; links absolutos exigem `APP_URL` em produção (sem confiar em `HTTP_HOST`).
+
+## Testes
+
+Testes automatizados rápidos (sem banco de dados, executados também no CI):
+
+```bash
+php tests/regras.php     # RBAC (perfis e autorização), Http::clientIp e Http::absoluteUrl
+php tests/tutoriais.php  # Permissões, conteúdo e rotas da Central de Ajuda
+php tests/infleet.php    # Cliente Infleet com respostas simuladas
+```
 
 ## Requisitos
 

@@ -260,6 +260,7 @@
   "Confira solicitação aprovada para o dia, aptidão SSMA quando exigida, destino e responsável interno.": "Check an approved access request for today, SSMA clearance when required, destination, and internal host.",
   "Confirmar nova senha": "Confirm new password",
   "Confirmar recusa": "Confirm rejection",
+  "Confirmo que esta solicitação é desta pessoa, mesmo sem CPF ou nome conferindo (fica registrado na auditoria).": "I confirm this request belongs to this person, even though the CPF or name does not match (recorded in the audit log).",
   "Conformidade documental": "Document compliance",
   "Consulta indisponível.": "Query unavailable.",
   "Consulta não concluída.": "Query not completed.",

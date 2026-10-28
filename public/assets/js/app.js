@@ -554,8 +554,14 @@
       html += '<details' + (s.outras.some((x) => x.id === marcada) ? ' open' : '') + '><summary>' + esc(t('Outras solicitações aprovadas hoje sem vínculo ({count})', { count: s.outras.length })) + '</summary>' +
         s.outras.map((x) => itemSolicitacao(x, x.id === marcada)).join('') + '</details>';
     }
+    if (a.solicitacao_manual) {
+      html += '<label class="checkbox"><input type="checkbox" name="confirmar_solicitacao_manual" value="1" form="form-portaria" id="confirmar-sol-manual"> ' +
+        '<span>' + esc(t("Confirmo que esta solicitação é desta pessoa, mesmo sem CPF ou nome conferindo (fica registrado na auditoria).")) + '</span></label>';
+    }
     html += '<p class="dica"><a href="' + esc(BASE) + '/solicitacoes" target="_blank" rel="noopener">' + esc(t("Abrir solicitações")) + '</a></p>';
     el.solBox.innerHTML = html;
+    const conf = $('#confirmar-sol-manual');
+    if (conf) { conf.addEventListener('change', atualizarEstado); }
     el.solBox.hidden = false;
     $$('input[name="solicitacao_id"]', el.solBox).forEach((r) => r.addEventListener('change', () => {
       st.solicitacaoId = r.value; analisar();
@@ -601,7 +607,8 @@
     el.bloqueios.innerHTML = bloqueios.length ? '<strong>' + (s === 'entrada' ? t("Entrada bloqueada") : t("Saída não permitida")) + '</strong><ul>' + bloqueios.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
     el.avisos.hidden = !avisos.length;
     el.avisos.innerHTML = avisos.length ? '<strong>' + esc(t("Atenção")) + '</strong><ul>' + avisos.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
-    el.btn.disabled = !st.pessoaId || !a || bloqueios.length > 0;
+    const confManual = $('#confirmar-sol-manual');
+    el.btn.disabled = !st.pessoaId || !a || bloqueios.length > 0 || (!!a.solicitacao_manual && s === 'entrada' && !(confManual && confManual.checked));
   }
   $$('input[name="sentido"]').forEach((r) => r.addEventListener('change', () => { st.solicitacaoId = ''; analisar(); atualizarEstado(); }));
 

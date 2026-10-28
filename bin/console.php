@@ -118,6 +118,8 @@ switch ($cmd) {
         }
         extension_loaded('curl') ? ok('extensão curl (Turnstile)') : out('  [--] extensão curl ausente (necessária só para Turnstile)');
         is_file(App::root('.env')) ? ok('.env encontrado') : falhou('.env ausente — copie .env.example para .env');
+        $appUrl = trim((string) (App::config('app')['url'] ?? ''));
+        $appUrl !== '' ? ok('APP_URL configurado (' . $appUrl . ')') : falhou('APP_URL vazio — configure APP_URL no .env');
         try {
             Crypto::cpfHash('00000000000');
             Crypto::decryptCpf(Crypto::encryptCpf('52998224725')) === '52998224725' ? ok('chaves de criptografia do CPF') : falhou('chaves do CPF');
