@@ -30,57 +30,57 @@ $totAlertas = count($alertas['documentos']) + count($alertas['permanencia']);
 ?>
 <p class="ind-periodo">
   <?= icon('relogio', 'icon icon-sm') ?> <strong><?= e($periodoTxt) ?></strong>
-  · <?= e($localNome ?? 'Todos os locais') ?>
+  · <?= e($localNome ?? t('Todos os locais')) ?>
   <?php if (!empty($f['aviso'])): ?> · <span class="badge badge-aviso"><?= e($f['aviso']) ?></span><?php endif; ?>
 </p>
 
-<section class="ind-kpis" aria-label="Indicadores principais">
+<section class="ind-kpis" aria-label="<?= e(t('Indicadores principais')) ?>">
   <div class="kpi kpi-heroi">
-    <span class="kpi-rotulo">Presentes agora</span>
+    <span class="kpi-rotulo"><?= e(t('Presentes agora')) ?></span>
     <strong class="kpi-heroi-valor"><?= $n($presenca['total']) ?></strong>
     <ul class="kpi-quebra">
       <?php foreach (['colaborador', 'visitante', 'terceiro'] as $c): ?>
-        <li><span class="viz-chave serie-<?= $c ?>" aria-hidden="true"></span><?= e(CATEGORIAS[$c]) ?> <strong><?= $n($presenca['porCategoria'][$c] ?? 0) ?></strong></li>
+        <li><span class="viz-chave serie-<?= $c ?>" aria-hidden="true"></span><?= e(label_t(CATEGORIAS, $c, '')) ?> <strong><?= $n($presenca['porCategoria'][$c] ?? 0) ?></strong></li>
       <?php endforeach; ?>
     </ul>
   </div>
-  <div class="kpi"><span class="kpi-rotulo">Entradas</span><strong class="kpi-valor"><?= $n($resumo['entradas']) ?></strong><?= $variacao($resumo['entradas'], $anterior['entradas']) ?></div>
-  <div class="kpi"><span class="kpi-rotulo">Saídas</span><strong class="kpi-valor"><?= $n($resumo['saidas']) ?></strong><?= $variacao($resumo['saidas'], $anterior['saidas']) ?></div>
-  <div class="kpi"><span class="kpi-rotulo">Pessoas distintas</span><strong class="kpi-valor"><?= $n($resumo['pessoas']) ?></strong><?= $variacao($resumo['pessoas'], $anterior['pessoas']) ?>
-    <span class="kpi-delta"><?= icon('veiculo', 'icon icon-sm') ?> <?= $n($resumo['veiculos']) ?> veículo(s) distinto(s)</span></div>
-  <div class="kpi"><span class="kpi-rotulo">Permanência média</span><strong class="kpi-valor"><?= e($duracao($permanencia)) ?></strong><span class="kpi-delta mudo">visitantes e terceiros</span></div>
-  <a class="kpi kpi-link" href="<?= e(url('/solicitacoes')) ?>"><span class="kpi-rotulo">Solicitações pendentes</span><strong class="kpi-valor"><?= $n($atual['pendentes'] ?? 0) ?></strong>
-    <span class="kpi-delta"><?= $n($atual['aguardando_ssma'] ?? 0) ?> aguardando SSMA · <?= $n($atual['aprovadas_hoje'] ?? 0) ?> aprovadas p/ hoje</span></a>
-  <div class="kpi"><span class="kpi-rotulo">Taxa de aprovação</span><strong class="kpi-valor"><?= $solicitacoes['taxaAprovacao'] === null ? '—' : $solicitacoes['taxaAprovacao'] . '%' ?></strong>
-    <span class="kpi-delta mudo"><?= $n($solicitacoes['total']) ?> solicitações recebidas no período</span></div>
-  <div class="kpi"><span class="kpi-rotulo">Verificações SSMA</span><strong class="kpi-valor"><?= $n($ssma['apto'] + $ssma['nao_apto']) ?></strong>
-    <span class="kpi-delta"><?= $n($ssma['apto']) ?> aptos · <?= $n($ssma['nao_apto']) ?> não aptos</span></div>
-  <div class="kpi<?= $resumo['sem_solicitacao'] > 0 ? ' kpi-atencao' : '' ?>"><span class="kpi-rotulo">Externos sem solicitação</span><strong class="kpi-valor"><?= $n($resumo['sem_solicitacao']) ?></strong>
-    <span class="kpi-delta mudo">de <?= $n($resumo['entradas_externos']) ?> entradas de visitantes/terceiros</span></div>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Entradas')) ?></span><strong class="kpi-valor"><?= $n($resumo['entradas']) ?></strong><?= $variacao($resumo['entradas'], $anterior['entradas']) ?></div>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Saídas')) ?></span><strong class="kpi-valor"><?= $n($resumo['saidas']) ?></strong><?= $variacao($resumo['saidas'], $anterior['saidas']) ?></div>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Pessoas distintas')) ?></span><strong class="kpi-valor"><?= $n($resumo['pessoas']) ?></strong><?= $variacao($resumo['pessoas'], $anterior['pessoas']) ?>
+    <span class="kpi-delta"><?= icon('veiculo', 'icon icon-sm') ?> <?= $n($resumo['veiculos']) ?> <?= e(t('veículo(s) distinto(s)')) ?></span></div>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Permanência média')) ?></span><strong class="kpi-valor"><?= e($duracao($permanencia)) ?></strong><span class="kpi-delta mudo"><?= e(t('visitantes e terceiros')) ?></span></div>
+  <a class="kpi kpi-link" href="<?= e(url('/solicitacoes')) ?>"><span class="kpi-rotulo"><?= e(t('Solicitações pendentes')) ?></span><strong class="kpi-valor"><?= $n($atual['pendentes'] ?? 0) ?></strong>
+    <span class="kpi-delta"><?= $n($atual['aguardando_ssma'] ?? 0) ?> <?= e(t('aguardando SSMA ·')) ?> <?= $n($atual['aprovadas_hoje'] ?? 0) ?> <?= e(t('aprovadas p/ hoje')) ?></span></a>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Taxa de aprovação')) ?></span><strong class="kpi-valor"><?= $solicitacoes['taxaAprovacao'] === null ? '—' : $solicitacoes['taxaAprovacao'] . '%' ?></strong>
+    <span class="kpi-delta mudo"><?= $n($solicitacoes['total']) ?> <?= e(t('solicitações recebidas no período')) ?></span></div>
+  <div class="kpi"><span class="kpi-rotulo"><?= e(t('Verificações SSMA')) ?></span><strong class="kpi-valor"><?= $n($ssma['apto'] + $ssma['nao_apto']) ?></strong>
+    <span class="kpi-delta"><?= $n($ssma['apto']) ?> <?= e(t('aptos ·')) ?> <?= $n($ssma['nao_apto']) ?> <?= e(t('não aptos')) ?></span></div>
+  <div class="kpi<?= $resumo['sem_solicitacao'] > 0 ? ' kpi-atencao' : '' ?>"><span class="kpi-rotulo"><?= e(t('Externos sem solicitação')) ?></span><strong class="kpi-valor"><?= $n($resumo['sem_solicitacao']) ?></strong>
+    <span class="kpi-delta mudo"><?= e(t('de')) ?> <?= $n($resumo['entradas_externos']) ?> <?= e(t('entradas de visitantes/terceiros')) ?></span></div>
 </section>
 
-<section class="cartao ind-alertas<?= $totAlertas ? ' com-alerta' : '' ?>" aria-label="Alertas de segurança">
-  <div class="cartao-cabecalho"><h2><?= icon($totAlertas ? 'alerta' : 'ok') ?> Alertas de segurança agora</h2>
-    <?php if ($totAlertas): ?><span class="badge badge-perigo"><?= $n($totAlertas) ?> alerta(s)</span><?php else: ?><span class="badge badge-sucesso">Nenhum alerta</span><?php endif; ?></div>
+<section class="cartao ind-alertas<?= $totAlertas ? ' com-alerta' : '' ?>" aria-label="<?= e(t('Alertas de segurança')) ?>">
+  <div class="cartao-cabecalho"><h2><?= icon($totAlertas ? 'alerta' : 'ok') ?> <?= e(t('Alertas de segurança agora')) ?></h2>
+    <?php if ($totAlertas): ?><span class="badge badge-perigo"><?= $n($totAlertas) ?> <?= e(t('alerta(s)')) ?></span><?php else: ?><span class="badge badge-sucesso"><?= e(t('Nenhum alerta')) ?></span><?php endif; ?></div>
   <?php if ($totAlertas): ?>
   <div class="grade-2">
     <div>
-      <h3>Presentes com documento vencido</h3>
-      <?php if (!$alertas['documentos']): ?><p class="mudo">Nenhum.</p><?php else: ?>
+      <h3><?= e(t('Presentes com documento vencido')) ?></h3>
+      <?php if (!$alertas['documentos']): ?><p class="mudo"><?= e(t('Nenhum.')) ?></p><?php else: ?>
       <ul class="lista-simples">
         <?php foreach ($alertas['documentos'] as $a): ?>
-          <li><span><a href="<?= e(url('/pessoas/' . $a['pessoa_id'])) ?>"><?= e($a['pessoa_nome']) ?></a> <small class="mudo"><?= e(CATEGORIAS[$a['pessoa_categoria']] ?? '') ?> · <?= e($a['local_nome']) ?></small></span>
+          <li><span><a href="<?= e(url('/pessoas/' . $a['pessoa_id'])) ?>"><?= e($a['pessoa_nome']) ?></a> <small class="mudo"><?= e(label_t(CATEGORIAS, $a['pessoa_categoria'], '')) ?> · <?= e($a['local_nome']) ?></small></span>
             <span><?php foreach (explode(',', (string) $a['tipos']) as $t): ?><?= badge((TIPOS_DOC[$t] ?? $t) . ' vencido', 'perigo') ?> <?php endforeach; ?></span></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>
     </div>
     <div>
-      <h3>Dentro há mais de <?= (int) $alertas['horas'] ?> h</h3>
-      <?php if (!$alertas['permanencia']): ?><p class="mudo">Nenhum.</p><?php else: ?>
+      <h3><?= e(t('Dentro há mais de')) ?> <?= (int) $alertas['horas'] ?> <?= e(t('h')) ?></h3>
+      <?php if (!$alertas['permanencia']): ?><p class="mudo"><?= e(t('Nenhum.')) ?></p><?php else: ?>
       <ul class="lista-simples">
         <?php foreach ($alertas['permanencia'] as $a): ?>
-          <li><span><?= e($a['pessoa_nome']) ?> <small class="mudo"><?= e(CATEGORIAS[$a['pessoa_categoria']] ?? '') ?> · <?= e($a['local_nome']) ?></small></span>
+          <li><span><?= e($a['pessoa_nome']) ?> <small class="mudo"><?= e(label_t(CATEGORIAS, $a['pessoa_categoria'], '')) ?> · <?= e($a['local_nome']) ?></small></span>
             <span><?= badge('desde ' . fmt_data_hora($a['entrada_em']), 'aviso') ?></span></li>
         <?php endforeach; ?>
       </ul>
@@ -91,74 +91,74 @@ $totAlertas = count($alertas['documentos']) + count($alertas['permanencia']);
 </section>
 
 <section class="cartao">
-  <div class="cartao-cabecalho"><h2><?= icon('grafico') ?> Entradas por <?= e($granTxt) ?> e categoria</h2>
-    <span class="mudo"><?= $n($resumo['entradas']) ?> entradas</span></div>
-  <?= Grafico::colunas('Entradas por ' . $granTxt . ' e categoria', $serie['rotulos'], $serie['dicas'], $serie['series'], $nomesSerie) ?>
+  <div class="cartao-cabecalho"><h2><?= icon('grafico') ?> <?= e(t('Entradas por')) ?> <?= e($granTxt) ?> <?= e(t('e categoria')) ?></h2>
+    <span class="mudo"><?= $n($resumo['entradas']) ?> <?= e(t('entradas')) ?></span></div>
+  <?= Grafico::colunas(t('Entradas por') . ' ' . $granTxt . ' ' . t('e categoria'), $serie['rotulos'], $serie['dicas'], $serie['series'], $nomesSerie) ?>
 </section>
 
 <div class="grade-2">
   <section class="cartao">
-    <div class="cartao-cabecalho"><h2><?= icon('relogio') ?> Horário de pico</h2><span class="mudo">entradas por hora do dia</span></div>
-    <?= Grafico::colunas('Entradas por hora do dia', array_map(fn ($h) => $h . 'h', range(0, 23)), array_map(fn ($h) => sprintf('%02d:00–%02d:59', $h, $h), range(0, 23)), ['unica' => $porHora], ['unica' => 'Entradas']) ?>
+    <div class="cartao-cabecalho"><h2><?= icon('relogio') ?> <?= e(t('Horário de pico')) ?></h2><span class="mudo"><?= e(t('entradas por hora do dia')) ?></span></div>
+    <?= Grafico::colunas(t('Entradas por hora do dia'), array_map(fn ($h) => $h . 'h', range(0, 23)), array_map(fn ($h) => sprintf('%02d:00–%02d:59', $h, $h), range(0, 23)), ['unica' => $porHora], ['unica' => 'Entradas']) ?>
   </section>
   <section class="cartao">
-    <div class="cartao-cabecalho"><h2><?= icon('local') ?> Presença agora por local</h2><?php if (can('registros.ver')): ?><a class="link" href="<?= e(url('/presenca')) ?>">Ver lista</a><?php endif; ?></div>
-    <?= Grafico::barras('Presença agora por local', array_map(fn ($l) => [
-        'rotulo' => $l['nome'], 'valor' => $l['n'], 'dica' => $l['nome'] . ': ' . $l['n'] . ' pessoa(s) dentro agora',
-    ], $presenca['porLocal']), 'unica', 'Ninguém dentro agora.') ?>
+    <div class="cartao-cabecalho"><h2><?= icon('local') ?> <?= e(t('Presença agora por local')) ?></h2><?php if (can('registros.ver')): ?><a class="link" href="<?= e(url('/presenca')) ?>"><?= e(t('Ver lista')) ?></a><?php endif; ?></div>
+    <?= Grafico::barras(t('Presença agora por local'), array_map(fn ($l) => [
+        'rotulo' => $l['nome'], 'valor' => $l['n'], 'dica' => $l['nome'] . ': ' . $l['n'] . ' ' . t('pessoa(s) dentro agora'),
+    ], $presenca['porLocal']), 'unica', t('Ninguém dentro agora.')) ?>
   </section>
 </div>
 
 <div class="grade-2">
   <section class="cartao">
-    <div class="cartao-cabecalho"><h2><?= icon('pessoas') ?> Empresas com mais entradas</h2><span class="mudo">visitantes e terceiros</span></div>
-    <?= Grafico::barras('Empresas com mais entradas', array_map(fn ($r) => [
+    <div class="cartao-cabecalho"><h2><?= icon('pessoas') ?> <?= e(t('Empresas com mais entradas')) ?></h2><span class="mudo"><?= e(t('visitantes e terceiros')) ?></span></div>
+    <?= Grafico::barras(t('Empresas com mais entradas'), array_map(fn ($r) => [
         'rotulo' => $r['empresa'], 'valor' => (int) $r['entradas'], 'extra' => (int) $r['pessoas'] . ' pessoa(s)',
-        'dica' => $r['empresa'] . ': ' . $r['entradas'] . ' entradas de ' . $r['pessoas'] . ' pessoa(s)',
-    ], $empresas), 'unica', 'Nenhuma entrada de visitantes ou terceiros no período.') ?>
+        'dica' => $r['empresa'] . ': ' . $r['entradas'] . ' ' . t('entradas de') . ' ' . $r['pessoas'] . ' pessoa(s)',
+    ], $empresas), 'unica', t('Nenhuma entrada de visitantes ou terceiros no período.')) ?>
   </section>
   <section class="cartao">
-    <div class="cartao-cabecalho"><h2><?= icon('solicit') ?> Solicitações recebidas no período</h2><span class="mudo"><?= $n($solicitacoes['total']) ?> no total</span></div>
-    <?= Grafico::barras('Solicitações por situação', array_map(fn ($st, $v) => [
+    <div class="cartao-cabecalho"><h2><?= icon('solicit') ?> <?= e(t('Solicitações recebidas no período')) ?></h2><span class="mudo"><?= $n($solicitacoes['total']) ?> <?= e(t('no total')) ?></span></div>
+    <?= Grafico::barras(t('Solicitações por situação'), array_map(fn ($st, $v) => [
         'rotuloHtml' => badge_status_solicitacao($st), 'rotulo' => STATUS_SOLICITACAO[$st], 'valor' => $v,
         'dica' => STATUS_SOLICITACAO[$st] . ': ' . $v,
-    ], array_keys($solicitacoes['porStatus']), $solicitacoes['porStatus']), 'unica', 'Nenhuma solicitação recebida no período.') ?>
+    ], array_keys($solicitacoes['porStatus']), $solicitacoes['porStatus']), 'unica', t('Nenhuma solicitação recebida no período.')) ?>
   </section>
 </div>
 
 <div class="grade-2">
   <section class="cartao sem-padding">
-    <div class="cartao-cabecalho pad"><h2><?= icon('escudo') ?> Conformidade documental</h2><span class="mudo">pessoas ativas · documento mais recente</span></div>
+    <div class="cartao-cabecalho pad"><h2><?= icon('escudo') ?> <?= e(t('Conformidade documental')) ?></h2><span class="mudo"><?= e(t('pessoas ativas · documento mais recente')) ?></span></div>
     <?php if (!$documentos['porTipo']): ?>
-      <p class="mudo vazio">Nenhum documento cadastrado.</p>
+      <p class="mudo vazio"><?= e(t('Nenhum documento cadastrado.')) ?></p>
     <?php else: ?>
     <div class="tabela-rolagem"><table class="tabela">
-      <thead><tr><th>Documento</th><th class="num">Vencidos</th><th class="num">A vencer (30 d)</th><th class="num">Válidos</th></tr></thead>
+      <thead><tr><th><?= e(t('Documento')) ?></th><th class="num"><?= e(t('Vencidos')) ?></th><th class="num"><?= e(t('A vencer (30 d)')) ?></th><th class="num"><?= e(t('Válidos')) ?></th></tr></thead>
       <tbody>
         <?php foreach ($documentos['porTipo'] as $tipo => $d): ?>
-          <tr><td><?= e(TIPOS_DOC[$tipo] ?? $tipo) ?></td>
+          <tr><td><?= e(label_t(TIPOS_DOC, $tipo, $tipo)) ?></td>
             <td class="num"><?= $d['vencidos'] ? badge($n($d['vencidos']), 'perigo') : '0' ?></td>
             <td class="num"><?= $d['a_vencer'] ? badge($n($d['a_vencer']), 'aviso') : '0' ?></td>
             <td class="num"><?= $n($d['validos']) ?></td></tr>
         <?php endforeach; ?>
       </tbody>
-      <tfoot><tr><th>Total</th><th class="num"><?= $n($documentos['total']['vencidos']) ?></th><th class="num"><?= $n($documentos['total']['a_vencer']) ?></th><th class="num"><?= $n($documentos['total']['validos']) ?></th></tr></tfoot>
+      <tfoot><tr><th><?= e(t('Total')) ?></th><th class="num"><?= $n($documentos['total']['vencidos']) ?></th><th class="num"><?= $n($documentos['total']['a_vencer']) ?></th><th class="num"><?= $n($documentos['total']['validos']) ?></th></tr></tfoot>
     </table></div>
     <?php endif; ?>
   </section>
 
   <section class="cartao sem-padding">
-    <div class="cartao-cabecalho pad"><h2><?= icon('auditoria') ?> Últimos eventos do período</h2></div>
+    <div class="cartao-cabecalho pad"><h2><?= icon('auditoria') ?> <?= e(t('Últimos eventos do período')) ?></h2></div>
     <?php if (!$ultimos): ?>
-      <p class="mudo vazio"><?= can('registros.ver') ? 'Nenhuma movimentação no período.' : 'Sem permissão para ver movimentações.' ?></p>
+      <p class="mudo vazio"><?= can('registros.ver') ? t('Nenhuma movimentação no período.') : t('Sem permissão para ver movimentações.') ?></p>
     <?php else: ?>
     <div class="tabela-rolagem"><table class="tabela">
-      <thead><tr><th>Data/Hora</th><th>Mov.</th><th>Pessoa / placa</th><th class="ocultar-sm">Local</th></tr></thead>
+      <thead><tr><th><?= e(t('Data/Hora')) ?></th><th><?= e(t('Mov.')) ?></th><th><?= e(t('Pessoa / placa')) ?></th><th class="ocultar-sm"><?= e(t('Local')) ?></th></tr></thead>
       <tbody>
         <?php foreach ($ultimos as $r): ?>
           <tr>
             <td class="nowrap"><?= e(fmt_data_hora($r['data_hora'])) ?></td>
-            <td><?= $r['sentido'] === 'entrada' ? badge('Entrada', 'sucesso') : badge('Saída', 'neutro') ?></td>
+            <td><?= $r['sentido'] === 'entrada' ? badge(t('Entrada'), 'sucesso') : badge(t('Saída'), 'neutro') ?></td>
             <td><?= e($r['pessoa_nome'] ?? '—') ?><?php if ($r['placa']): ?> <small class="mono mudo"><?= e($r['placa']) ?></small><?php endif; ?></td>
             <td class="ocultar-sm"><?= e($r['local_nome']) ?></td>
           </tr>

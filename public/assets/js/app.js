@@ -8,6 +8,8 @@
   const meta = (n) => (document.querySelector('meta[name="' + n + '"]') || {}).content || '';
   const BASE = meta('base-url').replace(/\/$/, '');
   const CSRF = meta('csrf-token');
+  const locale = window.SAGI18n?.locale || 'pt-BR';
+  const t = window.SAGI18n?.t || ((source, params) => String(source).replace(/\{([A-Za-z0-9_]+)\}/g, (token, key) => params && Object.prototype.hasOwnProperty.call(params, key) ? String(params[key]) : token));
 
   const esc = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -81,23 +83,23 @@
       ev.preventDefault();
       const r = await api(copiar.dataset.copiarLink);
       if (r.ok && r.data && r.data.url) {
-        try { await navigator.clipboard.writeText(r.data.url); toast('Link copiado.', 'sucesso'); }
-        catch (e) { window.prompt('Copie o link:', r.data.url); }
-      } else { toast((r.data && r.data.erro) || 'Sem permissão para copiar o link.', 'erro'); }
+        try { await navigator.clipboard.writeText(r.data.url); toast(t("Link copiado."), 'sucesso'); }
+        catch (e) { window.prompt(t("Copie o link:"), r.data.url); }
+      } else { toast((r.data && r.data.erro) || t("Sem permissão para copiar o link."), 'erro'); }
       return;
     }
     const copiarTexto = ev.target.closest('[data-copiar]');
     if (copiarTexto) {
       ev.preventDefault();
-      try { await navigator.clipboard.writeText(copiarTexto.dataset.copiar); toast('Copiado.', 'sucesso'); }
-      catch (e) { window.prompt('Copie:', copiarTexto.dataset.copiar); }
+      try { await navigator.clipboard.writeText(copiarTexto.dataset.copiar); toast(t("Copiado."), 'sucesso'); }
+      catch (e) { window.prompt(t("Copie:"), copiarTexto.dataset.copiar); }
       return;
     }
 
     const revelar = ev.target.closest('[data-revelar-cpf]');
     if (revelar) {
       ev.preventDefault();
-      const motivo = window.prompt('Informe o motivo para revelar o CPF (registrado na auditoria):', '');
+      const motivo = window.prompt(t("Informe o motivo para revelar o CPF (registrado na auditoria):"), '');
       if (motivo === null) { return; }
       const fd = new FormData(); fd.append('motivo', motivo);
       const r = await api(revelar.dataset.revelarCpf, { method: 'POST', body: fd });
@@ -105,7 +107,7 @@
         const alvo = document.getElementById(revelar.dataset.alvo);
         if (alvo) { alvo.textContent = r.data.cpf || '—'; }
         revelar.remove();
-      } else { toast((r.data && r.data.erro) || 'Não foi possível revelar o CPF.', 'erro'); }
+      } else { toast((r.data && r.data.erro) || t("Não foi possível revelar o CPF."), 'erro'); }
     }
   });
 
@@ -159,17 +161,17 @@
       const q = buscaAd.value.trim();
       if (q.length < 2) { resAd.hidden = true; return; }
       const r = await api('/api/ldap/busca?q=' + encodeURIComponent(q));
-      if (!r.ok) { toast((r.data && r.data.erro) || 'Falha ao consultar o AD.', 'erro'); return; }
+      if (!r.ok) { toast((r.data && r.data.erro) || t("Falha ao consultar o AD."), 'erro'); return; }
       resAd.innerHTML = '';
       (r.data || []).forEach((e) => {
         const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button';
         b.innerHTML = '<strong>' + esc(e.nome || e.login) + '</strong> <span class="badge badge-neutro mono">' + esc(e.login) + '</span>' +
-          (e.ativo ? '' : ' <span class="badge badge-perigo">desativada</span>') +
-          (e.vinculado_a ? ' <span class="badge badge-aviso">já vinculada: ' + esc(e.vinculado_a) + '</span>' : '') +
-          '<small>' + esc([e.email, e.matricula ? 'Matr. ' + e.matricula : '', e.departamento, e.cargo].filter(Boolean).join(' · ')) + '</small>';
+          (e.ativo ? '' : ' <span class="badge badge-perigo">' + esc(t("desativada")) + '</span>') +
+          (e.vinculado_a ? ' <span class="badge badge-aviso">' + esc(t('já vinculada: {name}', { name: e.vinculado_a })) + '</span>' : '') +
+          '<small>' + esc([e.email, e.matricula ? t('Matr. {number}', { number: e.matricula }) : '', e.departamento, e.cargo].filter(Boolean).join(' · ')) + '</small>';
         b.addEventListener('mousedown', (ev) => ev.preventDefault());
         b.addEventListener('click', () => {
-          if (!e.ativo) { toast('Conta desativada no AD.', 'erro'); return; }
+          if (!e.ativo) { toast(t("Conta desativada no AD."), 'erro'); return; }
           guid.value = e.guid; resAd.hidden = true; buscaAd.value = '';
           sel.innerHTML = '<strong>' + esc(e.login) + '</strong> — ' + esc(e.nome) + '<span class="sub mono">' + esc(e.dn) + '</span>';
           sel.hidden = false;
@@ -180,13 +182,13 @@
         });
         li.appendChild(b); resAd.appendChild(li);
       });
-      if (!(r.data || []).length) { resAd.innerHTML = '<li class="dica">Nenhuma conta encontrada no AD.</li>'; }
+      if (!(r.data || []).length) { resAd.innerHTML = '<li class="dica">' + esc(t("Nenhuma conta encontrada no AD.")) + '</li>'; }
       resAd.hidden = false;
     }, 300));
     buscaAd.addEventListener('blur', () => setTimeout(() => { resAd.hidden = true; }, 150));
     formUsuario.addEventListener('submit', (ev) => {
       const r = formUsuario.querySelector('input[name="auth_origem"]:checked');
-      if (r && r.value === 'ldap' && !guid.value) { ev.preventDefault(); toast('Selecione a conta do AD na busca.', 'erro'); buscaAd.focus(); }
+      if (r && r.value === 'ldap' && !guid.value) { ev.preventDefault(); toast(t("Selecione a conta do AD na busca."), 'erro'); buscaAd.focus(); }
     });
   }
 
@@ -195,7 +197,7 @@
     const botoes = $$('[data-tema]');
     if (!botoes.length) { return; }
     const ordem = ['', 'escuro', 'claro'];
-    const rotulos = { '': 'Automático', escuro: 'Escuro', claro: 'Claro' };
+    const rotulos = { '': t("Automático"), escuro: t("Escuro"), claro: t("Claro") };
     const atual = () => {
       const m = document.cookie.match(/(?:^|;\s*)sag_tema=(escuro|claro)/);
       return m ? m[1] : '';
@@ -206,12 +208,12 @@
       document.cookie = t
         ? 'sag_tema=' + t + '; path=/; max-age=31536000; SameSite=Lax'
         : 'sag_tema=; path=/; max-age=0; SameSite=Lax';
-      botoes.forEach((b) => { const s = b.querySelector('span'); if (s) { s.textContent = 'Tema: ' + rotulos[t]; } });
+      botoes.forEach((b) => { const s = b.querySelector('span'); if (s) { s.textContent = window.SAGI18n?.t('Tema: {theme}', { theme: rotulos[t] }) || ('Tema: ' + rotulos[t]); } });
     };
     botoes.forEach((b) => b.addEventListener('click', () => {
       const t = ordem[(ordem.indexOf(atual()) + 1) % ordem.length];
       aplicar(t);
-      toast('Tema: ' + rotulos[t] + (t === '' ? ' (segue o sistema)' : ''));
+      toast((window.SAGI18n?.t('Tema: {theme}', { theme: rotulos[t] }) || ('Tema: ' + rotulos[t])) + (t === '' ? (window.SAGI18n?.t(' (segue o sistema)') || ' (segue o sistema)') : ''));
     }));
   })();
 
@@ -253,7 +255,7 @@
     }
     if (selAtualizar) { selAtualizar.value = intervalo; }
 
-    const hora = () => new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Cuiaba' });
+    const hora = () => new Date().toLocaleTimeString(locale, { timeZone: 'America/Cuiaba' });
     const setStatus = (txt, cls) => {
       if (!status) { return; }
       status.classList.remove('erro', 'carregando');
@@ -261,7 +263,7 @@
       const span = status.querySelector('span');
       if (span) { span.textContent = txt; }
     };
-    const descrever = () => (intervalo === '0' ? ' · atualização automática desligada' : ' · próxima em ' + (selAtualizar ? selAtualizar.options[selAtualizar.selectedIndex].text : intervalo + ' s'));
+    const descrever = () => (intervalo === '0' ? t(' · atualização automática desligada') : t(' · próxima em {interval}', { interval: selAtualizar ? selAtualizar.options[selAtualizar.selectedIndex].text : intervalo + ' s' }));
 
     let timer = null;
     let emCurso = false;
@@ -277,7 +279,7 @@
       if (document.hidden) { pendenteAoVoltar = true; return; }   // economiza servidor com a aba oculta
       if (emCurso) { agendar(); return; }
       emCurso = true;
-      setStatus('Atualizando…', 'carregando');
+      setStatus(t("Atualizando…"), 'carregando');
       const params = new URLSearchParams(window.location.search);
       params.set('parcial', '1');
       try {
@@ -292,9 +294,9 @@
         const novos = $$('details', caixa);
         abertos.forEach((i) => { if (novos[i]) { novos[i].open = true; } });
         rolarParaFim();
-        setStatus('Atualizado às ' + hora() + descrever());
+        setStatus(t('Atualizado às {time}', { time: hora() }) + descrever());
       } catch (e) {
-        setStatus('Falha ao atualizar às ' + hora() + ' — nova tentativa no próximo ciclo', 'erro');
+        setStatus(t('Falha ao atualizar às {time} — nova tentativa no próximo ciclo', { time: hora() }), 'erro');
       } finally {
         emCurso = false;
         agendar();
@@ -312,11 +314,11 @@
         const url = new URL(window.location.href);
         url.searchParams.set('atualizar', intervalo);
         window.history.replaceState(null, '', url.toString());
-        setStatus('Atualizado às ' + hora() + descrever());
+        setStatus(t('Atualizado às {time}', { time: hora() }) + descrever());
         agendar();
       });
     }
-    setStatus('Atualizado às ' + hora() + descrever());
+    setStatus(t('Atualizado às {time}', { time: hora() }) + descrever());
     agendar();
 
     // Dica flutuante dos gráficos (substitui o title nativo)
@@ -350,7 +352,7 @@
     // Modo TV: relógio e tela cheia
     const relogio = $('#tv-relogio');
     if (relogio) {
-      const tic = () => { relogio.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Cuiaba' }); };
+      const tic = () => { relogio.textContent = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'America/Cuiaba' }); };
       tic();
       setInterval(tic, 1000);
     }
@@ -402,14 +404,14 @@
   /* --- busca de pessoa --- */
   el.buscaPessoa.addEventListener('input', debounce(async () => {
     const q = el.buscaPessoa.value.trim();
-    if (q.length < 2) { el.resPessoa.hidden = true; el.dicaPessoa.textContent = 'Digite pelo menos 2 caracteres para buscar.'; return; }
+    if (q.length < 2) { el.resPessoa.hidden = true; el.dicaPessoa.textContent = t("Digite pelo menos 2 caracteres para buscar."); return; }
     const r = await api('/api/pessoas/busca?q=' + encodeURIComponent(q));
     const itens = (r.ok && Array.isArray(r.data)) ? r.data : [];
     const tem = lista(el.resPessoa, itens, (p) =>
-      '<strong>' + esc(p.nome) + '</strong>' + (p.usuario ? ' <span class="badge badge-neutro">usuário</span>' : '') +
+      '<strong>' + esc(p.nome) + '</strong>' + (p.usuario ? ' <span class="badge badge-neutro">' + esc(t("usuário")) + '</span>' : '') +
       '<small>' + esc([p.cpf_exibicao || p.matricula || '—', p.categoria_label, p.empresa].filter(Boolean).join(' · ')) + '</small>',
     (p) => selecionarPessoa(p.id));
-    el.dicaPessoa.textContent = tem ? '' : 'Nenhuma pessoa encontrada. Use “Cadastro rápido”.';
+    el.dicaPessoa.textContent = tem ? '' : t("Nenhuma pessoa encontrada. Use “Cadastro rápido”.");
   }, 250));
   el.buscaPessoa.addEventListener('blur', () => setTimeout(() => { el.resPessoa.hidden = true; }, 150));
 
@@ -427,7 +429,7 @@
     el.pessoaId.value = '';
     el.pessoaCard.hidden = true; el.solBox.hidden = true;
     $('#busca-pessoa-box').hidden = false;
-    el.dicaPessoa.textContent = 'Digite pelo menos 2 caracteres para buscar.';
+    el.dicaPessoa.textContent = t("Digite pelo menos 2 caracteres para buscar.");
     el.padraoStatus.textContent = ''; el.padraoPendente.hidden = true;
     atualizarEstado();
     el.buscaPessoa.focus();
@@ -436,13 +438,13 @@
   /* --- busca de veículo --- */
   el.buscaVeic.addEventListener('input', debounce(async () => {
     const q = el.buscaVeic.value.trim();
-    if (q.length < 2) { el.resVeic.hidden = true; el.dicaVeic.textContent = 'Pessoa a pé? Deixe em branco.'; return; }
+    if (q.length < 2) { el.resVeic.hidden = true; el.dicaVeic.textContent = t("Pessoa a pé? Deixe em branco."); return; }
     const r = await api('/api/veiculos/busca?q=' + encodeURIComponent(q));
     const itens = (r.ok && Array.isArray(r.data)) ? r.data : [];
     const tem = lista(el.resVeic, itens, (v) =>
       '<strong class="mono">' + esc(v.placa) + '</strong><small>' + esc([v.tipo, v.marca_modelo, v.cor, v.empresa, v.tag ? 'TAG ' + v.tag : ''].filter(Boolean).join(' · ')) + '</small>',
     (v) => selecionarVeiculo(v));
-    el.dicaVeic.textContent = tem ? '' : 'Nenhum veículo encontrado.';
+    el.dicaVeic.textContent = tem ? '' : t("Nenhum veículo encontrado.");
   }, 250));
   el.buscaVeic.addEventListener('blur', () => setTimeout(() => { el.resVeic.hidden = true; }, 150));
 
@@ -456,14 +458,14 @@
   function renderVeiculo(v) {
     el.veiculoCard.innerHTML =
       '<div class="selecionado-topo"><dl class="dados">' +
-      '<div><dt>Placa</dt><dd class="mono">' + esc(v.placa) + '</dd></div>' +
-      '<div><dt>Modelo / Cor</dt><dd>' + esc([v.marca_modelo, v.cor].filter(Boolean).join(' · ') || '—') + '</dd></div>' +
-      '<div><dt>Empresa</dt><dd>' + esc(v.empresa || '—') + '</dd></div></dl>' +
-      '<button type="button" class="btn btn-fantasma btn-sm" id="btn-trocar-veiculo">Trocar</button></div>';
+      '<div><dt>' + esc(t("Placa")) + '</dt><dd class="mono">' + esc(v.placa) + '</dd></div>' +
+      '<div><dt>' + esc(t("Modelo / Cor")) + '</dt><dd>' + esc([v.marca_modelo, v.cor].filter(Boolean).join(' · ') || '—') + '</dd></div>' +
+      '<div><dt>' + esc(t("Empresa")) + '</dt><dd>' + esc(v.empresa || '—') + '</dd></div></dl>' +
+      '<button type="button" class="btn btn-fantasma btn-sm" id="btn-trocar-veiculo">' + esc(t("Trocar")) + '</button></div>';
     el.veiculoCard.hidden = false;
     $('#btn-trocar-veiculo').addEventListener('click', () => {
       st.veiculoId = ''; el.veiculoId.value = ''; el.veiculoCard.hidden = true;
-      $('#busca-veiculo-box').hidden = false; el.dicaVeic.textContent = 'Pessoa a pé? Deixe em branco.';
+      $('#busca-veiculo-box').hidden = false; el.dicaVeic.textContent = t("Pessoa a pé? Deixe em branco.");
       if (st.pessoaId) { analisar(); }
     });
   }
@@ -471,14 +473,14 @@
   /* --- responsável interno --- */
   el.resp.addEventListener('input', debounce(async () => {
     el.respId.value = ''; el.respInfo.hidden = false;
-    el.respInfo.textContent = el.resp.value.trim() ? 'Texto livre — não vinculado a uma pessoa cadastrada.' : '';
+    el.respInfo.textContent = el.resp.value.trim() ? t("Texto livre — não vinculado a uma pessoa cadastrada.") : '';
     const q = el.resp.value.trim();
     if (q.length < 2) { el.resResp.hidden = true; return; }
     const r = await api('/api/responsaveis/busca?q=' + encodeURIComponent(q));
     const itens = (r.ok && Array.isArray(r.data)) ? r.data : [];
     lista(el.resResp, itens, (p) =>
-      '<strong>' + esc(p.nome) + '</strong>' + (Number(p.usuario) ? ' <span class="badge badge-neutro">usuário</span>' : '') +
-      '<small>' + esc([p.empresa, p.matricula, p.telefone_principal, p.email_principal].filter(Boolean).join(' · ') || 'Sem contato') + '</small>',
+      '<strong>' + esc(p.nome) + '</strong>' + (Number(p.usuario) ? ' <span class="badge badge-neutro">' + esc(t("usuário")) + '</span>' : '') +
+      '<small>' + esc([p.empresa, p.matricula, p.telefone_principal, p.email_principal].filter(Boolean).join(' · ') || t("Sem contato")) + '</small>',
     (p) => definirResponsavel(p));
   }, 250));
   el.resp.addEventListener('blur', () => setTimeout(() => { el.resResp.hidden = true; }, 150));
@@ -486,8 +488,8 @@
   function definirResponsavel(p) {
     if (!p) { return; }
     el.resp.value = p.nome; el.respId.value = p.id;
-    const contato = [p.empresa, p.telefone_principal || 'Sem telefone', p.email_principal].filter(Boolean).join(' · ');
-    el.respInfo.textContent = contato + ((!p.telefone_principal && !p.email_principal) ? ' — responsável sem contato cadastrado' : '');
+    const contato = [p.empresa, p.telefone_principal || t("Sem telefone"), p.email_principal].filter(Boolean).join(' · ');
+    el.respInfo.textContent = contato + ((!p.telefone_principal && !p.email_principal) ? t(' — responsável sem contato cadastrado') : '');
     el.respInfo.hidden = false;
   }
 
@@ -500,7 +502,7 @@
       veiculo_id: st.veiculoId, solicitacao_id: st.solicitacaoId,
     });
     const r = await api('/api/portaria/analise?' + q.toString());
-    if (!r.ok || !r.data) { toast((r.data && r.data.erro) || 'Falha ao consultar a pessoa.', 'erro'); return; }
+    if (!r.ok || !r.data) { toast((r.data && r.data.erro) || t("Falha ao consultar a pessoa."), 'erro'); return; }
     st.analise = r.data;
     renderPessoa(r.data);
     renderSolicitacoes(r.data);
@@ -513,17 +515,17 @@
     const p = a.pessoa;
     const docs = (a.documentos || []).map((d) => {
       const cls = d.status === 'vencido' ? 'perigo' : (d.status === 'proximo_vencimento' ? 'aviso' : 'sucesso');
-      return '<span class="badge badge-' + cls + '" title="Validade ' + esc(d.validade_fmt) + '">' + esc(d.rotulo) + ' · ' + esc(d.validade_fmt) + '</span>';
+      return '<span class="badge badge-' + cls + '" title="' + esc(t('Validade {date}', { date: d.validade_fmt })) + '">' + esc(d.rotulo) + ' · ' + esc(d.validade_fmt) + '</span>';
     }).join(' ');
     el.pessoaCard.innerHTML =
       '<div class="selecionado-topo"><dl class="dados">' +
-      '<div><dt>Nome</dt><dd><strong>' + esc(p.nome) + '</strong></dd></div>' +
-      '<div><dt>Tipo</dt><dd><span class="badge badge-neutro">' + esc(p.categoria_label) + '</span></dd></div>' +
-      '<div><dt>Empresa</dt><dd>' + esc(p.empresa || '—') + '</dd></div>' +
-      '<div><dt>Telefone</dt><dd>' + esc(p.telefone_principal || p.telefone || '—') + '</dd></div>' +
-      '<div class="largo"><dt>Documentos</dt><dd>' + (docs || '<span class="mudo">Nenhum documento cadastrado</span>') + '</dd></div>' +
-      (a.presente_desde ? '<div class="largo"><dt>Situação</dt><dd><span class="badge badge-info">Presente neste local desde ' + esc(a.presente_desde) + '</span></dd></div>' : '') +
-      '</dl><button type="button" class="btn btn-fantasma btn-sm" id="btn-trocar-pessoa">Trocar</button></div>';
+      '<div><dt>' + esc(t("Nome")) + '</dt><dd><strong>' + esc(p.nome) + '</strong></dd></div>' +
+      '<div><dt>' + esc(t("Tipo")) + '</dt><dd><span class="badge badge-neutro">' + esc(p.categoria_label) + '</span></dd></div>' +
+      '<div><dt>' + esc(t("Empresa")) + '</dt><dd>' + esc(p.empresa || '—') + '</dd></div>' +
+      '<div><dt>' + esc(t("Telefone")) + '</dt><dd>' + esc(p.telefone_principal || p.telefone || '—') + '</dd></div>' +
+      '<div class="largo"><dt>' + esc(t("Documentos")) + '</dt><dd>' + (docs || '<span class="mudo">' + esc(t("Nenhum documento cadastrado")) + '</span>') + '</dd></div>' +
+      (a.presente_desde ? '<div class="largo"><dt>' + esc(t("Situação")) + '</dt><dd><span class="badge badge-info">' + esc(t('Presente neste local desde {date}', { date: a.presente_desde })) + '</span></dd></div>' : '') +
+      '</dl><button type="button" class="btn btn-fantasma btn-sm" id="btn-trocar-pessoa">' + esc(t("Trocar")) + '</button></div>';
     el.pessoaCard.hidden = false;
     $('#btn-trocar-pessoa').addEventListener('click', trocarPessoa);
   }
@@ -533,8 +535,8 @@
     return '<label class="sol-item' + (aprovada ? '' : ' desabilitada') + '">' +
       '<input type="radio" name="solicitacao_id" value="' + esc(s.id) + '"' + (marcada ? ' checked' : '') + (aprovada ? '' : ' disabled') + '>' +
       '<span><strong>' + esc(s.visitante_nome) + '</strong> <span class="badge badge-' + (aprovada ? 'sucesso' : 'aviso') + '">' + esc(s.status_label) + '</span>' +
-      (s.risco ? ' <span class="badge badge-perigo">Risco</span>' : '') +
-      '<small>' + esc([s.area ? 'Área: ' + s.area : '', s.responsavel ? 'Resp.: ' + s.responsavel : '', s.empresa].filter(Boolean).join(' · ')) + '</small></span></label>';
+      (s.risco ? ' <span class="badge badge-perigo">' + esc(t("Risco")) + '</span>' : '') +
+      '<small>' + esc([s.area ? t('Área: {area}', { area: s.area }) : '', s.responsavel ? t('Resp.: {name}', { name: s.responsavel }) : '', s.empresa].filter(Boolean).join(' · ')) + '</small></span></label>';
   }
 
   function renderSolicitacoes(a) {
@@ -542,21 +544,21 @@
     const s = a.solicitacoes;
     const marcada = st.solicitacaoId || a.solicitacao_sugerida || '';
     const principais = s.vinculadas.concat(s.candidatas);
-    let html = '<h3 class="rotulo-caps">Solicitação de acesso de hoje</h3>';
+    let html = '<h3 class="rotulo-caps">' + esc(t("Solicitação de acesso de hoje")) + '</h3>';
     if (principais.length) {
       html += principais.map((x) => itemSolicitacao(x, x.id === marcada)).join('');
     } else {
-      html += '<p class="dica">Nenhuma solicitação aprovada para hoje foi encontrada para esta pessoa (por CPF ou nome).</p>';
+      html += '<p class="dica">' + esc(t("Nenhuma solicitação aprovada para hoje foi encontrada para esta pessoa (por CPF ou nome).")) + '</p>';
     }
     if (s.outras.length) {
-      html += '<details' + (s.outras.some((x) => x.id === marcada) ? ' open' : '') + '><summary>Outras solicitações aprovadas hoje sem vínculo (' + s.outras.length + ')</summary>' +
+      html += '<details' + (s.outras.some((x) => x.id === marcada) ? ' open' : '') + '><summary>' + esc(t('Outras solicitações aprovadas hoje sem vínculo ({count})', { count: s.outras.length })) + '</summary>' +
         s.outras.map((x) => itemSolicitacao(x, x.id === marcada)).join('') + '</details>';
     }
     if (a.solicitacao_manual) {
       html += '<label class="checkbox"><input type="checkbox" name="confirmar_solicitacao_manual" value="1" form="form-portaria" id="confirmar-sol-manual"> ' +
-        '<span>Confirmo que esta solicitação é desta pessoa, mesmo sem CPF ou nome conferindo (fica registrado na auditoria).</span></label>';
+        '<span>' + esc(t("Confirmo que esta solicitação é desta pessoa, mesmo sem CPF ou nome conferindo (fica registrado na auditoria).")) + '</span></label>';
     }
-    html += '<p class="dica"><a href="' + esc(BASE) + '/solicitacoes" target="_blank" rel="noopener">Abrir solicitações</a></p>';
+    html += '<p class="dica"><a href="' + esc(BASE) + '/solicitacoes" target="_blank" rel="noopener">' + esc(t("Abrir solicitações")) + '</a></p>';
     el.solBox.innerHTML = html;
     const conf = $('#confirmar-sol-manual');
     if (conf) { conf.addEventListener('change', atualizarEstado); }
@@ -570,7 +572,7 @@
   function aplicarPadrao(a, forcar) {
     const p = a.pessoa;
     const d = (p.destino_padrao || '').trim(), r = (p.responsavel_interno_padrao || '').trim(), o = (p.observacoes_portaria_padrao || '').trim();
-    if (!d && !r && !o) { el.padraoStatus.textContent = 'Sem dados padrão cadastrados para esta pessoa.'; el.padraoPendente.hidden = true; return; }
+    if (!d && !r && !o) { el.padraoStatus.textContent = t("Sem dados padrão cadastrados para esta pessoa."); el.padraoPendente.hidden = true; return; }
     if (!forcar && st.padraoAplicadoPara === p.id) { return; }
     // Responsável pré-preenchido com o próprio usuário logado não conta como "digitado"
     const respVazio = !el.resp.value.trim() || (!!window.__respPadraoUsuario && el.respId.value === window.__respPadraoUsuario);
@@ -580,9 +582,9 @@
       if (r) {
         el.resp.value = r; el.respId.value = '';
         if (a.responsavel_padrao) { definirResponsavel(a.responsavel_padrao); }
-        else { el.respInfo.hidden = false; el.respInfo.textContent = 'Texto livre — não vinculado a uma pessoa cadastrada.'; }
+        else { el.respInfo.hidden = false; el.respInfo.textContent = t("Texto livre — não vinculado a uma pessoa cadastrada."); }
       }
-      el.padraoStatus.textContent = 'Dados preenchidos a partir do cadastro da pessoa.';
+      el.padraoStatus.textContent = t("Dados preenchidos a partir do cadastro da pessoa.");
       el.padraoPendente.hidden = true;
     } else {
       el.padraoPendente.hidden = false;
@@ -597,14 +599,14 @@
     const s = sentido();
     el.btn.classList.toggle('entrada', s === 'entrada');
     el.btn.classList.toggle('saida', s === 'saida');
-    el.btnTexto.textContent = s === 'entrada' ? 'CONFIRMAR ENTRADA' : 'CONFIRMAR SAÍDA';
+    el.btnTexto.textContent = s === 'entrada' ? t("CONFIRMAR ENTRADA") : t("CONFIRMAR SAÍDA");
     const a = st.analise;
     const bloqueios = (a && st.pessoaId) ? a.bloqueios : [];
     const avisos = (a && st.pessoaId) ? a.avisos : [];
     el.bloqueios.hidden = !bloqueios.length;
-    el.bloqueios.innerHTML = bloqueios.length ? '<strong>' + (s === 'entrada' ? 'Entrada bloqueada' : 'Saída não permitida') + '</strong><ul>' + bloqueios.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
+    el.bloqueios.innerHTML = bloqueios.length ? '<strong>' + (s === 'entrada' ? t("Entrada bloqueada") : t("Saída não permitida")) + '</strong><ul>' + bloqueios.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
     el.avisos.hidden = !avisos.length;
-    el.avisos.innerHTML = avisos.length ? '<strong>Atenção</strong><ul>' + avisos.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
+    el.avisos.innerHTML = avisos.length ? '<strong>' + esc(t("Atenção")) + '</strong><ul>' + avisos.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '';
     const confManual = $('#confirmar-sol-manual');
     el.btn.disabled = !st.pessoaId || !a || bloqueios.length > 0 || (!!a.solicitacao_manual && s === 'entrada' && !(confManual && confManual.checked));
   }
@@ -620,7 +622,7 @@
     st.fotos.forEach((f, i) => {
       const fig = document.createElement('figure');
       fig.className = 'foto-item';
-      fig.innerHTML = '<img alt="Prévia ' + (i + 1) + '"><button type="button" class="foto-remover" aria-label="Remover foto">&times;</button>' +
+      fig.innerHTML = '<img alt="' + esc(t('Prévia {number}', { number: i + 1 })) + '"><button type="button" class="foto-remover" aria-label="' + esc(t('Remover foto')) + '">&times;</button>' +
         '<select name="fotos_tipo[]" form="form-portaria">' + opcoes + '</select><figcaption>' + Math.round(f.file.size / 1024) + ' KB</figcaption>';
       fig.querySelector('img').src = f.url;
       const sel = fig.querySelector('select'); sel.value = f.tipo;
@@ -631,13 +633,13 @@
       el.fotosGrade.appendChild(fig);
     });
     el.fotosVazio.hidden = st.fotos.length > 0;
-    el.fotosContador.textContent = '(' + st.fotos.length + '/' + MAX_FOTOS + ' · JPG/PNG/WEBP · até ' + MAX_MB + ' MB)';
+    el.fotosContador.textContent = t('({count}/{max} · JPG/PNG/WEBP · até {mb} MB)', { count: st.fotos.length, max: MAX_FOTOS, mb: MAX_MB });
   }
   function adicionarFotos(files, tipo) {
     Array.from(files || []).forEach((file) => {
-      if (st.fotos.length >= MAX_FOTOS) { toast('Máximo de ' + MAX_FOTOS + ' fotos por registro.', 'erro'); return; }
-      if (MIMES.indexOf(file.type) === -1) { toast('Formato inválido: ' + file.name + ' (use JPG, PNG ou WEBP).', 'erro'); return; }
-      if (file.size > MAX_MB * 1024 * 1024) { toast(file.name + ' excede ' + MAX_MB + ' MB.', 'erro'); return; }
+      if (st.fotos.length >= MAX_FOTOS) { toast(t('Máximo de {count} fotos por registro.', { count: MAX_FOTOS }), 'erro'); return; }
+      if (MIMES.indexOf(file.type) === -1) { toast(t('Formato inválido: {name} (use JPG, PNG ou WEBP).', { name: file.name }), 'erro'); return; }
+      if (file.size > MAX_MB * 1024 * 1024) { toast(t('{name} excede {mb} MB.', { name: file.name, mb: MAX_MB }), 'erro'); return; }
       st.fotos.push({ file: file, url: URL.createObjectURL(file), tipo: tipo });
     });
     sincronizarFotos();
@@ -649,10 +651,10 @@
   form.addEventListener('submit', (ev) => {
     if (el.btn.disabled) { ev.preventDefault(); return; }
     if (form.dataset.exigirDestino === '1' && sentido() === 'entrada' && !el.destino.value.trim()) {
-      ev.preventDefault(); toast('Informe o destino/setor.', 'erro'); el.destino.focus(); return;
+      ev.preventDefault(); toast(t("Informe o destino/setor."), 'erro'); el.destino.focus(); return;
     }
     el.btn.disabled = true;
-    el.btnTexto.textContent = 'Registrando...';
+    el.btnTexto.textContent = t("Registrando...");
   });
 
   /* --- cadastros rápidos --- */
@@ -665,11 +667,11 @@
       erro.hidden = true;
       const r = await api(f.dataset.endpoint, { method: 'POST', body: new FormData(f) });
       if (r.ok && r.data) {
-        f.closest('dialog').close(); f.reset(); toast('Cadastrado com sucesso.', 'sucesso'); aoCriar(r.data);
+        f.closest('dialog').close(); f.reset(); toast(t("Cadastrado com sucesso."), 'sucesso'); aoCriar(r.data);
       } else if (r.status === 409 && r.data && r.data.id) {
         f.closest('dialog').close(); toast(r.data.erro, 'aviso'); aoCriar(r.data);
       } else {
-        erro.textContent = (r.data && r.data.erro) || 'Falha ao cadastrar.'; erro.hidden = false;
+        erro.textContent = (r.data && r.data.erro) || t("Falha ao cadastrar."); erro.hidden = false;
       }
     });
   }
@@ -684,8 +686,9 @@
 (function () {
   const alvo = document.getElementById('qr-mfa');
   if (!alvo || typeof window.qrcode !== 'function') { return; }
+  const t = window.SAGI18n?.t || ((s) => s);
   const qr = window.qrcode(0, 'M');
   qr.addData(alvo.dataset.otpauth || '');
   qr.make();
-  alvo.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 4, scalable: true, title: 'Código QR do Salinas Access Gate' });
+  alvo.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 4, scalable: true, title: t('Código QR do Salinas Access Gate') });
 })();

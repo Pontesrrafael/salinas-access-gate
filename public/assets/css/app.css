@@ -1,5 +1,11 @@
 /* Salinas Access Gate — identidade Salinas Gold (#024B37 / #FFCD00 / #C6D53E / #707070) */
 /* Tema claro (padrão). O tema escuro redefine só os tokens — ver fim do arquivo. */
+.seletor-idioma { display:flex; flex-wrap:wrap; align-items:center; gap:6px; max-width:100%; }
+.seletor-idioma label { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
+.seletor-idioma select { width:auto; max-width:100%; min-height:34px; }
+.sidebar-rodape .seletor-idioma { margin:10px 0; font-size:13px; }
+.sidebar-rodape .seletor-idioma label { color:inherit; }
+.tela-simples .seletor-tema { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; max-width:calc(100% - 24px); }
 :root {
   color-scheme: light;
   --raio: 8px;
@@ -687,8 +693,10 @@ body.modo-tv { font-size: 16px; }
    Forçado: <html data-theme="dark|light"> definido pelo cookie sag_tema (sem piscar, sem script inline). */
 .logo-claro { display: var(--logo-claro); }
 .logo-escuro { display: var(--logo-escuro); }
-.tela-simples .seletor-tema { position: fixed; top: 12px; right: 12px; }
+.tela-simples .seletor-tema { position: fixed; top: 12px; right: 12px; z-index:2; }
+.tela-simples .seletor-idioma label { color:#fff; }
 .seletor-tema .btn { background: rgba(255, 255, 255, .12); color: #fff; border-color: rgba(255, 255, 255, .3); }
+@media(max-width:600px) { .tela-simples .seletor-tema { position:relative; inset:auto; margin:0 auto 14px; } }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
