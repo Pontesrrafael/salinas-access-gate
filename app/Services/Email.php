@@ -24,6 +24,22 @@ use Throwable;
 final class Email
 {
     public const MAX_TENTATIVAS = 5;
+    public const SCOPE_GRAPH = 'https://graph.microsoft.com/.default';
+    public const SCOPE_SMTP = 'https://outlook.office365.com/.default';
+
+    /** @var null|callable(string,array,string,int):array{status:int,headers:array,body:string} */
+    private static $http = null;
+    /** Cache somente no processo; nunca grava tokens no disco ou no banco. */
+    private static array $tokens = [];
+    private static array $segredos = [];
+
+    /** Injeta HTTP falso e descarta o cache para isolar testes. */
+    public static function definirHttp(?callable $http): void
+    {
+        self::$http = $http;
+        self::$tokens = [];
+        self::$segredos = [];
+    }
 
     /** @var null|callable(string,string,string,?string,string,array):void */
     private static $transporte = null;
@@ -68,7 +84,7 @@ final class Email
         return Settings::bool('email_ativo');
     }
 
-    /** @return array{host:string,porta:int,usuario:string,senha:string,de_email:string,de_nome:string,seguranca:string,timeout:int,tls_verify:bool} */
+    /** @return array<string,mixed> */
     public static function cfg(): array
     {
         $c = App::config('smtp');
@@ -82,6 +98,9 @@ final class Email
             'seguranca'  => strtolower(trim((string) ($c['seguranca'] ?? 'tls'))),
             'timeout'    => max(1, min(60, (int) ($c['timeout'] ?? 10))),
             'tls_verify' => (bool) ($c['tls_verify'] ?? true),
+            'transporte' => (string) (App::config('email')['transporte'] ?? 'smtp'),
+            'smtp_auth'  => (string) (App::config('email')['smtp_auth'] ?? 'login'),
+            'microsoft'  => App::config('microsoft'),
         ];
     }
 
@@ -136,11 +155,15 @@ final class Email
     /** Remove a senha SMTP (em texto puro ou Base64) antes de persistir ultimo_erro. */
     public static function limparErro(string $erro, ?string $senha = null): string
     {
-        $senhaReal = $senha ?? self::cfg()['senha'];
+        $cfg = self::cfg();
         $limpo = $erro;
-        if ($senhaReal !== '') {
-            $limpo = str_replace([$senhaReal, base64_encode($senhaReal)], '[redigido]', $limpo);
+        $segredos = array_merge(self::$segredos, [$senha ?? '', $cfg['senha'], $cfg['microsoft']['client_secret'] ?? '']);
+        usort($segredos, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($segredos as $segredo) {
+            if ($segredo === '') { continue; }
+            $limpo = str_replace([$segredo, base64_encode($segredo), rawurlencode($segredo), urlencode($segredo)], '[redigido]', $limpo);
         }
+        $limpo = (string) preg_replace('/Bearer\s+[^\s"<>]+/i', 'Bearer [redigido]', $limpo);
         $limpo = trim((string) preg_replace('/\s+/', ' ', $limpo));
         return mb_substr($limpo, 0, 500);
     }
@@ -307,7 +330,7 @@ final class Email
                 $enviados++;
             } catch (Throwable $e) {
                 $tentativas = (int) $item['tentativas'];
-                $atraso = self::atrasoTentativaSegundos($tentativas);
+                $atraso = self::atrasoFalha($tentativas, $e);
                 $erro = self::limparErro($e->getMessage());
                 Database::run(
                     'UPDATE email_fila
@@ -362,7 +385,7 @@ final class Email
                 $enviados++;
             } catch (Throwable $e) {
                 $tentativas = ((int) ($item['tentativas'] ?? 0)) + 1;
-                $atraso = self::atrasoTentativaSegundos($tentativas);
+                $atraso = self::atrasoFalha($tentativas, $e);
                 $item['tentativas'] = $tentativas;
                 $item['ultimo_erro'] = self::limparErro($e->getMessage());
                 $item['enviar_apos'] = $agora->modify('+' . $atraso . ' seconds')->format('Y-m-d H:i:s');
@@ -375,7 +398,7 @@ final class Email
     }
 
     /**
-     * Envia uma mensagem imediatamente usando o transporte injetado (testes) ou cliente SMTP nativo.
+     * Envia imediatamente (inclusive diagnóstico CLI); a fila aplica email_ativo antes de chamar.
      */
     public static function enviar(
         string $para,
@@ -390,17 +413,219 @@ final class Email
         $deEmail = self::validarEndereco((string) ($cfgFinal['de_email'] ?: 'noreply@salinasgold.com.br'));
         $mime = self::montarMime($paraValido, $assuntoValido, $texto, $html, $cfgFinal);
 
+        if (!in_array($cfgFinal['transporte'], ['smtp', 'graph'], true)) {
+            throw new RuntimeException('EMAIL_TRANSPORTE inválido (use smtp ou graph).');
+        }
+
         if (self::$transporte !== null) {
             (self::$transporte)($paraValido, $assuntoValido, $texto, $html, $mime, $cfgFinal);
             return;
         }
 
-        self::enviarSmtp($paraValido, $deEmail, $mime, $cfgFinal);
+        if ($cfgFinal['transporte'] === 'graph') {
+            self::enviarGraph($paraValido, $deEmail, $assuntoValido, $texto, $html, $cfgFinal);
+        } else {
+            self::enviarSmtp($paraValido, $deEmail, $mime, $cfgFinal);
+        }
     }
 
-    /**
-     * Abre conexão socket e executa a conversa SMTP (EHLO, STARTTLS, AUTH LOGIN, MAIL FROM, RCPT TO, DATA, QUIT).
-     */
+    /** Considera Retry-After sem dormir nem bloquear o worker. */
+    private static function atrasoFalha(int $tentativa, Throwable $erro): int
+    {
+        return max(self::atrasoTentativaSegundos($tentativa), $erro instanceof EmailFalhaMicrosoft ? $erro->retryAfter : 0);
+    }
+
+    private static function registrarSegredo(string $segredo): void
+    {
+        if ($segredo !== '' && !in_array($segredo, self::$segredos, true)) {
+            self::$segredos[] = $segredo;
+        }
+    }
+
+    /** @return array{status:int,headers:array,body:string} */
+    private static function httpMicrosoft(string $url, array $headers, string $body, int $timeout): array
+    {
+        if (self::$http !== null) {
+            try {
+                return (self::$http)($url, $headers, $body, $timeout);
+            } catch (Throwable) {
+                // Nem exceções do adaptador de teste devem expor corpo, credenciais ou cabeçalhos.
+                throw new RuntimeException('Falha de conexão HTTPS com a Microsoft.');
+            }
+        }
+        if (!extension_loaded('curl')) {
+            throw new RuntimeException('A extensão curl é necessária para o e-mail Microsoft.');
+        }
+        $curl = curl_init($url);
+        if ($curl === false) {
+            throw new RuntimeException('Falha de conexão HTTPS com a Microsoft.');
+        }
+        $resHeaders = [];
+        try {
+            curl_setopt_array($curl, [
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_POSTFIELDS => $body,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => $timeout,
+                CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_HEADERFUNCTION => static function ($ch, string $linha) use (&$resHeaders): int {
+                    if (str_starts_with($linha, 'HTTP/')) { $resHeaders = []; }
+                    if (str_contains($linha, ':')) {
+                        [$nome, $valor] = explode(':', $linha, 2);
+                        $resHeaders[strtolower(trim($nome))] = trim($valor);
+                    }
+                    return strlen($linha);
+                },
+            ]);
+            $res = curl_exec($curl);
+            if ($res === false) {
+                // curl_error pode incluir detalhes de rede: diagnóstico deliberadamente limitado.
+                throw new RuntimeException('Falha de conexão HTTPS com a Microsoft.');
+            }
+            return ['status' => (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE), 'headers' => $resHeaders, 'body' => $res];
+        } finally {
+            // O objeto CurlHandle é liberado ao sair do escopo (PHP 8.2+).
+            unset($curl);
+        }
+    }
+
+    private static function falhaMicrosoft(array $res, string $etapa): never
+    {
+        $status = (int) ($res['status'] ?? 0);
+        $headers = array_change_key_case($res['headers'] ?? [], CASE_LOWER);
+        $retry = trim((string) ($headers['retry-after'] ?? ''));
+        $segundos = ctype_digit($retry) ? (int) $retry : max(0, (strtotime($retry) ?: time()) - time());
+        // Diagnósticos fixos: nunca persiste o corpo retornado pela Microsoft.
+        $ajuda = match ($status) {
+            401 => 'Verifique as credenciais e a validade do token.',
+            403 => 'Verifique a permissão de envio e o escopo da caixa remetente.',
+            429 => 'Limite da Microsoft atingido; a fila respeitará Retry-After.',
+            default => $status >= 500 ? 'Serviço Microsoft indisponível; a fila tentará novamente.' : 'Verifique a configuração Microsoft.',
+        };
+        // Limite compatível com a coluna DATETIME e modify(), inclusive para cabeçalhos inválidos.
+        throw new EmailFalhaMicrosoft("{$etapa} (HTTP {$status}). {$ajuda}", $status, min(31536000, $segundos));
+    }
+
+    /** Obtém token app-only; cache por credencial e recurso com margem de 60 segundos. */
+    public static function obterTokenMicrosoft(array $cfg, string $scope, bool $renovar = false): string
+    {
+        if (!in_array($scope, [self::SCOPE_GRAPH, self::SCOPE_SMTP], true)) {
+            throw new RuntimeException('Escopo OAuth Microsoft inválido.');
+        }
+        $ms = $cfg['microsoft'] ?? [];
+        $tenant = (string) ($ms['tenant_id'] ?? '');
+        $client = (string) ($ms['client_id'] ?? '');
+        $uuid = '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i';
+        if (!preg_match($uuid, $tenant) || !preg_match($uuid, $client)) {
+            throw new RuntimeException('Configure MS_TENANT_ID e MS_CLIENT_ID com os identificadores do Entra.');
+        }
+        $secret = (string) ($ms['client_secret'] ?? '');
+        self::registrarSegredo($secret);
+        $chave = hash('sha256', json_encode([$ms, $scope], JSON_THROW_ON_ERROR));
+        if (!$renovar && (self::$tokens[$chave]['expira'] ?? 0) > time()) {
+            return self::$tokens[$chave]['token'];
+        }
+        unset(self::$tokens[$chave]);
+        $url = 'https://login.microsoftonline.com/' . $tenant . '/oauth2/v2.0/token';
+        $form = ['client_id' => $client, 'grant_type' => 'client_credentials', 'scope' => $scope];
+        if (($ms['client_cert_path'] ?? '') !== '' || ($ms['client_cert_key_path'] ?? '') !== '') {
+            $form['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $form['client_assertion'] = self::assertionMicrosoft($ms, $url, $client);
+            self::registrarSegredo($form['client_assertion']);
+        } elseif ($secret !== '') {
+            $form['client_secret'] = $secret;
+        } else {
+            throw new RuntimeException('Configure MS_CLIENT_SECRET ou o certificado e a chave privada Microsoft.');
+        }
+        $res = self::httpMicrosoft($url, ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'], http_build_query($form, '', '&', PHP_QUERY_RFC3986), (int) $cfg['timeout']);
+        if ($res['status'] !== 200) { self::falhaMicrosoft($res, 'Falha ao obter token Microsoft'); }
+        $dados = json_decode($res['body'], true);
+        if (!is_array($dados) || !is_string($dados['access_token'] ?? null)
+            || $dados['access_token'] === '' || preg_match('/[\x00-\x20\x7f]/', $dados['access_token'])
+            || strtolower((string) ($dados['token_type'] ?? '')) !== 'bearer'
+            || !is_numeric($dados['expires_in'] ?? null) || (int) $dados['expires_in'] <= 0) {
+            throw new RuntimeException('Resposta de token Microsoft inválida.');
+        }
+        $token = $dados['access_token'];
+        self::registrarSegredo($token);
+        self::$tokens[$chave] = ['token' => $token, 'expira' => time() + max(0, min(86400, (int) $dados['expires_in']) - 60)];
+        return $token;
+    }
+
+    private static function base64Url(string $valor): string
+    {
+        return rtrim(strtr(base64_encode($valor), '+/', '-_'), '=');
+    }
+
+    /** Certificado PEM cadastrado no Entra; assertion RS256 curta e exclusiva para este tenant. */
+    private static function assertionMicrosoft(array $ms, string $audience, string $client): string
+    {
+        if (!extension_loaded('openssl')) { throw new RuntimeException('A extensão openssl é necessária para o certificado Microsoft.'); }
+        if (($ms['client_cert_path'] ?? '') === '' || ($ms['client_cert_key_path'] ?? '') === '') {
+            throw new RuntimeException('Configure os dois caminhos do certificado e da chave privada Microsoft.');
+        }
+        $cert = @file_get_contents((string) ($ms['client_cert_path'] ?? ''));
+        $pem = @file_get_contents((string) ($ms['client_cert_key_path'] ?? ''));
+        if ($cert === false || $pem === false) { throw new RuntimeException('Não foi possível ler o certificado ou a chave privada Microsoft.'); }
+        $key = @openssl_pkey_get_private($pem);
+        $info = @openssl_x509_parse($cert);
+        $fingerprint = @openssl_x509_fingerprint($cert, 'sha1', true);
+        $detalhes = $key !== false ? openssl_pkey_get_details($key) : false;
+        if (!$key || !$info || !$fingerprint || !$detalhes || $detalhes['type'] !== OPENSSL_KEYTYPE_RSA
+            || $detalhes['bits'] < 2048 || !@openssl_x509_check_private_key($cert, $key)
+            || ($info['validFrom_time_t'] ?? PHP_INT_MAX) > time() || ($info['validTo_time_t'] ?? 0) <= time()) {
+            throw new RuntimeException('Certificado Microsoft inválido, vencido ou incompatível com a chave RSA.');
+        }
+        $header = self::base64Url(json_encode(['alg' => 'RS256', 'typ' => 'JWT', 'x5t' => self::base64Url($fingerprint)], JSON_THROW_ON_ERROR));
+        $claims = self::base64Url(json_encode(['aud' => $audience, 'iss' => $client, 'sub' => $client, 'jti' => Uuid::v4(), 'nbf' => time() - 5, 'exp' => time() + 300], JSON_THROW_ON_ERROR));
+        $jwt = $header . '.' . $claims;
+        if (!@openssl_sign($jwt, $assinatura, $key, OPENSSL_ALGO_SHA256)) {
+            throw new RuntimeException('Não foi possível assinar a autenticação Microsoft.');
+        }
+        return $jwt . '.' . self::base64Url($assinatura);
+    }
+
+    public static function montarXoauth2(string $usuario, string $token): string
+    {
+        $usuario = self::validarEndereco($usuario);
+        if ($token === '' || preg_match('/[\x00-\x20\x7f]/', $token)) {
+            throw new InvalidArgumentException('Token SMTP OAuth inválido.');
+        }
+        self::registrarSegredo($token);
+        $base64 = base64_encode('user=' . $usuario . "\x01auth=Bearer " . $token . "\x01\x01");
+        self::registrarSegredo($base64);
+        return $base64;
+    }
+
+    private static function enviarGraph(string $para, string $de, string $assunto, string $texto, ?string $html, array $cfg): void
+    {
+        // Graph JSON aceita um corpo: usa HTML recebido ou converte o texto com escape.
+        $corpo = $html !== null && trim($html) !== '' ? $html
+            : '<pre>' . htmlspecialchars($texto, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
+        $json = json_encode([
+            'message' => [
+                'subject' => $assunto,
+                'body' => ['contentType' => 'HTML', 'content' => $corpo],
+                'toRecipients' => [['emailAddress' => ['address' => $para]]],
+            ],
+            'saveToSentItems' => false,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $url = 'https://graph.microsoft.com/v1.0/users/' . rawurlencode($de) . '/sendMail';
+        for ($tentativa = 0; $tentativa < 2; $tentativa++) {
+            $token = self::obterTokenMicrosoft($cfg, self::SCOPE_GRAPH, $tentativa > 0);
+            $res = self::httpMicrosoft($url, ['Authorization: Bearer ' . $token, 'Content-Type: application/json'], $json, (int) $cfg['timeout']);
+            if ($res['status'] === 202) { return; } // Aceitação para processamento, não confirmação de entrega.
+            if ($res['status'] === 401 && $tentativa === 0) { continue; }
+            self::falhaMicrosoft($res, 'Falha no envio Microsoft Graph');
+        }
+    }
+
+    /** Abre socket e executa SMTP com LOGIN ou XOAUTH2. */
     public static function enviarSmtp(string $para, string $deEmail, string $mime, array $cfg): void
     {
         $host = trim((string) ($cfg['host'] ?? ''));
@@ -414,6 +639,9 @@ final class Email
         }
         if (!in_array($seguranca, ['tls', 'ssl', 'nenhuma'], true)) {
             throw new RuntimeException('Modo de segurança SMTP inválido (use tls, ssl ou nenhuma).');
+        }
+        if (($cfg['smtp_auth'] ?? 'login') === 'oauth' && ($seguranca === 'nenhuma' || !$tlsVerify)) {
+            throw new RuntimeException('SMTP OAuth exige TLS com certificado verificado.');
         }
 
         $esquema = $seguranca === 'ssl' ? 'tls' : 'tcp';
@@ -446,6 +674,7 @@ final class Email
         try {
             self::dialogarSmtp($socket, $para, $deEmail, $mime, $cfg);
         } catch (Throwable $e) {
+            if ($e instanceof EmailFalhaMicrosoft) { throw $e; }
             throw new RuntimeException(self::limparErro($e->getMessage(), (string) ($cfg['senha'] ?? '')), 0, $e);
         } finally {
             @fclose($socket);
@@ -467,6 +696,14 @@ final class Email
         $seguranca = strtolower(trim((string) ($cfg['seguranca'] ?? 'tls')));
         $usuario = trim((string) ($cfg['usuario'] ?? ''));
         $senha = (string) ($cfg['senha'] ?? '');
+        $auth = (string) ($cfg['smtp_auth'] ?? 'login');
+        if (!in_array($auth, ['login', 'oauth'], true)) {
+            throw new RuntimeException('EMAIL_SMTP_AUTH inválido (use login ou oauth).');
+        }
+        if ($auth === 'oauth' && (!in_array($seguranca, ['tls', 'ssl'], true) || !($cfg['tls_verify'] ?? true))) {
+            throw new RuntimeException('SMTP OAuth exige TLS com certificado verificado.');
+        }
+        self::registrarSegredo($senha);
         $ehloHost = parse_url((string) (App::config('app')['url'] ?? ''), PHP_URL_HOST) ?: 'salinasgold.local';
         $ehloHost = preg_replace('/[^a-zA-Z0-9.\-]/', '', (string) $ehloHost) ?: 'salinasgold.local';
 
@@ -491,7 +728,12 @@ final class Email
             self::enviarComando($socket, "EHLO {$ehloHost}", [250], 'EHLO pós-STARTTLS');
         }
 
-        if ($usuario !== '') {
+        if ($auth === 'oauth') {
+            $token = self::obterTokenMicrosoft($cfg, self::SCOPE_SMTP);
+            $xoauth = self::montarXoauth2($usuario !== '' ? $usuario : $deEmail, $token);
+            // Alguns servidores retornam 334 com um desafio de erro SASL. A conexão será fechada.
+            self::enviarComando($socket, 'AUTH XOAUTH2 ' . $xoauth, [235], 'Autenticação SMTP OAuth');
+        } elseif ($usuario !== '') {
             self::enviarComando($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN');
             self::enviarComando($socket, base64_encode($usuario), [334], 'Usuário SMTP');
             self::enviarComando($socket, base64_encode($senha), [235], 'Autenticação SMTP');
@@ -563,10 +805,19 @@ final class Email
         }
 
         if (!in_array($codigo, $codigosEsperados, true)) {
-            $resumo = trim((string) preg_replace('/\s+/', ' ', $resposta));
+            $resumo = self::limparErro($resposta);
             throw new RuntimeException("Erro SMTP em {$etapa} (código {$codigo}): {$resumo}");
         }
 
         return $resposta;
+    }
+}
+
+/** Falha HTTP com espera sugerida pelo servidor, reaproveitada pela fila. */
+final class EmailFalhaMicrosoft extends RuntimeException
+{
+    public function __construct(string $message, int $status, public readonly int $retryAfter)
+    {
+        parent::__construct($message, $status);
     }
 }
