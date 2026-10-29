@@ -49,7 +49,7 @@ expect(Crypto::decryptSegredo(null) === null, 'Segredo vazio deve devolver null.
 // 3. Exportação dos dados do titular: só Admin/TI
 $papel = static function (string $p): void {
     (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
-    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 't', 'papel' => $p, 'seguranca_patrimonial' => 0]);
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 't-' . $p, 'papel' => $p, 'seguranca_patrimonial' => 0]);
 };
 foreach (['supervisor', 'ssma', 'porteiro'] as $p) {
     $papel($p);

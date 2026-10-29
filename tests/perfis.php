@@ -128,7 +128,8 @@ verificar(Auth::user()['papel'] === 'porteiro' && Auth::user()['papel_padrao'] =
 verificar(Auth::mfaObrigatorio(), 'MFA obrigatório mesmo com Admin inativo e padrão Solicitante.');
 $auditorias = count($db->consultas);
 $sessao = session_id();
-verificar(!Auth::trocarPerfil('ssma') && !Auth::trocarPerfil('ADMIN') && !Auth::trocarPerfil(''), 'Perfis não concedidos e desconhecidos recusados.');
+verificar(!Auth::trocarPerfil('ADMIN') && !Auth::trocarPerfil('') && !Auth::trocarPerfil('root'), 'Perfis desconhecidos recusados.');
+verificar(in_array('ssma', Auth::perfis(), true) && !in_array('ssma', Auth::perfisConcedidos(), true), 'Admin/TI pode trabalhar em qualquer perfil (como o Super-Admin do GLPI), sem que ele vire concessão.');
 verificar(Auth::papel() === 'porteiro' && session_id() === $sessao && count($db->consultas) === $auditorias, 'Tentativa inválida não muda sessão nem gera auditoria de sucesso.');
 verificar(Auth::trocarPerfil('porteiro') && session_id() === $sessao, 'Reenvio do perfil atual é idempotente.');
 [$sqlAuditoria, $argsAuditoria] = $db->consultas[0];

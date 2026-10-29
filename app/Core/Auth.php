@@ -161,6 +161,17 @@ final class Auth
     {
         if (!self::$loaded) { self::user(); }
         if (self::$user === null) { return []; }
+        $concedidos = self::perfisConcedidos();
+        // Como o Super-Admin do GLPI: quem tem Admin/TI pode trabalhar em qualquer perfil (ver o sistema como Porteiro,
+        // Gestor de área etc.) e voltar ao Admin/TI para configurar. Os demais só usam os perfis concedidos.
+        return in_array('admin', $concedidos, true) ? array_keys(self::PAPEIS) : $concedidos;
+    }
+
+    /** Perfis efetivamente concedidos ao usuário (usuario_perfis), sem a ampliação do Admin. */
+    public static function perfisConcedidos(): array
+    {
+        if (!self::$loaded) { self::user(); }
+        if (self::$user === null) { return []; }
         return array_values(array_intersect(array_keys(self::PAPEIS), self::$user['perfis'] ?? [self::$user['papel']]));
     }
 
@@ -168,10 +179,15 @@ final class Auth
     {
         $perfis = self::perfis();
         $ativo = Session::get('perfil_ativo');
+        // O perfil ativo vale só para o usuário que o escolheu (nunca herdado de outra conta na mesma sessão).
+        if (Session::get('perfil_ativo_uid') !== (self::$user['id'] ?? null)) {
+            $ativo = null;
+        }
         if (!is_string($ativo) || !in_array($ativo, $perfis, true)) {
             $padrao = self::$user['papel'] ?? null;
             $ativo = in_array($padrao, $perfis, true) ? $padrao : ($perfis[0] ?? null);
             Session::set('perfil_ativo', $ativo);
+            Session::set('perfil_ativo_uid', self::$user['id'] ?? null);
         }
         return $ativo;
     }
@@ -185,6 +201,7 @@ final class Auth
         Audit::log('auth', self::id(), 'TROCA_PERFIL', ['anterior' => $anterior, 'perfil' => $perfil]);
         Session::regenerate();
         Session::set('perfil_ativo', $perfil);
+        Session::set('perfil_ativo_uid', self::$user['id'] ?? null);
         self::$membroArea = null;
         self::$areasGeridas = null;
         return true;
@@ -208,7 +225,7 @@ final class Auth
 
     public static function mfaObrigatorio(): bool
     {
-        return in_array('admin', self::perfis(), true)
+        return in_array('admin', self::perfisConcedidos(), true)
             && (self::user()['auth_origem'] ?? 'local') === 'local'
             && \App\Services\Settings::bool('mfa_obrigatorio_admin');
     }
