@@ -1,0 +1,71 @@
+{
+  "geradoEm": "2026-10-29T16:06:21.087Z",
+  "navegador": "156.0.8078.73",
+  "videos": [
+    {
+      "arquivo": "v01-entrar-e-escolher-perfil.webm",
+      "bytes": 2667257,
+      "segundos": 25.24,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v01-entrar-e-escolher-perfil.json"
+    },
+    {
+      "arquivo": "v02-abrir-chamado.webm",
+      "bytes": 2349208,
+      "segundos": 24.96,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v02-abrir-chamado.json"
+    },
+    {
+      "arquivo": "v03-acompanhar-e-aprovar.webm",
+      "bytes": 2525194,
+      "segundos": 24.84,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v03-acompanhar-e-aprovar.json"
+    },
+    {
+      "arquivo": "v04-atender-chamado.webm",
+      "bytes": 3048175,
+      "segundos": 25.08,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v04-atender-chamado.json"
+    },
+    {
+      "arquivo": "v05-configurar-area.webm",
+      "bytes": 4320130,
+      "segundos": 24.6,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v05-configurar-area.json"
+    },
+    {
+      "arquivo": "v06-registrar-entrada-portaria.webm",
+      "bytes": 3322377,
+      "segundos": 25.64,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v06-registrar-entrada-portaria.json"
+    },
+    {
+      "arquivo": "v07-trocar-idioma-e-tema.webm",
+      "bytes": 3338200,
+      "segundos": 24.56,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v07-trocar-idioma-e-tema.json"
+    },
+    {
+      "arquivo": "v08-notificacoes-e-duas-etapas.webm",
+      "bytes": 2104460,
+      "segundos": 24.6,
+      "largura": 1440,
+      "altura": 900,
+      "roteiro": "tools/doc/roteiros/v08-notificacoes-e-duas-etapas.json"
+    }
+  ],
+  "erros": []
+}

@@ -1,0 +1,22 @@
+{
+  "nome": "v05-configurar-area",
+  "passos": [
+    {"acao":"legenda","texto":"Em Áreas e formulários, organize a equipe que atenderá os chamados."},
+    {"acao":"ir","rota":"/servicos/config?perfil=admin"},
+    {"acao":"selecionar","alvo":"form[action$='/membros'] select[name=usuario_id]","valor":"u-lia"},
+    {"acao":"selecionar","alvo":"form[action$='/membros'] select[name=papel]","valor":"atendente"},
+    {"acao":"clicar","alvo":"form[action$='/membros'] button[type=submit]","espera":"etapa=membros"},
+    {"acao":"legenda","texto":"Cadastre a categoria e defina os prazos de resposta e solução."},
+    {"acao":"digitar","alvo":"form[action='/servicos/config/categorias'] [name=nome]","texto":"Ventilação"},
+    {"acao":"selecionar","alvo":"form[action='/servicos/config/categorias'] [name=sla_resposta_atalho]","valor":"30"},
+    {"acao":"selecionar","alvo":"form[action='/servicos/config/categorias'] [name=sla_solucao_atalho]","valor":"240"},
+    {"acao":"clicar","alvo":"form[action='/servicos/config/categorias'] button[type=submit]","espera":"etapa=categorias"},
+    {"acao":"legenda","texto":"Adicione campos para receber as informações necessárias ao atendimento."},
+    {"acao":"digitar","alvo":"form[action='/servicos/config/campos'] [name=rotulo]","texto":"Número do equipamento"},
+    {"acao":"selecionar","alvo":"form[action='/servicos/config/campos'] [name=tipo]","valor":"texto"},
+    {"acao":"digitar","alvo":"form[action='/servicos/config/campos'] [name=ajuda]","texto":"Informe a identificação da etiqueta."},
+    {"acao":"clicar","alvo":"form[action='/servicos/config/campos'] button[type=submit]","espera":"etapa=campos"},
+    {"acao":"legenda","texto":"Equipe, categoria e campo exibidos na vitrine. As ações são simuladas."},
+    {"acao":"pausar","ms":5000}
+  ]
+}
