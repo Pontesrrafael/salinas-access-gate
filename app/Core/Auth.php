@@ -15,11 +15,14 @@ final class Auth
         'supervisor' => 'Supervisor',
         'ssma'       => 'SSMA',
         'porteiro'   => 'Porteiro',
+        'colaborador' => 'Solicitante (serviços)',
+        'gestor_area' => 'Gestor de área (serviços)',
     ];
 
     /** permissão => papéis autorizados */
     private const PERMISSOES = [
         'portaria.operar'          => ['admin', 'porteiro'],
+        'painel.ver'               => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.ver'              => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.criar'            => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.editar'           => ['admin', 'supervisor', 'ssma'],
@@ -46,15 +49,17 @@ final class Auth
         'auditoria.ver'            => ['admin', 'supervisor'],
         'usuarios.gerir'           => ['admin'],
         'configuracoes.gerir'      => ['admin'],
-        'chamados.abrir'           => ['admin', 'supervisor', 'ssma', 'porteiro'],
+        'chamados.abrir'           => ['admin', 'supervisor', 'ssma', 'porteiro', 'colaborador', 'gestor_area'],
         'chamados.atender'         => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'chamados.configurar'      => ['admin'],
+        'chamados.configurar_area' => ['admin', 'gestor_area'],
     ];
 
     private static ?array $user = null;
     private static bool $loaded = false;
     /** Usuário atual é membro de alguma área de serviço (uma consulta por requisição). */
     private static ?bool $membroArea = null;
+    private static ?array $areasGeridas = null;
 
     /**
      * Autentica por e-mail (conta local) ou usuário de rede (Active Directory, se habilitado).
@@ -99,10 +104,12 @@ final class Auth
         Session::regenerate();
         Session::set('uid', $u['id']);
         Session::set('login_em', time());
+        Session::set('perfil_ativo', $u['papel']);
         Database::update('usuarios', ['ultimo_login_em' => date('Y-m-d H:i:s')], 'id = ?', [$u['id']]);
         self::$user = null;
         self::$loaded = false;
         self::$membroArea = null;
+        self::$areasGeridas = null;
     }
 
     public static function logout(): void
@@ -111,24 +118,32 @@ final class Auth
         self::$user = null;
         self::$loaded = true;
         self::$membroArea = null;
+        self::$areasGeridas = null;
     }
 
     public static function user(): ?array
     {
         if (!self::$loaded) {
             self::$loaded = true;
+            self::$user = null;
+            self::$membroArea = null;
+            self::$areasGeridas = null;
             $uid = Session::get('uid');
             if (is_string($uid) && $uid !== '') {
                 $u = Database::one('SELECT * FROM usuarios WHERE id = ?', [$uid]);
                 if ($u && (int) $u['ativo'] === 1) {
                     unset($u['senha_hash'], $u['mfa_segredo_enc']);
+                    $u['perfis'] = array_column(Database::all('SELECT perfil FROM usuario_perfis WHERE usuario_id = ? ORDER BY perfil', [$uid]), 'perfil');
                     self::$user = $u;
                 } else {
                     Session::forget('uid');
+                    Session::forget('perfil_ativo');
                 }
             }
         }
-        return self::$user;
+        // Mantém o padrão separado: os controladores legados também recebem o perfil ativo.
+        return self::$user === null ? null : [...self::$user,
+            'papel_padrao' => self::$user['papel'], 'papel' => self::perfilAtivo()];
     }
 
     public static function id(): ?string
@@ -138,7 +153,91 @@ final class Auth
 
     public static function papel(): ?string
     {
-        return self::user()['papel'] ?? null;
+        return self::perfilAtivo();
+    }
+
+    /** Perfis relidos do banco a cada requisição, nunca aceitos da sessão ou do formulário. */
+    public static function perfis(): array
+    {
+        if (!self::$loaded) { self::user(); }
+        if (self::$user === null) { return []; }
+        $concedidos = self::perfisConcedidos();
+        // Como o Super-Admin do GLPI: quem tem Admin/TI pode trabalhar em qualquer perfil (ver o sistema como Porteiro,
+        // Gestor de área etc.) e voltar ao Admin/TI para configurar. Os demais só usam os perfis concedidos.
+        return in_array('admin', $concedidos, true) ? array_keys(self::PAPEIS) : $concedidos;
+    }
+
+    /** Perfis efetivamente concedidos ao usuário (usuario_perfis), sem a ampliação do Admin. */
+    public static function perfisConcedidos(): array
+    {
+        if (!self::$loaded) { self::user(); }
+        if (self::$user === null) { return []; }
+        return array_values(array_intersect(array_keys(self::PAPEIS), self::$user['perfis'] ?? [self::$user['papel']]));
+    }
+
+    public static function perfilAtivo(): ?string
+    {
+        $perfis = self::perfis();
+        $ativo = Session::get('perfil_ativo');
+        // O perfil ativo vale só para o usuário que o escolheu (nunca herdado de outra conta na mesma sessão).
+        if (Session::get('perfil_ativo_uid') !== (self::$user['id'] ?? null)) {
+            $ativo = null;
+        }
+        if (!is_string($ativo) || !in_array($ativo, $perfis, true)) {
+            $padrao = self::$user['papel'] ?? null;
+            $ativo = in_array($padrao, $perfis, true) ? $padrao : ($perfis[0] ?? null);
+            Session::set('perfil_ativo', $ativo);
+            Session::set('perfil_ativo_uid', self::$user['id'] ?? null);
+        }
+        return $ativo;
+    }
+
+    public static function trocarPerfil(string $perfil): bool
+    {
+        if (!in_array($perfil, self::perfis(), true)) { return false; }
+        $anterior = self::perfilAtivo();
+        if ($anterior === $perfil) { return true; }
+        // Audita antes de efetivar; falha de persistência não concede o novo contexto.
+        Audit::log('auth', self::id(), 'TROCA_PERFIL', ['anterior' => $anterior, 'perfil' => $perfil]);
+        Session::regenerate();
+        Session::set('perfil_ativo', $perfil);
+        Session::set('perfil_ativo_uid', self::$user['id'] ?? null);
+        self::$membroArea = null;
+        self::$areasGeridas = null;
+        return true;
+    }
+
+    /** null significa todas as áreas (somente Admin com perfil ativo). */
+    public static function areasGeridas(): ?array
+    {
+        if (self::is('admin')) { return null; }
+        if (!self::is('gestor_area')) { return []; }
+        return self::$areasGeridas ??= array_column(Database::all(
+            "SELECT area_id FROM servico_area_membros WHERE usuario_id = ? AND papel = 'gestor'", [self::id()]
+        ), 'area_id');
+    }
+
+    public static function gereArea(string $areaId): bool
+    {
+        $areas = self::areasGeridas();
+        return $areas === null || in_array($areaId, $areas, true);
+    }
+
+    public static function mfaObrigatorio(): bool
+    {
+        return in_array('admin', self::perfisConcedidos(), true)
+            && (self::user()['auth_origem'] ?? 'local') === 'local'
+            && \App\Services\Settings::bool('mfa_obrigatorio_admin');
+    }
+
+    public static function inicioPerfil(): string
+    {
+        return match (self::papel()) {
+            'colaborador' => '/chamados/meus',
+            'gestor_area' => self::areasGeridas() ? '/chamados/fila' : '/chamados/meus',
+            'porteiro' => '/portaria',
+            default => '/painel',
+        };
     }
 
     public static function check(): bool
@@ -155,6 +254,8 @@ final class Auth
     public static function can(string $permissao): bool
     {
         $p = self::papel();
+        if ($p === 'colaborador' && $permissao === 'chamados.atender') { return false; }
+        if ($p === 'gestor_area' && $permissao === 'chamados.atender') { return self::areasGeridas() !== []; }
         if ($permissao === 'chamados.atender' && $p !== null && $p !== 'admin') {
             return self::$membroArea ??= (bool) Database::value('SELECT 1 FROM servico_area_membros WHERE usuario_id = ? LIMIT 1', [self::id()]);
         }
@@ -163,7 +264,7 @@ final class Auth
 
     public static function isSegurancaPatrimonial(): bool
     {
-        return (int) (self::user()['seguranca_patrimonial'] ?? 0) === 1;
+        return self::is('admin', 'supervisor', 'ssma', 'porteiro') && (int) (self::user()['seguranca_patrimonial'] ?? 0) === 1;
     }
 
     /** Garante sessão válida; força troca de senha quando necessário. */
@@ -177,18 +278,27 @@ final class Auth
             Session::set('intended', $_SERVER['REQUEST_URI'] ?? '/');
             Http::redirect('/login');
         }
+        if (self::perfilAtivo() === null) {
+            Http::abort(403, t('Sua conta não possui perfil de acesso. Procure o Admin/TI.'));
+        }
         if ((int) $u['must_change_password'] === 1 && ($u['auth_origem'] ?? 'local') === 'local' && Http::path() !== '/trocar-senha') {
             Http::redirect('/trocar-senha');
         }
         // MFA obrigatório para Admin/TI com conta local (ISO 27001 A.8.5): cadastra antes de usar o sistema
-        if ($u['papel'] === 'admin' && ($u['auth_origem'] ?? 'local') === 'local' && (int) ($u['mfa_ativo'] ?? 0) !== 1
-            && \App\Services\Settings::bool('mfa_obrigatorio_admin')
+        if (self::mfaObrigatorio() && (int) ($u['mfa_ativo'] ?? 0) !== 1
             && !in_array(Http::path(), ['/conta/mfa', '/trocar-senha'], true)) {
             if (Http::isAjax()) {
                 Http::json(['erro' => 'Cadastre a verificação em duas etapas para continuar.'], 403);
             }
             Session::flash('aviso', 'Para Admin/TI a verificação em duas etapas é obrigatória. Cadastre-a para continuar.');
             Http::redirect('/conta/mfa');
+        }
+        // Também protege o endpoint legado, que consultava somente usuarios.papel.
+        if (self::mfaObrigatorio() && Http::path() === '/conta/mfa/desativar') {
+            Http::abort(403, t('A verificação em duas etapas é obrigatória para contas com perfil Admin/TI.'));
+        }
+        if (self::is('colaborador', 'gestor_area') && in_array(Http::path(), ['/', '/painel'], true)) {
+            Http::redirect(self::inicioPerfil());
         }
         return $u;
     }

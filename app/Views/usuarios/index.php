@@ -20,7 +20,10 @@
           <td><strong><?= e($u['nome']) ?></strong>
             <?= ($u['auth_origem'] ?? 'local') === 'ldap' ? badge(t('AD'), 'info') : '' ?>
             <span class="sub"><?= e($u['email']) ?><?= !empty($u['ldap_usuario']) ? ' · ' . e($u['ldap_usuario']) : '' ?></span></td>
-          <td><?= badge(papel_label($u['papel']), $u['papel'] === 'admin' ? 'ouro' : 'neutro') ?>
+          <td><?php foreach (array_filter(explode(',', $u['perfis_csv'] ?? '')) as $perfil): ?>
+            <?= badge(papel_label($perfil), $perfil === 'admin' ? 'ouro' : 'neutro') ?>
+            <?php endforeach; ?>
+            <span class="sub"><?= e(t('Padrão: {perfil}', ['perfil' => papel_label($u['papel'])])) ?></span>
             <?php if ((int) $u['seguranca_patrimonial']): ?><span class="sub"><?= e(t('Seg. Patrimonial')) ?></span><?php endif; ?></td>
           <td class="ocultar-md mudo"><?= e($u['areas'] ?? '—') ?></td>
           <td class="ocultar-md"><?= $u['pessoa_id'] ? '<a href="' . e(url('/pessoas/' . $u['pessoa_id'])) . '">' . e($u['pessoa_nome']) . '</a>' : '<span class="mudo">—</span>' ?></td>

@@ -29,7 +29,10 @@ final class Chamados
     ];
     public const PRIORIDADES = [1 => 'Crítica', 2 => 'Muito alta', 3 => 'Alta', 4 => 'Média', 5 => 'Baixa', 6 => 'Muito baixa'];
     public const PRAZOS = ['no_prazo' => 'No prazo', 'vencendo' => 'Vencendo', 'vencido' => 'Vencido'];
-    public const TIPOS = ['comentario' => 'Comentário público', 'interno' => 'Nota interna', 'solucao' => 'Solução', 'status' => 'Status', 'atribuicao' => 'Atribuição'];
+    public const TIPOS = ['comentario' => 'Comentário público', 'interno' => 'Nota interna', 'solucao' => 'Solução', 'status' => 'Status', 'atribuicao' => 'Atribuição', 'prorrogacao' => 'Prorrogação de prazo'];
+    public const ATALHOS_PRORROGACAO = [1440 => '+1 dia', 4320 => '+3 dias', 10080 => '+7 dias', 21600 => '+15 dias'];
+    public const UNIDADES_PRAZO = ['min' => 'Minutos', 'h' => 'Horas', 'd' => 'Dias'];
+    public const MAX_PRAZO_MINUTOS = 525600; // 365 dias
 
     /**
      * Matriz inspirada no GLPI, com seis níveis locais (1 = mais crítico).
@@ -47,6 +50,92 @@ final class Chamados
             throw new InvalidArgumentException(t('Urgência ou impacto fora da faixa.'));
         }
         return [[3, 2, 1, 1], [4, 3, 2, 1], [5, 4, 3, 2], [6, 5, 4, 3], [6, 6, 5, 4]][$urgencia - 1][$impacto - 1];
+    }
+
+    /** Rótulos numerados para a configuração, usando a escala do motor. */
+    public static function rotulosUrgencia(): array
+    {
+        $rotulos = [];
+        foreach (self::URGENCIAS as $valor => $rotulo) { $rotulos[$valor] = $valor . ' — ' . t($rotulo); }
+        return $rotulos;
+    }
+
+    /**
+     * Herança independente por prazo e regime; origem indica o nível mais específico com prazo.
+     * @return array{resposta_min:?int, solucao_min:?int, comercial:bool, origem:'categoria'|'area'|'nenhum'}
+     */
+    public static function slaEfetivo(array $categoria, array $area): array
+    {
+        $resposta = $categoria['sla_resposta_min'] ?? $area['sla_resposta_min'] ?? null;
+        $solucao = $categoria['sla_solucao_min'] ?? $area['sla_solucao_min'] ?? null;
+        $regime = $categoria['usar_horario_comercial'] ?? $area['usar_horario_comercial'] ?? null;
+        return [
+            'resposta_min' => $resposta === null ? null : (int) $resposta,
+            'solucao_min' => $solucao === null ? null : (int) $solucao,
+            'comercial' => $regime === null ? Settings::bool('horario_comercial_ativo') : (bool) $regime,
+            'origem' => isset($categoria['sla_resposta_min']) || isset($categoria['sla_solucao_min']) ? 'categoria'
+                : (($resposta !== null || $solucao !== null) ? 'area' : 'nenhum'),
+        ];
+    }
+
+    public static function textoSla(array $categoria, array $area = []): string
+    {
+        return !self::slaEfetivo($categoria, $area)['comercial']
+            ? t('SLA em horas corridas (24x7).')
+            : t('SLA em horário comercial, descontando dias sem expediente e feriados.');
+    }
+
+    /** Transferência inicia o SLA da nova categoria agora; preserva a primeira resposta e a abertura. */
+    public static function transferir(array $chamado, array $categoria, DateTimeImmutable $agora, array $area = []): array
+    {
+        if (in_array($chamado['status'], ['solucionado', 'fechado'], true)) {
+            throw new InvalidArgumentException(t('Reabra o chamado antes de transferir.'));
+        }
+        $sla = self::slaEfetivo($categoria, $area);
+        $calendario = self::calendarioConfigurado($categoria, $area);
+        return [
+            'area_id' => $categoria['area_id'], 'categoria_id' => $categoria['id'],
+            'atendente_id' => null, 'status' => 'novo', 'segundos_pendente' => 0, 'pendente_desde' => null,
+            'prazo_prorrogado_min' => 0,
+            'sla_inicio' => $agora->format('Y-m-d H:i:s'),
+            'sla_resposta_snapshot' => empty($chamado['respondido_em']) ? null : ($chamado['sla_resposta_snapshot'] ?? json_encode([
+                'inicio' => $chamado['sla_inicio'] ?? $chamado['created_at'],
+                'calendario' => self::calendarioChamado($chamado),
+            ], JSON_THROW_ON_ERROR)),
+            'calendario_sla' => $calendario === null ? null : json_encode($calendario, JSON_THROW_ON_ERROR),
+            'prazo_resposta' => empty($chamado['respondido_em'])
+                ? self::prazo($agora, $sla['resposta_min'], $calendario)?->format('Y-m-d H:i:s')
+                : $chamado['prazo_resposta'],
+            'prazo_solucao' => self::prazo($agora, $sla['solucao_min'], $calendario)?->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    public static function situacaoResposta(array $c, DateTimeImmutable $agora): string
+    {
+        $snapshot = isset($c['sla_resposta_snapshot']) ? json_decode($c['sla_resposta_snapshot'], true, 512, JSON_THROW_ON_ERROR) : null;
+        return self::situacaoPrazo(new DateTimeImmutable($snapshot['inicio'] ?? $c['sla_inicio'] ?? $c['created_at']),
+            empty($c['prazo_resposta']) ? null : new DateTimeImmutable($c['prazo_resposta']),
+            new DateTimeImmutable($c['respondido_em'] ?? $agora->format('Y-m-d H:i:s')), $snapshot !== null ? $snapshot['calendario'] : self::calendarioChamado($c));
+    }
+
+    public static function proximoPrazo(array $c, DateTimeImmutable $agora): ?DateTimeImmutable
+    {
+        if (in_array($c['status'], ['solucionado', 'fechado'], true)) { return null; }
+        $prazos = [];
+        if (empty($c['respondido_em']) && !empty($c['prazo_resposta'])) { $prazos[] = new DateTimeImmutable($c['prazo_resposta']); }
+        if (!in_array($c['status'], ['solucionado', 'fechado'], true) && ($solucao = self::prazoSolucao($c, $agora))) { $prazos[] = $solucao; }
+        return $prazos ? min($prazos) : null;
+    }
+
+    /** Aceite pela equipe conta como primeira resposta; não reescreve uma resposta já registrada. */
+    public static function mudancasAtribuicao(array $c, string $atendenteId, DateTimeImmutable $agora): array
+    {
+        if (in_array($c['status'], ['solucionado', 'fechado'], true)) { throw new InvalidArgumentException(t('Reabra o chamado antes de atribuir.')); }
+        if ($c['atendente_id'] === $atendenteId && !empty($c['respondido_em'])) { return []; }
+        $mudancas = ['atendente_id' => $atendenteId];
+        if (empty($c['respondido_em'])) { $mudancas['respondido_em'] = $agora->format('Y-m-d H:i:s'); }
+        if ($c['status'] === 'novo') { $mudancas += self::mudarStatus($c, 'atribuido', $agora); }
+        return $mudancas;
     }
 
     public static function prazo(DateTimeImmutable $inicio, ?int $minutos, ?array $calendario = null): ?DateTimeImmutable
@@ -90,9 +179,9 @@ final class Chamados
         return compact('dias', 'inicio', 'fim', 'feriados');
     }
 
-    public static function calendarioConfigurado(array $categoria): ?array
+    public static function calendarioConfigurado(array $categoria, array $area = []): ?array
     {
-        if (empty($categoria['usar_horario_comercial']) || !Settings::bool('horario_comercial_ativo')) { return null; }
+        if (!self::slaEfetivo($categoria, $area)['comercial']) { return null; }
         return self::calendario([
             'dias' => Settings::get('horario_dias', '1,2,3,4,5'),
             'inicio' => Settings::get('horario_inicio', '07:00'), 'fim' => Settings::get('horario_fim', '17:00'),
@@ -212,19 +301,20 @@ final class Chamados
         if (empty($chamado['prazo_solucao'])) { return 'no_prazo'; }
         $fim = new DateTimeImmutable($chamado['solucionado_em'] ?? $chamado['fechado_em'] ?? $agora->format('Y-m-d H:i:s'));
         $calendario = self::calendarioChamado($chamado);
-        $total = max(0, self::segundosUteis(new DateTimeImmutable($chamado['created_at']), new DateTimeImmutable($chamado['prazo_solucao']), $calendario));
+        $total = max(0, self::segundosUteis(new DateTimeImmutable($chamado['sla_inicio'] ?? $chamado['created_at']), new DateTimeImmutable($chamado['prazo_solucao']), $calendario));
         // Subtrai as pausas do consumo, inclusive quando o chamado já estava vencido.
         $pausa = max(0, (int) ($chamado['segundos_pendente'] ?? 0));
         if ($chamado['status'] === 'pendente' && !empty($chamado['pendente_desde'])) {
             $pausa += max(0, self::segundosUteis(new DateTimeImmutable($chamado['pendente_desde']), $fim, $calendario));
         }
-        $restante = $total - self::segundosUteis(new DateTimeImmutable($chamado['created_at']), $fim, $calendario) + $pausa;
+        $restante = $total - self::segundosUteis(new DateTimeImmutable($chamado['sla_inicio'] ?? $chamado['created_at']), $fim, $calendario) + $pausa;
         return $restante < 0 ? 'vencido' : ($restante <= $total * 0.2 ? 'vencendo' : 'no_prazo');
     }
 
     public static function podeFecharAutomaticamente(array $chamado, DateTimeImmutable $agora, int $dias = 7): bool
     {
         return $dias > 0 && $chamado['status'] === 'solucionado' && !empty($chamado['solucionado_em'])
+            && (empty($chamado['ultimo_comentario_solicitante']) || $chamado['ultimo_comentario_solicitante'] < $chamado['solucionado_em'])
             && (new DateTimeImmutable($chamado['solucionado_em']))->modify('+' . $dias . ' days') <= $agora;
     }
 
@@ -238,12 +328,14 @@ final class Chamados
         if (!Settings::bool('chamados_ativo') || $dias <= 0) { return 0; }
         $agora = new DateTimeImmutable();
         $corte = $agora->modify('-' . $dias . ' days')->format('Y-m-d H:i:s');
-        $candidatos = Database::all("SELECT id FROM chamados WHERE status = 'solucionado' AND solucionado_em <= ? ORDER BY solucionado_em LIMIT " . max(1, min(1000, $limite)), [$corte]);
+        $candidatos = Database::all("SELECT c.id FROM chamados c WHERE c.status = 'solucionado' AND c.solucionado_em <= ? AND NOT EXISTS (SELECT 1 FROM chamado_acompanhamentos ac WHERE ac.chamado_id = c.id AND ac.usuario_id = c.solicitante_id AND ac.tipo = 'comentario' AND ac.created_at >= c.solucionado_em) ORDER BY c.solucionado_em LIMIT " . max(1, min(1000, $limite)), [$corte]);
         $total = 0;
         foreach ($candidatos as $item) {
             $total += Database::transaction(static function () use ($item, $agora, $dias): int {
                 $c = Database::one('SELECT * FROM chamados WHERE id = ? FOR UPDATE', [$item['id']]);
-                if (!$c || !self::podeFecharAutomaticamente($c, $agora, $dias)) { return 0; }
+                if (!$c) { return 0; }
+                $c['ultimo_comentario_solicitante'] = Database::value("SELECT MAX(created_at) FROM chamado_acompanhamentos WHERE chamado_id = ? AND usuario_id = ? AND tipo = 'comentario'", [$c['id'], $c['solicitante_id']]);
+                if (!self::podeFecharAutomaticamente($c, $agora, $dias)) { return 0; }
                 $mudancas = self::mudarStatus($c, 'fechado', $agora) + ['fechado_automaticamente' => 1];
                 Database::update('chamados', $mudancas, 'id = ?', [$c['id']]);
                 Database::insert('chamado_acompanhamentos', [
@@ -302,5 +394,67 @@ final class Chamados
         unset($categoria);
         usort($categorias, static fn ($a, $b) => strnatcasecmp($a['caminho'], $b['caminho']));
         return $categorias;
+    }
+
+    /**
+     * Converte um valor inteiro acompanhado de unidade (min, h, d) em minutos, validando limites (1 min até 365 dias).
+     */
+    public static function converterParaMinutos(mixed $valor, mixed $unidade = 'min'): int
+    {
+        if (!is_int($valor) && !is_string($valor)) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        $str = trim((string) $valor);
+        if ($str === '' || !preg_match('/^[0-9]+$/D', $str)) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        if (!is_string($unidade)) {
+            throw new InvalidArgumentException(t('Unidade de tempo inválida.'));
+        }
+        $fator = match (strtolower(trim($unidade))) {
+            '', 'min', 'minuto', 'minutos', 'm' => 1,
+            'h', 'hr', 'hora', 'horas'          => 60,
+            'd', 'dia', 'dias'                  => 1440,
+            default                             => throw new InvalidArgumentException(t('Unidade de tempo inválida.')),
+        };
+        $numero = (float) $str;
+        $total = $numero * $fator;
+        if ($numero < 1 || $total < 1 || $total > self::MAX_PRAZO_MINUTOS) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        return (int) $total;
+    }
+
+    /**
+     * Prorroga o prazo de solução do chamado em $minutos, respeitando o calendário do chamado e a pausa de pendente.
+     *
+     * @param array<string, mixed> $chamado
+     * @return array{prazo_solucao:string, prazo_prorrogado_min:int, segundos_pendente?:int, pendente_desde?:string}
+     */
+    public static function prorrogar(array $chamado, int $minutos, DateTimeImmutable $agora): array
+    {
+        if (($chamado['status'] ?? '') === 'fechado') {
+            throw new InvalidArgumentException(t('Não é permitido prorrogar um chamado fechado.'));
+        }
+        if ($minutos < 1 || $minutos > self::MAX_PRAZO_MINUTOS) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        $calendario = self::calendarioChamado($chamado);
+        $tinhaPrazo = !empty($chamado['prazo_solucao']);
+        $base = $tinhaPrazo ? new DateTimeImmutable((string) $chamado['prazo_solucao']) : $agora;
+        $novoPrazo = self::somarSegundos($base, $minutos * 60, $calendario);
+        $acumulado = max(0, (int) ($chamado['prazo_prorrogado_min'] ?? 0)) + $minutos;
+
+        $mudancas = [
+            'prazo_solucao'        => $novoPrazo->format('Y-m-d H:i:s'),
+            'prazo_prorrogado_min' => $acumulado,
+        ];
+        if (!$tinhaPrazo) {
+            $mudancas['segundos_pendente'] = 0;
+            if (($chamado['status'] ?? '') === 'pendente') {
+                $mudancas['pendente_desde'] = $agora->format('Y-m-d H:i:s');
+            }
+        }
+        return $mudancas;
     }
 }

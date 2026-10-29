@@ -7,3 +7,8 @@ storage/cache/*
 importacao/
 *.csv
 storage/importacao/
+
+# Ferramentas locais do manual
+/tools/doc/node_modules/
+/tools/doc/.gravacoes/
+/tools/demo/.runtime/

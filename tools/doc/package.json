@@ -1,0 +1,8 @@
+{
+  "name": "salinas-access-gate-doc",
+  "private": true,
+  "type": "module",
+  "description": "Capturas e vídeos do manual a partir da vitrine local (tools/demo).",
+  "scripts": { "capturar": "node capturar.mjs", "videos": "node videos.mjs" },
+  "devDependencies": { "playwright-core": "1.64.1" }
+}

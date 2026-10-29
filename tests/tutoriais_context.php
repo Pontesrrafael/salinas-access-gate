@@ -11,6 +11,7 @@ function contextExpect(bool $ok, string $message): void {
 function contextRole(string $role): void {
     (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
     (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'context-' . $role, 'papel' => $role]);
+    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, false); // sem banco: fora das áreas de serviço
 }
 contextRole('admin');
 // Rotas conferidas em app/routes.php; formulários não são listagens.

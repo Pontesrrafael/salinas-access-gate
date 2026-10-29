@@ -1,0 +1,22 @@
+{
+  "nome": "v04-atender-chamado",
+  "passos": [
+    {"acao":"legenda","texto":"Na fila da área, abra o pedido e atribua o atendimento a você."},
+    {"acao":"ir","rota":"/chamados/demo?perfil=gestor_area&estado=novo"},
+    {"acao":"clicar","alvo":"button:has-text('Atribuir a mim')","espera":"etapa=atribuir"},
+    {"acao":"legenda","texto":"Use um comentário público para informar o andamento ao solicitante."},
+    {"acao":"digitar","alvo":"[name=acompanhamento_texto]","texto":"Equipe a caminho para verificar o equipamento."},
+    {"acao":"clicar","alvo":"form[action$='/acompanhar'] button[type=submit]","espera":"etapa=acompanhar"},
+    {"acao":"legenda","texto":"Quando precisar de prazo adicional, informe o tempo e justifique a prorrogação."},
+    {"acao":"digitar","alvo":"[name=prorrogacao_valor]","texto":"2"},
+    {"acao":"selecionar","alvo":"[name=prorrogacao_unidade]","valor":"h"},
+    {"acao":"digitar","alvo":"[name=prorrogacao_motivo]","texto":"Aguardando peça de reposição."},
+    {"acao":"clicar","alvo":"button:has-text('Prorrogar prazo')","espera":"etapa=prorrogar"},
+    {"acao":"legenda","texto":"Ao concluir, selecione Solucionado e descreva o que foi feito."},
+    {"acao":"selecionar","alvo":"select[name=status]","valor":"solucionado"},
+    {"acao":"digitar","alvo":"[name=status_texto]","texto":"Manutenção concluída e funcionamento conferido."},
+    {"acao":"clicar","alvo":"button:has-text('Atualizar status')","espera":"estado=solucionado"},
+    {"acao":"legenda","texto":"O solicitante poderá conferir a solução e aprovar ou reabrir o chamado."},
+    {"acao":"pausar","ms":5000}
+  ]
+}

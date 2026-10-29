@@ -21,7 +21,17 @@ final class ChamadosController extends Controller
 
     private function atende(string $areaId, array $u): bool
     {
-        return $u['papel'] === 'admin' || (bool) Database::value(
+        $papelAtivo = Auth::papel() ?? ($u['papel'] ?? null);
+        if ($papelAtivo === 'admin') {
+            return true;
+        }
+        if (!Auth::can('chamados.atender')) {
+            return false;
+        }
+        if ($papelAtivo === 'gestor_area') {
+            return Auth::gereArea($areaId);
+        }
+        return (bool) Database::value(
             'SELECT 1 FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$areaId, $u['id']]
         );
     }
@@ -38,7 +48,7 @@ final class ChamadosController extends Controller
     private function categoria(string $areaId, string $categoriaId): ?array
     {
         if (!Uuid::valid($areaId) || !Uuid::valid($categoriaId)) { return null; }
-        return Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1', [$categoriaId, $areaId]);
+        return Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id)', [$categoriaId, $areaId]);
     }
 
     public function abrir(): void
@@ -47,13 +57,16 @@ final class ChamadosController extends Controller
         $old = Session::pullOld();
         $areaId = Http::str('area_id', (string) ($old['area_id'] ?? ''));
         $categoriaId = Http::str('categoria_id', (string) ($old['categoria_id'] ?? ''));
-        $areas = Database::all('SELECT id, nome, descricao FROM servico_areas WHERE ativo = 1 ORDER BY ordem, nome');
+        $areas = Database::all('SELECT a.id, a.nome, a.descricao FROM servico_areas a WHERE a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id) AND EXISTS (SELECT 1 FROM servico_categorias c WHERE c.area_id = a.id AND c.ativo = 1) ORDER BY a.ordem, a.nome');
         if (!in_array($areaId, array_column($areas, 'id'), true)) { $areaId = ''; }
         $categorias = $areaId ? Chamados::categoriasEmArvore(Database::all('SELECT * FROM servico_categorias WHERE area_id = ? AND ativo = 1 ORDER BY ordem, nome', [$areaId])) : [];
         $categoria = $this->categoria($areaId, $categoriaId);
         if (!$categoria) { $categoriaId = ''; }
+        $area = $categoria ? Database::one('SELECT * FROM servico_areas WHERE id = ?', [$areaId]) : [];
+        $sla = $categoria ? Chamados::slaEfetivo($categoria, $area ?? []) : null;
+        $textoSla = $categoria ? Chamados::textoSla($categoria, $area ?? []) : '';
         $campos = $categoria ? FormularioDinamico::campos($areaId, $categoriaId) : [];
-        $this->view('chamados/abrir', compact('areas', 'areaId', 'categorias', 'categoriaId', 'categoria', 'campos', 'old') + ['titulo' => t('Abrir chamado')]);
+        $this->view('chamados/abrir', compact('areas', 'areaId', 'categorias', 'categoriaId', 'categoria', 'campos', 'old', 'textoSla', 'sla') + ['titulo' => t('Abrir chamado')]);
     }
 
     public function criar(): void
@@ -78,17 +91,21 @@ final class ChamadosController extends Controller
         $campos = FormularioDinamico::campos($areaId, $categoriaId);
         $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES);
         $files = Upload::files('anexos');
-        $erros = [...$validacao['erros'], ...Upload::validar($files, true)];
+        $todosArquivos = $files;
+        foreach ($validacao['arquivos'] as $uploads) { array_push($todosArquivos, ...$uploads); }
+        $erros = [...$validacao['erros'], ...Upload::validar($todosArquivos, true)];
         if ($erros) { $this->falha(implode(' ', $erros), $voltar); }
         $id = Uuid::v4();
         $salvos = [];
         try {
             Database::transaction(function () use ($u, $categoria, $categoriaId, $areaId, $titulo, $descricao, $paraVoce, $beneficiario, $urgencia, $impacto, $files, $validacao, $campos, $id, &$salvos): void {
                 // Bloqueia o cadastro enquanto registra a demanda (não aceita uma categoria desativada entre GET e POST).
-                $ativa = Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 FOR UPDATE', [$categoriaId, $areaId]);
+                $ativa = Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id) FOR UPDATE', [$categoriaId, $areaId]);
                 if (!$ativa) { throw new InvalidArgumentException(t('Selecione uma área e uma categoria ativas.')); }
                 $categoria = $ativa;
-                $calendario = Chamados::calendarioConfigurado($categoria);
+                $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$areaId]);
+                $sla = Chamados::slaEfetivo($categoria, $area);
+                $calendario = Chamados::calendarioConfigurado($categoria, $area);
                 $agora = new DateTimeImmutable();
                 Database::insert('chamados', [
                     'id' => $id, 'area_id' => $areaId, 'categoria_id' => $categoriaId,
@@ -97,8 +114,8 @@ final class ChamadosController extends Controller
                     'recorrente' => Http::bool('recorrente') ? 1 : 0, 'urgencia' => $urgencia, 'impacto' => $impacto,
                     'prioridade' => Chamados::prioridade($urgencia, $impacto),
                     'calendario_sla' => $calendario === null ? null : json_encode($calendario, JSON_THROW_ON_ERROR),
-                    'prazo_resposta' => Chamados::prazo($agora, isset($categoria['sla_resposta_min']) ? (int) $categoria['sla_resposta_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
-                    'prazo_solucao' => Chamados::prazo($agora, isset($categoria['sla_solucao_min']) ? (int) $categoria['sla_solucao_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
+                    'prazo_resposta' => Chamados::prazo($agora, $sla['resposta_min'], $calendario)?->format('Y-m-d H:i:s'),
+                    'prazo_solucao' => Chamados::prazo($agora, $sla['solucao_min'], $calendario)?->format('Y-m-d H:i:s'),
                     'created_at' => $agora->format('Y-m-d H:i:s'),
                 ]);
                 foreach ($campos as $campo) {
@@ -109,8 +126,13 @@ final class ChamadosController extends Controller
                     ]);
                 }
                 $this->salvarAnexos($files, $id, null, $u['id'], $salvos);
+                foreach ($validacao['arquivos'] as $campoId => $uploads) {
+                    $this->salvarAnexos($uploads, $id, null, $u['id'], $salvos, $campoId);
+                }
                 Audit::log('chamados', $id, 'criar', ['area_id' => $areaId, 'categoria_id' => $categoriaId]);
-                Notificacoes::chamado('criado', Database::one('SELECT * FROM chamados WHERE id = ?', [$id]), ['usuario_id' => $u['id']]);
+                $chamadoCriado = Database::one('SELECT * FROM chamados WHERE id = ?', [$id]);
+                Notificacoes::chamado('criado', $chamadoCriado, ['usuario_id' => $u['id']]);
+                Notificacoes::chamado('recebido', $chamadoCriado);
             });
         } catch (Throwable $e) {
             $this->limparAnexos($salvos);
@@ -126,14 +148,34 @@ final class ChamadosController extends Controller
     private function listar(bool $fila): void
     {
         $u = $this->habilitado($fila ? 'chamados.atender' : 'chamados.abrir');
+        $papelAtivo = Auth::papel() ?? ($u['papel'] ?? null);
+        $gestorArea = $fila && $papelAtivo === 'gestor_area';
+        $areasGeridas = $gestorArea ? array_values(Auth::areasGeridas() ?? []) : [];
         $where = []; $params = [];
         if (!$fila) { $where[] = 'c.solicitante_id = ?'; $params[] = $u['id']; }
-        elseif ($u['papel'] !== 'admin') {
+        elseif ($gestorArea) {
+            if ($areasGeridas === []) {
+                $where[] = '1 = 0';
+            } else {
+                $where[] = 'c.area_id IN (' . Database::in($areasGeridas) . ')';
+                array_push($params, ...$areasGeridas);
+            }
+        } elseif ($papelAtivo !== 'admin') {
             $where[] = 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = c.area_id AND m.usuario_id = ?)';
             $params[] = $u['id'];
         }
         $filtros = [];
-        foreach (['area_id', 'status', 'categoria_id', 'prioridade', 'atendente_id', 'prazo'] as $key) { $filtros[$key] = Http::str($key); }
+        foreach (['area_id', 'status', 'categoria_id', 'prioridade', 'atendente_id', 'prazo', 'q', 'ordem', 'visao'] as $key) { $filtros[$key] = Http::str($key); }
+        $filtros['q'] = mb_substr($filtros['q'], 0, 200);
+        if ($fila && $filtros['visao'] === '') { $filtros['visao'] = 'abertos'; }
+        if ($filtros['visao'] === 'abertos' && !isset(Chamados::STATUS[$filtros['status']])) { $where[] = "c.status NOT IN ('solucionado','fechado')"; }
+        if ($filtros['atendente_id'] === 'none') { $where[] = 'c.atendente_id IS NULL'; }
+        if ($filtros['atendente_id'] === 'me') { $where[] = 'c.atendente_id = ?'; $params[] = $u['id']; }
+        if ($filtros['q'] !== '') {
+            $where[] = "(CAST(c.numero AS CHAR) = ? OR c.titulo LIKE ? ESCAPE '!' OR c.beneficiario_nome LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM usuarios solicitante WHERE solicitante.id = c.solicitante_id AND solicitante.nome LIKE ? ESCAPE '!'))";
+            $busca = '%' . strtr($filtros['q'], ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+            array_push($params, ltrim($filtros['q'], '#'), $busca, $busca, $busca);
+        }
         foreach (['area_id', 'categoria_id', 'atendente_id'] as $key) {
             if (Uuid::valid($filtros[$key])) { $where[] = 'c.' . $key . ' = ?'; $params[] = $filtros[$key]; }
         }
@@ -143,26 +185,46 @@ final class ChamadosController extends Controller
         // antes da paginação; lê lotes pequenos para não carregar a fila inteira em memória.
         $sqlWhere = $where ? implode(' AND ', $where) : '1 = 1';
         [$pagina, $limite, $offset] = $this->paginacao();
-        $consulta = 'SELECT c.*, a.nome AS area_nome, cat.nome AS categoria_nome, u.nome AS atendente_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id WHERE ' . $sqlWhere . ' ORDER BY c.created_at DESC, c.numero DESC';
-        if (isset(Chamados::PRAZOS[$filtros['prazo']])) {
+        $consulta = 'SELECT c.*, a.nome AS area_nome, a.cor AS area_cor, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ($filtros['ordem'] === 'prioridade' ? ' ORDER BY c.prioridade, c.created_at, c.numero' : ' ORDER BY c.created_at DESC, c.numero DESC');
+        if (isset(Chamados::PRAZOS[$filtros['prazo']]) || $filtros['prazo'] === 'alerta' || $filtros['ordem'] === 'prazo') {
             $agora = new DateTimeImmutable();
-            $total = 0; $lista = []; $cursor = 0;
+            $total = 0; $lista = []; $cursor = 0; $ordenaveis = [];
             do {
                 $lote = Database::all($consulta . ' LIMIT 200 OFFSET ' . $cursor, $params);
                 foreach ($lote as $item) {
-                    if (Chamados::situacaoSolucao($item, $agora) !== $filtros['prazo']) { continue; }
-                    if ($total >= $offset && count($lista) < $limite) { $lista[] = $item; }
+                    if (isset(Chamados::PRAZOS[$filtros['prazo']]) && Chamados::situacaoSolucao($item, $agora) !== $filtros['prazo']) { continue; }
+                    if ($filtros['prazo'] === 'alerta' && (in_array($item['status'], ['solucionado', 'fechado'], true) || (Chamados::situacaoSolucao($item, $agora) === 'no_prazo' && (!empty($item['respondido_em']) || Chamados::situacaoResposta($item, $agora) === 'no_prazo')))) { continue; }
+                    if ($filtros['ordem'] === 'prazo') { $ordenaveis[] = ['id' => $item['id'], 'prazo' => Chamados::proximoPrazo($item, $agora)?->getTimestamp() ?? PHP_INT_MAX, 'numero' => $item['numero']]; }
+                    elseif ($total >= $offset && count($lista) < $limite) { $lista[] = $item; }
                     $total++;
                 }
                 $cursor += 200;
             } while (count($lote) === 200);
+            if ($filtros['ordem'] === 'prazo') {
+                usort($ordenaveis, static fn ($a, $b) => [$a['prazo'], $a['numero']] <=> [$b['prazo'], $b['numero']]);
+                $ids = array_column(array_slice($ordenaveis, $offset, $limite), 'id');
+                if ($ids) {
+                    $porId = array_column(Database::all('SELECT c.*, a.nome AS area_nome, a.cor AS area_cor, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ' AND c.id IN (' . Database::in($ids) . ')', [...$params, ...$ids]), null, 'id');
+                    foreach ($ids as $id) { if (isset($porId[$id])) { $lista[] = $porId[$id]; } }
+                }
+            }
         } else {
             $total = (int) Database::value('SELECT COUNT(*) FROM chamados c WHERE ' . $sqlWhere, $params);
             $lista = Database::all($consulta . ' LIMIT ' . $limite . ' OFFSET ' . $offset, $params);
         }
-        $escopo = $u['papel'] === 'admin' ? '1 = 1' : 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = a.id AND m.usuario_id = ?)';
-        $escopoParams = $u['papel'] === 'admin' ? [] : [$u['id']];
-        if (!$fila) { $escopo = 'a.ativo = 1'; $escopoParams = []; }
+        if (!$fila) {
+            $escopo = 'a.ativo = 1';
+            $escopoParams = [];
+        } elseif ($papelAtivo === 'admin') {
+            $escopo = '1 = 1';
+            $escopoParams = [];
+        } elseif ($gestorArea) {
+            $escopo = $areasGeridas === [] ? '1 = 0' : 'a.id IN (' . Database::in($areasGeridas) . ')';
+            $escopoParams = $areasGeridas;
+        } else {
+            $escopo = 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = a.id AND m.usuario_id = ?)';
+            $escopoParams = [$u['id']];
+        }
         $areas = Database::all('SELECT a.id, a.nome FROM servico_areas a WHERE ' . $escopo . ' ORDER BY a.ordem, a.nome', $escopoParams);
         $categorias = []; $membros = [];
         if (in_array($filtros['area_id'], array_column($areas, 'id'), true)) {
@@ -170,7 +232,8 @@ final class ChamadosController extends Controller
             if ($fila) { $membros = $this->membros($filtros['area_id']); }
         }
         $satisfacaoAreas = $fila ? Database::all('SELECT a.id, a.nome, AVG(s.nota) AS media, COUNT(s.chamado_id) AS avaliacoes FROM servico_areas a LEFT JOIN chamados c ON c.area_id = a.id LEFT JOIN chamado_satisfacao s ON s.chamado_id = c.id WHERE ' . $escopo . (Uuid::valid($filtros['area_id']) ? ' AND a.id = ?' : '') . ' GROUP BY a.id, a.nome ORDER BY a.nome', [...$escopoParams, ...(Uuid::valid($filtros['area_id']) ? [$filtros['area_id']] : [])]) : [];
-        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite', 'satisfacaoAreas') + ['titulo' => $fila ? t('Fila de atendimento') : t('Meus chamados')]);
+        $titulo = !$fila ? t('Meus chamados') : ($gestorArea ? t('Backlog das minhas áreas') : t('Fila de atendimento'));
+        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'gestorArea', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite', 'satisfacaoAreas') + ['titulo' => $titulo]);
     }
 
     private function membros(string $areaId): array
@@ -183,14 +246,19 @@ final class ChamadosController extends Controller
         $u = $this->habilitado();
         $c = $this->chamado($id, $u);
         $atende = $this->atende($c['area_id'], $u);
-        $info = Database::one('SELECT a.nome AS area_nome, cat.nome AS categoria_nome, s.nome AS solicitante_nome, u.nome AS atendente_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id JOIN usuarios s ON s.id = c.solicitante_id LEFT JOIN usuarios u ON u.id = c.atendente_id WHERE c.id = ?', [$id]);
+        $info = Database::one('SELECT a.nome AS area_nome, cat.nome AS categoria_nome, s.nome AS solicitante_nome, u.nome AS atendente_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios s ON s.id = c.solicitante_id LEFT JOIN usuarios u ON u.id = c.atendente_id WHERE c.id = ?', [$id]);
         $c += $info;
         $eventos = Database::all('SELECT ac.*, u.nome AS usuario_nome FROM chamado_acompanhamentos ac LEFT JOIN usuarios u ON u.id = ac.usuario_id WHERE ac.chamado_id = ?' . ($atende ? '' : " AND ac.tipo <> 'interno'") . ' ORDER BY ac.created_at, ac.id', [$id]);
-        $anexos = Database::all('SELECT a.id, a.nome_arquivo, a.tamanho_bytes, a.acompanhamento_id FROM chamado_anexos a LEFT JOIN chamado_acompanhamentos ac ON ac.id = a.acompanhamento_id WHERE a.chamado_id = ?' . ($atende ? '' : " AND (ac.id IS NULL OR ac.tipo <> 'interno')") . ' ORDER BY a.created_at, a.id', [$id]);
-        $respostas = Database::all('SELECT rotulo, valor FROM chamado_respostas WHERE chamado_id = ? ORDER BY created_at, campo_id', [$id]);
+        $anexos = Database::all('SELECT a.id, a.nome_arquivo, a.tamanho_bytes, a.acompanhamento_id, a.campo_id FROM chamado_anexos a LEFT JOIN chamado_acompanhamentos ac ON ac.id = a.acompanhamento_id WHERE a.chamado_id = ?' . ($atende ? '' : " AND (ac.id IS NULL OR ac.tipo <> 'interno')") . ' ORDER BY a.created_at, a.id', [$id]);
+        $respostas = Database::all('SELECT campo_id, rotulo, valor FROM chamado_respostas WHERE chamado_id = ? ORDER BY created_at, campo_id', [$id]);
         $membros = $atende ? $this->membros($c['area_id']) : [];
+        $destinos = $atende ? Database::all('SELECT cat.id, cat.area_id, cat.nome, a.nome AS area_nome FROM servico_categorias cat JOIN servico_areas a ON a.id = cat.area_id WHERE cat.ativo = 1 AND a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id) ORDER BY a.nome, cat.nome') : [];
+        $oldTransferencia = Session::get('_old', []);
+        $destinoCategoriaId = Http::str('destino_categoria_id', (string) ($oldTransferencia['destino_categoria_id'] ?? ''));
+        $destinoSelecionado = array_column($destinos, null, 'id')[$destinoCategoriaId] ?? null;
+        $camposDestino = $destinoSelecionado ? FormularioDinamico::pendentes(FormularioDinamico::campos($destinoSelecionado['area_id'], $destinoCategoriaId), array_column($respostas, 'campo_id')) : [];
         $satisfacao = Database::one('SELECT nota, comentario, created_at FROM chamado_satisfacao WHERE chamado_id = ?', [$id]);
-        $this->view('chamados/detalhe', compact('c', 'atende', 'eventos', 'anexos', 'respostas', 'membros', 'u', 'satisfacao') + ['titulo' => t('Chamado #{numero}', ['numero' => $c['numero']])]);
+        $this->view('chamados/detalhe', compact('c', 'atende', 'eventos', 'anexos', 'respostas', 'membros', 'u', 'satisfacao', 'destinos', 'destinoCategoriaId', 'destinoSelecionado', 'camposDestino') + ['titulo' => t('Chamado #{numero}', ['numero' => $c['numero']])]);
     }
 
     private function evento(string $id, ?string $usuarioId, string $tipo, string $texto): string
@@ -204,7 +272,7 @@ final class ChamadosController extends Controller
     {
         $u = $this->habilitado();
         $this->chamado($id, $u);
-        $texto = Http::str('texto');
+        $texto = Http::str('acompanhamento_texto');
         $tipo = Http::str('tipo', 'comentario');
         $files = Upload::files('anexos');
         $voltar = '/chamados/' . $id;
@@ -250,13 +318,10 @@ final class ChamadosController extends Controller
                 if (!$this->atende($c['area_id'], $u)) { Http::abort(403, t('Apenas a equipe da área pode atender este chamado.')); }
                 if (in_array($c['status'], ['solucionado', 'fechado'], true)) { throw new InvalidArgumentException(t('Reabra o chamado antes de atribuir.')); }
                 $membro = Uuid::valid($atendenteId) ? Database::one('SELECT u.id FROM usuarios u JOIN servico_area_membros m ON m.usuario_id = u.id WHERE m.area_id = ? AND u.id = ? AND u.ativo = 1 FOR UPDATE', [$c['area_id'], $atendenteId]) : null;
-                if (!$membro) { throw new InvalidArgumentException(t('Escolha um membro ativo da área.')); }
-                if ($c['atendente_id'] === $atendenteId) { return; }
-                $mudancas = ['atendente_id' => $atendenteId];
-                if ($c['status'] === 'novo') {
-                    $mudancas += Chamados::mudarStatus($c, 'atribuido', new DateTimeImmutable());
-                    $this->evento($id, $u['id'], 'status', 'atribuido');
-                }
+                if (!$membro && !($u['papel'] === 'admin' && $atendenteId === $u['id'])) { throw new InvalidArgumentException(t('Escolha um membro ativo da área.')); }
+                $mudancas = Chamados::mudancasAtribuicao($c, $atendenteId, new DateTimeImmutable());
+                if (!$mudancas) { return; }
+                if ($c['status'] === 'novo') { $this->evento($id, $u['id'], 'status', 'atribuido'); }
                 Database::update('chamados', $mudancas, 'id = ?', [$id]);
                 // O nome fica no histórico mesmo se a conta for renomeada depois.
                 $nome = (string) Database::value('SELECT nome FROM usuarios WHERE id = ?', [$atendenteId]);
@@ -271,13 +336,19 @@ final class ChamadosController extends Controller
     public function status(string $id): void
     {
         // Reutiliza o POST protegido existente; não exige alteração nas rotas da equipe.
+        if (Http::str('acao') === 'transferir') { $this->transferir($id); return; }
         if (Http::str('acao') === 'avaliar') { $this->avaliar($id); return; }
+        if (Http::str('acao') === 'prorrogar') { $this->prorrogar($id); return; }
         $u = $this->habilitado();
         $this->chamado($id, $u);
         $destino = Http::str('status');
-        $texto = Http::str('texto');
+        $texto = Http::str('status_texto');
+        $files = Upload::files('anexos');
+        $erros = Upload::validar($files, true);
+        if ($erros) { $this->falha(implode(' ', $erros), '/chamados/' . $id); }
+        $salvos = [];
         try {
-            Database::transaction(function () use ($id, $u, $destino, $texto): void {
+            Database::transaction(function () use ($id, $u, $destino, $texto, $files, &$salvos): void {
                 $c = $this->chamado($id, $u, true);
                 $atende = $this->atende($c['area_id'], $u);
                 $solicitante = $c['solicitante_id'] === $u['id'];
@@ -292,17 +363,73 @@ final class ChamadosController extends Controller
                 $mudancas = Chamados::mudarStatus($c, $destino, $agora);
                 if ($destino === 'solucionado' && !$c['respondido_em']) { $mudancas['respondido_em'] = $agora->format('Y-m-d H:i:s'); }
                 Database::update('chamados', $mudancas, 'id = ?', [$id]);
-                if ($texto !== '') { $this->evento($id, $u['id'], $destino === 'solucionado' ? 'solucao' : 'comentario', $texto); }
+                $eventoId = $texto !== '' ? $this->evento($id, $u['id'], $destino === 'solucionado' ? 'solucao' : 'comentario', $texto) : null;
+                $this->salvarAnexos($files, $id, $eventoId, $u['id'], $salvos);
                 $this->evento($id, $u['id'], 'status', $destino);
                 Audit::log('chamados', $id, match ($destino) { 'solucionado' => 'solucionar', 'fechado' => 'fechar', default => 'mudar_status' }, ['de' => $c['status'], 'para' => $destino]);
+                $chamadoAtualizado = array_replace($c, $mudancas);
                 if (in_array($destino, ['solucionado', 'fechado'], true)) {
-                    Notificacoes::chamado($destino, array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
+                    Notificacoes::chamado($destino, $chamadoAtualizado, ['usuario_id' => $u['id']]);
+                } elseif ($destino === 'pendente') {
+                    Notificacoes::chamado('pendente', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
+                } elseif ($c['status'] === 'solucionado' && $destino === 'atribuido') {
+                    Notificacoes::chamado('reaberto', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
                 } elseif ($texto !== '') {
-                    Notificacoes::chamado('comentario', array_replace($c, $mudancas), ['usuario_id' => $u['id'], 'texto' => $texto]);
+                    Notificacoes::chamado('comentario', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
                 }
             });
-        } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/chamados/' . $id); }
-        $this->ok(t('Status atualizado.'), '/chamados/' . $id);
+        } catch (Throwable $e) {
+            $this->limparAnexos($salvos);
+            if ($e instanceof InvalidArgumentException) { $this->falha($e->getMessage(), '/chamados/' . $id); }
+            throw $e;
+        }
+        $this->ok($destino === 'fechado' ? t('Solução aprovada. Avalie o atendimento abaixo.') : t('Status atualizado.'), '/chamados/' . $id);
+    }
+
+    private function transferir(string $id): void
+    {
+        $u = $this->habilitado('chamados.atender');
+        $categoriaId = Http::str('destino_categoria_id');
+        $motivo = Http::str('transferencia_motivo');
+        $salvos = [];
+        try {
+            Database::transaction(function () use ($id, $u, $categoriaId, $motivo, &$salvos): void {
+                $c = $this->chamado($id, $u, true);
+                if (!$this->atende($c['area_id'], $u)) { Http::abort(403); }
+                if (!Uuid::valid($categoriaId) || $motivo === '' || mb_strlen($motivo) > 2000) {
+                    throw new InvalidArgumentException(t('Selecione o destino e informe o motivo da transferência (até 2.000 caracteres).'));
+                }
+                $categoria = Database::one('SELECT cat.*, a.nome AS area_nome FROM servico_categorias cat JOIN servico_areas a ON a.id = cat.area_id WHERE cat.id = ? AND cat.ativo = 1 AND a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id) FOR UPDATE', [$categoriaId]);
+                if (!$categoria || $categoriaId === $c['categoria_id']) { throw new InvalidArgumentException(t('Escolha outra categoria ativa com equipe disponível.')); }
+                $respondidos = array_column(Database::all('SELECT campo_id FROM chamado_respostas WHERE chamado_id = ?', [$id]), 'campo_id');
+                $campos = FormularioDinamico::pendentes(FormularioDinamico::campos($categoria['area_id'], $categoriaId), $respondidos);
+                $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES);
+                $arquivos = [];
+                foreach ($validacao['arquivos'] as $uploads) { array_push($arquivos, ...$uploads); }
+                $erros = [...$validacao['erros'], ...Upload::validar($arquivos, true)];
+                if ($erros) { throw new InvalidArgumentException(implode(' ', $erros)); }
+                $origem = Database::one('SELECT a.nome AS area_nome, cat.nome FROM servico_categorias cat JOIN servico_areas a ON a.id = cat.area_id WHERE cat.id = ?', [$c['categoria_id']]);
+                $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$categoria['area_id']]);
+                $mudancas = Chamados::transferir($c, $categoria, new DateTimeImmutable(), $area);
+                Database::update('chamados', $mudancas, 'id = ?', [$id]);
+                foreach ($campos as $campo) {
+                    Database::insert('chamado_respostas', ['chamado_id' => $id, 'campo_id' => $campo['id'], 'rotulo' => $campo['rotulo'], 'valor' => $validacao['valores'][$campo['id']] ?? null]);
+                }
+                foreach ($validacao['arquivos'] as $campoId => $uploads) { $this->salvarAnexos($uploads, $id, null, $u['id'], $salvos, $campoId); }
+                $this->evento($id, $u['id'], 'comentario', t('Transferência: {origem} → {destino}. Motivo: {motivo}', [
+                    'origem' => $origem['area_nome'] . ' / ' . $origem['nome'],
+                    'destino' => $categoria['area_nome'] . ' / ' . $categoria['nome'], 'motivo' => $motivo,
+                ]));
+                $this->evento($id, $u['id'], 'status', 'novo');
+                Audit::log('chamados', $id, 'transferir', ['area_origem' => $c['area_id'], 'categoria_origem' => $c['categoria_id'], 'area_destino' => $categoria['area_id'], 'categoria_destino' => $categoriaId]);
+                Notificacoes::chamado('transferido', array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
+            });
+        } catch (Throwable $e) {
+            $this->limparAnexos($salvos);
+            if ($e instanceof InvalidArgumentException) { $this->falha($e->getMessage(), '/chamados/' . $id); }
+            throw $e;
+        }
+        $this->ok(t('Chamado transferido. Os prazos da nova categoria começam na transferência.'), '/chamados/fila');
     }
 
     private function avaliar(string $id): void
@@ -315,7 +442,7 @@ final class ChamadosController extends Controller
                 if (!Chamados::podeAvaliar($c, $u['id'], $jaAvaliou)) {
                     throw new InvalidArgumentException(t('Somente o solicitante pode avaliar um chamado fechado, uma única vez.'));
                 }
-                $dados = Chamados::validarSatisfacao(Http::input('nota'), Http::str('comentario'));
+                $dados = Chamados::validarSatisfacao(Http::input('avaliacao_nota'), Http::str('avaliacao_comentario'));
                 Database::insert('chamado_satisfacao', $dados + ['chamado_id' => $id, 'respondido_por' => $u['id']]);
                 Audit::log('chamados', $id, 'avaliar', ['nota' => $dados['nota']]);
             });
@@ -323,12 +450,62 @@ final class ChamadosController extends Controller
         $this->ok(t('Avaliação registrada. Obrigado!'), '/chamados/' . $id);
     }
 
-    private function salvarAnexos(array $files, string $id, ?string $eventoId, string $usuarioId, array &$salvos): void
+    public function prorrogar(string $id): void
+    {
+        $u = $this->habilitado('chamados.atender');
+        $this->chamado($id, $u);
+        $atalho = Http::str('prorrogacao_atalho');
+        $valor = Http::str('prorrogacao_valor');
+        $unidade = Http::str('prorrogacao_unidade', 'd');
+        $motivo = Http::str('prorrogacao_motivo');
+        $voltar = '/chamados/' . $id;
+        if ($motivo === '' || mb_strlen($motivo) > 2000) {
+            $this->falha(t('Informe o motivo da prorrogação (até 2.000 caracteres).'), $voltar);
+        }
+        try {
+            if ($valor !== '') {
+                $minutos = Chamados::converterParaMinutos($valor, $unidade);
+            } elseif ($atalho !== '') {
+                $minutos = Chamados::converterParaMinutos($atalho, 'min');
+            } else {
+                throw new InvalidArgumentException(t('Escolha um atalho ou informe o tempo adicional de prorrogação.'));
+            }
+            Database::transaction(function () use ($id, $u, $minutos, $motivo): void {
+                $c = $this->chamado($id, $u, true);
+                if (!$this->atende($c['area_id'], $u)) {
+                    Http::abort(403, t('Apenas a equipe da área pode atender este chamado.'));
+                }
+                $agora = new DateTimeImmutable();
+                $antes = Chamados::prazoSolucao($c, $agora)?->format('Y-m-d H:i:s');
+                $mudancas = Chamados::prorrogar($c, $minutos, $agora);
+                Database::update('chamados', $mudancas, 'id = ?', [$id]);
+                $depois = Chamados::prazoSolucao(array_replace($c, $mudancas), $agora)?->format('Y-m-d H:i:s');
+                $duracaoTexto = ServicosConfigController::formatarSla($minutos);
+                $this->evento($id, $u['id'], 'prorrogacao', t('Prazo de solução prorrogado em +{tempo} (novo prazo: {prazo}). Motivo: {motivo}', [
+                    'tempo'  => $duracaoTexto,
+                    'prazo'  => fmt_data_hora($depois),
+                    'motivo' => $motivo,
+                ]));
+                Audit::log('chamados', $id, 'prorrogar', [
+                    'minutos'              => $minutos,
+                    'antes'                => $antes,
+                    'depois'               => $depois,
+                    'prazo_prorrogado_min' => $mudancas['prazo_prorrogado_min'],
+                    'motivo'               => $motivo,
+                ]);
+            });
+        } catch (InvalidArgumentException $e) {
+            $this->falha($e->getMessage(), $voltar);
+        }
+        $this->ok(t('Prazo de solução prorrogado.'), $voltar);
+    }
+
+    private function salvarAnexos(array $files, string $id, ?string $eventoId, string $usuarioId, array &$salvos, ?string $campoId = null): void
     {
         foreach ($files as $file) {
             $meta = Upload::salvar($file, true);
             $salvos[] = $meta['storage_path'];
-            Database::insert('chamado_anexos', $meta + ['id' => Uuid::v4(), 'chamado_id' => $id, 'acompanhamento_id' => $eventoId, 'criado_por' => $usuarioId]);
+            Database::insert('chamado_anexos', $meta + ['id' => Uuid::v4(), 'chamado_id' => $id, 'acompanhamento_id' => $eventoId, 'campo_id' => $campoId, 'criado_por' => $usuarioId]);
         }
     }
 

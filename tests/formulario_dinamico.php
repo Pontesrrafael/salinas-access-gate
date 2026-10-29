@@ -221,4 +221,25 @@ try {
     @unlink($tmpTxt);
 }
 
+
+// Campos de upload dinâmicos conservam o arquivo normalizado para persistência no controller.
+$tmpPdf = tempnam(__DIR__ . '/../storage', 'pdf-');
+$tmpGrande = tempnam(__DIR__ . '/../storage', 'grande-');
+try {
+    file_put_contents($tmpPdf, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n");
+    $campoPdf = [['id' => 'pdf', 'rotulo' => 'Comprovante', 'tipo' => 'anexo', 'obrigatorio' => 1]];
+    $f = ['name' => 'comprovante.pdf', 'tmp_name' => $tmpPdf, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpPdf)];
+    $validado = FormularioDinamico::validar($campoPdf, [], ['campos' => ['name' => ['pdf' => $f['name']], 'tmp_name' => ['pdf' => $tmpPdf], 'error' => ['pdf' => 0], 'size' => ['pdf' => $f['size']]]]);
+    expect($validado['erros'] === [] && $validado['arquivos']['pdf'] === [$f], 'PDF dinâmico válido sai vinculado ao campo para persistência.');
+    file_put_contents($tmpGrande, str_repeat('x', 4 * 1024 * 1024 + 1));
+    $grande = array_replace($f, ['tmp_name' => $tmpGrande, 'size' => 1]);
+    expect(FormularioDinamico::validar($campoPdf, [], ['pdf' => $grande])['erros'] !== [], 'Tamanho real superior a 4 MB é recusado mesmo com metadados falsos.');
+    $limite = \App\Core\App::config('uploads')['max_files'];
+    expect(\App\Services\Upload::validar(array_fill(0, $limite + 1, $f), true) !== [], 'Limite agregado de anexos impede ultrapassar o máximo do envio.');
+    $htmlMultipla = FormularioDinamico::renderizar([['id' => 'm', 'rotulo' => 'Equipamentos', 'tipo' => 'multipla', 'opcoes' => ['A', 'B'], 'obrigatorio' => 1]]);
+    expect(str_contains($htmlMultipla, '<fieldset') && str_contains($htmlMultipla, '<legend>Equipamentos'), 'Grupo múltiplo tem fieldset e legend.');
+    expect(str_contains($htmlMultipla, 'aria-hidden="true"'), 'Asterisco decorativo não é anunciado.');
+    expect(FormularioDinamico::pendentes([['id' => 'antigo'], ['id' => 'novo']], ['antigo']) === [['id' => 'novo']], 'Transferência pede campos novos e preserva respostas históricas.');
+} finally { @unlink($tmpPdf); @unlink($tmpGrande); }
+
 echo "FormularioDinamico: validação dos 8 tipos, obrigatórios, opções fora da lista, escape HTML e árvore de categorias OK.\n";

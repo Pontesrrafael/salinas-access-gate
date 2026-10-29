@@ -1,0 +1,18 @@
+{
+  "nome": "v08-notificacoes-e-duas-etapas",
+  "passos": [
+    {"acao":"legenda","texto":"Nas notificações, escolha em quais eventos deseja receber avisos por e-mail."},
+    {"acao":"ir","rota":"/conta/notificacoes?perfil=colaborador"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":":nth-match(input[name='eventos[]'],1)"},
+    {"acao":"clicar","alvo":"button[value=salvar]","espera":"sucesso=1"},
+    {"acao":"legenda","texto":"Em Duas etapas, leia o QR no aplicativo autenticador ou digite a chave."},
+    {"acao":"ir","rota":"/conta/mfa?perfil=colaborador"},
+    {"acao":"pausar","ms":5000},
+    {"acao":"legenda","texto":"Este QR e esta chave são públicos e fictícios. Não os use em uma conta real."},
+    {"acao":"digitar","alvo":"[name=codigo]","texto":"123456"},
+    {"acao":"clicar","alvo":"button:has-text('Ativar')","espera":"ativada=1"},
+    {"acao":"legenda","texto":"Ativação simulada. No sistema, confirme com o código do seu próprio aplicativo."},
+    {"acao":"pausar","ms":5000}
+  ]
+}

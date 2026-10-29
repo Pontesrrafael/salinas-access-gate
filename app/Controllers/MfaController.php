@@ -132,6 +132,7 @@ final class MfaController extends Controller
 
     private function obrigatorio(array $u): bool
     {
-        return $u['papel'] === 'admin' && Settings::bool('mfa_obrigatorio_admin');
+        // Vale para quem TEM o perfil Admin (mesmo com outro perfil ativo), como em Auth::requireLogin.
+        return Auth::mfaObrigatorio();
     }
 }

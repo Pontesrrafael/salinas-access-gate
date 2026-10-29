@@ -9,7 +9,7 @@ $menu = [
         ['/tutoriais', 'Tutoriais', 'relatorio', null],
     ],
     'Operação' => [
-        ['/painel', 'Painel', 'painel', null],
+        ['/painel', 'Painel', 'painel', 'painel.ver'],
         ['/indicadores', 'Indicadores', 'grafico', 'indicadores.ver'],
         ['/portaria', 'Portaria', 'portaria', 'portaria.operar'],
         ['/solicitacoes', 'Solicitações', 'solicit', 'solicitacoes.ver'],
@@ -20,7 +20,7 @@ $menu = [
         ['/chamados/abrir', 'Abrir chamado', 'mais', 'chamados.abrir'],
         ['/chamados/meus', 'Meus chamados', 'solicit', 'chamados.abrir'],
         ['/chamados/fila', 'Fila de atendimento', 'pessoas', 'chamados.atender'],
-        ['/servicos/config', 'Áreas e formulários', 'config', 'chamados.configurar'],
+        ['/servicos/config', 'Áreas e formulários', 'config', 'chamados.configurar_area'],
     ],
     'Cadastros' => [
         ['/pessoas', 'Pessoas', 'pessoas', 'pessoas.ver'],
@@ -35,6 +35,8 @@ $menu = [
         ['/configuracoes', 'Configurações', 'config', 'configuracoes.gerir'],
     ],
 ];
+if (App\Core\Auth::is('colaborador')) { unset($menu['Ajuda']); }
+$perfis = App\Core\Auth::perfis();
 ?><!doctype html>
 <html lang="<?= e(App\Core\I18n::current()) ?>"<?= tema_attr() ?>>
 <head>
@@ -55,10 +57,10 @@ $menu = [
 <body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
 <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-hidden="true">
 <aside class="sidebar">
-  <div class="sidebar-logo">
+  <a class="sidebar-logo" href="<?= e(url('/')) ?>" title="<?= e(t('Ir para o início')) ?>">
     <img class="logo-claro" src="<?= e(asset('img/logo-horizontal.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
     <img class="logo-escuro" src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
-  </div>
+  </a>
   <nav>
     <?php foreach ($menu as $grupo => $itens):
         $visiveis = array_filter($itens, fn ($i) => $i[3] === null || can($i[3]));
@@ -71,11 +73,12 @@ $menu = [
   </nav>
   <div class="sidebar-rodape">
     <div class="usuario-nome"><?= e($u['nome'] ?? '') ?></div>
-    <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
+    <div class="usuario-papel"><?= e(papel_label(App\Core\Auth::papel())) ?><?= App\Core\Auth::isSegurancaPatrimonial() ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
     <?= botao_tema() ?>
     <?php if (($u['auth_origem'] ?? 'local') === 'local'): ?>
       <a class="nav-item<?= $ativo('/conta/mfa') ?>" href="<?= e(url('/conta/mfa')) ?>"><?= icon('escudo') ?><span><?= e(($u['mfa_ativo'] ?? 0) ? t('Duas etapas') : t('Duas etapas (desligada)')) ?></span></a>
     <?php endif; ?>
+    <a class="nav-item<?= $ativo('/conta/notificacoes') ?>" href="<?= e(url('/conta/notificacoes')) ?>"><?= icon('solicit') ?><span><?= e(t('Notificações por e-mail')) ?></span></a>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
       <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span><?= e(t('Sair')) ?></span></button>
@@ -93,6 +96,21 @@ $menu = [
     <div class="topo-acoes"<?= !empty($acoes) ? ' data-tour="acoes"' : '' ?>>
       <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>"><?= e(t('Como usar')) ?></button><?php endif; ?>
       <?= $acoes ?? '' /* HTML da aplicação */ ?>
+      <?php if (count($perfis) > 1): ?>
+      <details class="seletor-idioma">
+        <summary><?= e(t('Perfil: {perfil}', ['perfil' => papel_label(App\Core\Auth::perfilAtivo())])) ?></summary>
+        <ul class="idioma-opcoes">
+          <?php foreach ($perfis as $perfil): $perfilAtual = $perfil === App\Core\Auth::perfilAtivo(); ?>
+          <li><form method="post" action="<?= e(url('/conta/perfil')) ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="perfil" value="<?= e($perfil) ?>">
+            <input type="hidden" name="voltar" value="<?= e($path . (empty($_SERVER['QUERY_STRING']) ? '' : '?' . $_SERVER['QUERY_STRING'])) ?>">
+            <button type="submit" class="btn btn-fantasma"<?= $perfilAtual ? ' disabled aria-current="true"' : '' ?>><?= e(papel_label($perfil)) ?><?= $perfilAtual ? ' · ' . e(t('Ativo')) : '' ?></button>
+          </form></li>
+          <?php endforeach; ?>
+        </ul>
+      </details>
+      <?php endif; ?>
       <?= seletor_idioma() ?>
     </div>
   </header>

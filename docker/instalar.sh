@@ -128,7 +128,7 @@ done
 echo "OK — $(curl -fsS "http://127.0.0.1:${PORTA}/saude" 2>/dev/null || echo 'saude sem resposta local')"
 
 etapa "Administrador"
-ADMINS="$(docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -N -e "SELECT COUNT(*) FROM usuarios WHERE papel=\"admin\" AND ativo=1"' 2>/dev/null || echo 0)"
+ADMINS="$(docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -N -e "SELECT COUNT(DISTINCT u.id) FROM usuarios u LEFT JOIN usuario_perfis p ON p.usuario_id = u.id AND p.perfil = \"admin\" WHERE u.ativo = 1 AND (u.papel = \"admin\" OR p.perfil IS NOT NULL)"' 2>/dev/null || echo 0)"
 if [ "${ADMINS:-0}" = "0" ]; then
   EMAIL_ADMIN="${SAG_ADMIN_EMAIL:-ti@salinasgold.com.br}"; NOME_ADMIN="${SAG_ADMIN_NOME:-TI Salinas}"
   if [ -t 0 ] && [ -z "${SAG_ADMIN_EMAIL:-}" ]; then
