@@ -28,13 +28,16 @@ $corSugerida = isset($corSugerida) && is_string($corSugerida) && $corSugerida !=
     : ServicosConfigController::sugerirCorArea($areas);
 $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($atalhosSla): void {
     $herdar = $areaHerdada !== null;
+    $unidadesSla = ServicosConfigController::UNIDADES_SLA;
 ?>
   <div class="grade-2">
     <?php foreach (['resposta' => 'SLA padrão de resposta', 'solucao' => 'SLA padrão de solução'] as $tipo => $rotulo): ?>
       <?php
         $valor = $dados['sla_' . $tipo . '_min'] ?? null;
         $atalho = $valor !== null && isset($atalhosSla[(int) $valor]) ? (int) $valor : '';
-        $manual = $valor !== null && $atalho === '' ? (string) $valor : '';
+        $decomposto = $valor !== null && $atalho === ''
+            ? ServicosConfigController::decomporSla((int) $valor)
+            : ['valor' => '', 'unidade' => 'min'];
       ?>
       <div class="form-pilha">
         <label class="campo">
@@ -49,10 +52,20 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
             <small><?= e(t('Herdado da área: {valor}', ['valor' => ServicosConfigController::formatarSla(isset($areaHerdada['sla_' . $tipo . '_min']) ? (int) $areaHerdada['sla_' . $tipo . '_min'] : null)])) ?></small>
           <?php endif; ?>
         </label>
-        <label class="campo">
-          <span><?= e($tipo === 'resposta' ? t('SLA de resposta (minutos)') : t('SLA de solução (minutos)')) ?></span>
-          <input type="number" name="sla_<?= e($tipo) ?>_min" min="1" max="100800" step="1" value="<?= e($manual) ?>">
-        </label>
+        <div class="grade-2 compacta">
+          <label class="campo">
+            <span><?= e($tipo === 'resposta' ? t('SLA de resposta (personalizado)') : t('SLA de solução (personalizado)')) ?></span>
+            <input type="number" name="sla_<?= e($tipo) ?>_min" min="1" max="525600" step="1" value="<?= e($decomposto['valor']) ?>" placeholder="<?= e(t('Até 365 dias')) ?>">
+          </label>
+          <label class="campo">
+            <span><?= e(t('Unidade')) ?></span>
+            <select name="sla_<?= e($tipo) ?>_unidade">
+              <?php foreach ($unidadesSla as $uCod => $uRot): ?>
+                <option value="<?= e($uCod) ?>"<?= selected($decomposto['unidade'], $uCod) ?>><?= e(t($uRot)) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+        </div>
       </div>
     <?php endforeach; ?>
     <label class="campo">
@@ -67,7 +80,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
       <?php endif; ?>
     </label>
   </div>
-  <p class="dica"><?= e(t('O valor personalizado em minutos prevalece sobre o atalho. Deixe ambos vazios para herdar ou ficar sem SLA.')) ?></p>
+  <p class="dica"><?= e(t('O valor personalizado (número + unidade, de 1 minuto até 365 dias) prevalece sobre o atalho. Com horário comercial ativo, "dias" contam dias úteis de expediente (descontando períodos fora do expediente, fins de semana e feriados). Deixe ambos vazios para herdar ou ficar sem SLA.')) ?></p>
 <?php
 };
 ?>

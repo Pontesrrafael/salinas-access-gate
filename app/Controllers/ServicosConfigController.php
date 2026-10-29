@@ -18,15 +18,27 @@ use InvalidArgumentException;
 final class ServicosConfigController extends Controller
 {
     public const ATALHOS_SLA = [
-        15   => '15 min',
-        30   => '30 min',
-        60   => '1 h',
-        120  => '2 h',
-        240  => '4 h',
-        480  => '8 h',
-        1440 => '24 h',
-        4320 => '72 h',
+        15    => '15 min',
+        30    => '30 min',
+        60    => '1 h',
+        120   => '2 h',
+        240   => '4 h',
+        480   => '8 h',
+        1440  => '24 h',
+        4320  => '72 h',
+        7200  => '5 d',
+        10080 => '7 d',
+        21600 => '15 d',
+        43200 => '30 d',
     ];
+
+    public const UNIDADES_SLA = [
+        'min' => 'Minutos',
+        'h'   => 'Horas',
+        'd'   => 'Dias',
+    ];
+
+    public const MAX_SLA_MINUTOS = 525600; // 365 dias
 
     /**
      * Escala única alinhada ao motor Chamados::URGENCIAS (1 = Muito alta … 5 = Muito baixa).
@@ -743,9 +755,42 @@ final class ServicosConfigController extends Controller
         if ($minutos < 60) {
             return $minutos . ' min';
         }
+        if ($minutos >= 1440 && $minutos % 1440 === 0) {
+            return intdiv($minutos, 1440) . ' d';
+        }
         $h = intdiv($minutos, 60);
         $m = $minutos % 60;
         return $m === 0 ? $h . ' h' : $h . ' h ' . $m . ' min';
+    }
+
+    /**
+     * Decompõe os minutos salvos em valor e unidade (min, h, d) para pré-preenchimento do campo personalizado.
+     *
+     * @return array{valor:string, unidade:string}
+     */
+    public static function decomporSla(?int $minutos): array
+    {
+        if ($minutos === null || $minutos <= 0) {
+            return ['valor' => '', 'unidade' => 'min'];
+        }
+        if ($minutos >= 1440 && $minutos % 1440 === 0) {
+            return ['valor' => (string) intdiv($minutos, 1440), 'unidade' => 'd'];
+        }
+        if ($minutos >= 60 && $minutos % 60 === 0) {
+            return ['valor' => (string) intdiv($minutos, 60), 'unidade' => 'h'];
+        }
+        return ['valor' => (string) $minutos, 'unidade' => 'min'];
+    }
+
+    public static function converterParaMinutos(mixed $valor, mixed $unidade = 'min'): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+        if (is_string($valor) && trim($valor) === '') {
+            return null;
+        }
+        return Chamados::converterParaMinutos($valor, $unidade);
     }
 
     /** Validação estrita compartilhada pelos cadastros de área e categoria. */
@@ -753,16 +798,21 @@ final class ServicosConfigController extends Controller
     {
         $dados = [];
         foreach (['resposta', 'solucao'] as $tipo) {
-            $manual = $entrada['sla_' . $tipo . '_min'] ?? '';
+            $manual = $entrada['sla_' . $tipo . '_valor'] ?? $entrada['sla_' . $tipo . '_min'] ?? '';
+            $unidade = $entrada['sla_' . $tipo . '_unidade'] ?? 'min';
             $atalho = $entrada['sla_' . $tipo . '_atalho'] ?? '';
-            if (!is_string($manual) || !is_string($atalho)) {
-                throw new InvalidArgumentException(t('SLA inválido; informe minutos inteiros entre 1 e 100800.'));
+            if ((!is_string($manual) && !is_int($manual)) || (!is_string($atalho) && !is_int($atalho)) || !is_string($unidade)) {
+                throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
             }
-            $valor = trim($manual) !== '' ? trim($manual) : trim($atalho);
-            if ($valor !== '' && (!preg_match('/^[0-9]+$/D', $valor) || (float) $valor < 1 || (float) $valor > 100800)) {
-                throw new InvalidArgumentException(t('SLA inválido; informe minutos inteiros entre 1 e 100800.'));
+            $manualStr = trim((string) $manual);
+            $atalhoStr = trim((string) $atalho);
+            if ($manualStr !== '') {
+                $dados['sla_' . $tipo . '_min'] = Chamados::converterParaMinutos($manualStr, $unidade);
+            } elseif ($atalhoStr !== '') {
+                $dados['sla_' . $tipo . '_min'] = Chamados::converterParaMinutos($atalhoStr, 'min');
+            } else {
+                $dados['sla_' . $tipo . '_min'] = null;
             }
-            $dados['sla_' . $tipo . '_min'] = $valor === '' ? null : (int) $valor;
         }
         $regime = $entrada['usar_horario_comercial'] ?? '';
         if (!in_array($regime, ['', '0', '1'], true)) {

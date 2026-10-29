@@ -120,7 +120,9 @@ final class ChamadosController extends Controller
                     $this->salvarAnexos($uploads, $id, null, $u['id'], $salvos, $campoId);
                 }
                 Audit::log('chamados', $id, 'criar', ['area_id' => $areaId, 'categoria_id' => $categoriaId]);
-                Notificacoes::chamado('criado', Database::one('SELECT * FROM chamados WHERE id = ?', [$id]), ['usuario_id' => $u['id']]);
+                $chamadoCriado = Database::one('SELECT * FROM chamados WHERE id = ?', [$id]);
+                Notificacoes::chamado('criado', $chamadoCriado, ['usuario_id' => $u['id']]);
+                Notificacoes::chamado('recebido', $chamadoCriado);
             });
         } catch (Throwable $e) {
             $this->limparAnexos($salvos);
@@ -305,6 +307,7 @@ final class ChamadosController extends Controller
         // Reutiliza o POST protegido existente; não exige alteração nas rotas da equipe.
         if (Http::str('acao') === 'transferir') { $this->transferir($id); return; }
         if (Http::str('acao') === 'avaliar') { $this->avaliar($id); return; }
+        if (Http::str('acao') === 'prorrogar') { $this->prorrogar($id); return; }
         $u = $this->habilitado();
         $this->chamado($id, $u);
         $destino = Http::str('status');
@@ -333,10 +336,15 @@ final class ChamadosController extends Controller
                 $this->salvarAnexos($files, $id, $eventoId, $u['id'], $salvos);
                 $this->evento($id, $u['id'], 'status', $destino);
                 Audit::log('chamados', $id, match ($destino) { 'solucionado' => 'solucionar', 'fechado' => 'fechar', default => 'mudar_status' }, ['de' => $c['status'], 'para' => $destino]);
+                $chamadoAtualizado = array_replace($c, $mudancas);
                 if (in_array($destino, ['solucionado', 'fechado'], true)) {
-                    Notificacoes::chamado($destino, array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
+                    Notificacoes::chamado($destino, $chamadoAtualizado, ['usuario_id' => $u['id']]);
+                } elseif ($destino === 'pendente') {
+                    Notificacoes::chamado('pendente', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
+                } elseif ($c['status'] === 'solucionado' && $destino === 'atribuido') {
+                    Notificacoes::chamado('reaberto', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
                 } elseif ($texto !== '') {
-                    Notificacoes::chamado('comentario', array_replace($c, $mudancas), ['usuario_id' => $u['id'], 'texto' => $texto]);
+                    Notificacoes::chamado('comentario', $chamadoAtualizado, ['usuario_id' => $u['id'], 'texto' => $texto]);
                 }
             });
         } catch (Throwable $e) {
@@ -383,7 +391,7 @@ final class ChamadosController extends Controller
                 ]));
                 $this->evento($id, $u['id'], 'status', 'novo');
                 Audit::log('chamados', $id, 'transferir', ['area_origem' => $c['area_id'], 'categoria_origem' => $c['categoria_id'], 'area_destino' => $categoria['area_id'], 'categoria_destino' => $categoriaId]);
-                Notificacoes::chamado('criado', array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
+                Notificacoes::chamado('transferido', array_replace($c, $mudancas), ['usuario_id' => $u['id']]);
             });
         } catch (Throwable $e) {
             $this->limparAnexos($salvos);
@@ -409,6 +417,56 @@ final class ChamadosController extends Controller
             });
         } catch (InvalidArgumentException $e) { $this->falha($e->getMessage(), '/chamados/' . $id); }
         $this->ok(t('Avaliação registrada. Obrigado!'), '/chamados/' . $id);
+    }
+
+    public function prorrogar(string $id): void
+    {
+        $u = $this->habilitado('chamados.atender');
+        $this->chamado($id, $u);
+        $atalho = Http::str('prorrogacao_atalho');
+        $valor = Http::str('prorrogacao_valor');
+        $unidade = Http::str('prorrogacao_unidade', 'd');
+        $motivo = Http::str('prorrogacao_motivo');
+        $voltar = '/chamados/' . $id;
+        if ($motivo === '' || mb_strlen($motivo) > 2000) {
+            $this->falha(t('Informe o motivo da prorrogação (até 2.000 caracteres).'), $voltar);
+        }
+        try {
+            if ($valor !== '') {
+                $minutos = Chamados::converterParaMinutos($valor, $unidade);
+            } elseif ($atalho !== '') {
+                $minutos = Chamados::converterParaMinutos($atalho, 'min');
+            } else {
+                throw new InvalidArgumentException(t('Escolha um atalho ou informe o tempo adicional de prorrogação.'));
+            }
+            Database::transaction(function () use ($id, $u, $minutos, $motivo): void {
+                $c = $this->chamado($id, $u, true);
+                if (!$this->atende($c['area_id'], $u)) {
+                    Http::abort(403, t('Apenas a equipe da área pode atender este chamado.'));
+                }
+                $agora = new DateTimeImmutable();
+                $antes = Chamados::prazoSolucao($c, $agora)?->format('Y-m-d H:i:s');
+                $mudancas = Chamados::prorrogar($c, $minutos, $agora);
+                Database::update('chamados', $mudancas, 'id = ?', [$id]);
+                $depois = Chamados::prazoSolucao(array_replace($c, $mudancas), $agora)?->format('Y-m-d H:i:s');
+                $duracaoTexto = ServicosConfigController::formatarSla($minutos);
+                $this->evento($id, $u['id'], 'prorrogacao', t('Prazo de solução prorrogado em +{tempo} (novo prazo: {prazo}). Motivo: {motivo}', [
+                    'tempo'  => $duracaoTexto,
+                    'prazo'  => fmt_data_hora($depois),
+                    'motivo' => $motivo,
+                ]));
+                Audit::log('chamados', $id, 'prorrogar', [
+                    'minutos'              => $minutos,
+                    'antes'                => $antes,
+                    'depois'               => $depois,
+                    'prazo_prorrogado_min' => $mudancas['prazo_prorrogado_min'],
+                    'motivo'               => $motivo,
+                ]);
+            });
+        } catch (InvalidArgumentException $e) {
+            $this->falha($e->getMessage(), $voltar);
+        }
+        $this->ok(t('Prazo de solução prorrogado.'), $voltar);
     }
 
     private function salvarAnexos(array $files, string $id, ?string $eventoId, string $usuarioId, array &$salvos, ?string $campoId = null): void

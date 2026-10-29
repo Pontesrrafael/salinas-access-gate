@@ -15,12 +15,17 @@ use Throwable;
  *
  * Regras:
  * - Apenas enfileira em email_fila via Email::enfileirar (nunca envia na requisição HTTP).
+ * - Filtra destinatários por PreferenciasNotificacao::quer($usuarioId, $evento).
  * - Destinatários por evento:
- *   - criado: equipe da área (servico_area_membros + usuarios.email ativos)
- *   - atribuido: atendente responsável
- *   - comentario (público): a outra parte (atendente/equipe se o solicitante comentou; solicitante se a equipe comentou)
- *   - solucionado: solicitante
- *   - fechado: a outra parte (atendente/equipe quando fechado pelo solicitante; solicitante quando fechado automaticamente ou pela equipe)
+ *   - criado: equipe da área (atendente.criado)
+ *   - recebido / solicitante.criado: solicitante (solicitante.criado)
+ *   - atribuido: atendente responsável (atendente.atribuido) e solicitante (solicitante.atribuido)
+ *   - comentario (público): a outra parte (atendente.comentario se o solicitante comentou; solicitante.comentario se a equipe comentou)
+ *   - pendente: solicitante (solicitante.pendente)
+ *   - solucionado: solicitante (solicitante.solucionado)
+ *   - fechado: a outra parte (atendente/equipe quando fechado pelo solicitante; solicitante.fechado quando fechado automaticamente ou pela equipe)
+ *   - transferido: equipe da área de destino (atendente.transferido)
+ *   - reaberto: atendente responsável ou equipe da área (atendente.reaberto)
  * - Nunca avisa quem realizou a ação.
  * - Nunca envia notas internas nem dados sensíveis/desnecessários (LGPD).
  */
@@ -45,7 +50,7 @@ final class Notificacoes
     /**
      * Enfileira notificações do chamado conforme o evento ocorrido.
      *
-     * @param string               $evento  criado|atribuido|comentario|solucionado|fechado
+     * @param string               $evento  criado|recebido|atribuido|comentario|pendente|solucionado|fechado|transferido|reaberto
      * @param array<string, mixed> $chamado Linha ou dados do chamado
      * @param array<string, mixed> $extra   Contexto adicional (ex.: usuario_id, tipo, automatico, atendente_id)
      */
@@ -69,7 +74,6 @@ final class Notificacoes
             return;
         }
 
-        [$assunto, $tituloEvento, $resumoEvento] = self::textosEvento($eventoNorm, $chamado);
         $numero = !empty($chamado['numero']) ? '#' . $chamado['numero'] : '#' . substr($id, 0, 8);
         $tituloChamado = self::limparLinha((string) ($chamado['titulo'] ?? t('Chamado')));
         $areaNome = self::limparLinha((string) ($chamado['area_nome'] ?? '—'));
@@ -83,6 +87,9 @@ final class Notificacoes
         $referencia = 'chamado:' . $id;
 
         foreach ($destinatarios as $dest) {
+            $eventoTexto = (string) ($dest['evento_pref'] ?? $eventoNorm);
+            [$assunto, $tituloEvento, $resumoEvento] = self::textosEvento($eventoNorm, $chamado, $eventoTexto);
+
             $dadosView = [
                 'assunto'          => $assunto,
                 'tituloEvento'     => $tituloEvento,
@@ -110,7 +117,8 @@ final class Notificacoes
     }
 
     /**
-     * Determina a lista deduplicada de destinatários para o evento, excluindo quem realizou a ação.
+     * Determina a lista deduplicada de destinatários para o evento, excluindo quem realizou a ação
+     * e respeitando as preferências individuais (PreferenciasNotificacao::quer).
      *
      * @param array<string, mixed> $chamado
      * @param array<string, mixed> $extra
@@ -134,13 +142,63 @@ final class Notificacoes
         $candidatos = [];
         switch ($eventoNorm) {
             case 'criado':
-                $candidatos = self::buscarEquipeArea($areaId, $chamado, $extra);
+            case 'atendente.criado':
+                foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                    $m['evento_pref'] = 'atendente.criado';
+                    $candidatos[] = $m;
+                }
+                if (!empty($extra['incluir_solicitante']) && $solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.criado';
+                        $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'recebido':
+            case 'solicitante.criado':
+                if ($solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.criado';
+                        $candidatos[] = $u;
+                    }
+                }
                 break;
 
             case 'atribuido':
                 if ($atendenteId !== '') {
                     $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
                     if ($u !== null) {
+                        $u['evento_pref'] = 'atendente.atribuido';
+                        $candidatos[] = $u;
+                    }
+                }
+                if ($solicitanteId !== '') {
+                    $uSol = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($uSol !== null) {
+                        $uSol['evento_pref'] = 'solicitante.atribuido';
+                        $candidatos[] = $uSol;
+                    }
+                }
+                break;
+
+            case 'atendente.atribuido':
+                if ($atendenteId !== '') {
+                    $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'atendente.atribuido';
+                        $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'solicitante.atribuido':
+                if ($solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.atribuido';
                         $candidatos[] = $u;
                     }
                 }
@@ -152,26 +210,69 @@ final class Notificacoes
                     if ($atendenteId !== '') {
                         $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
                         if ($u !== null) {
+                            $u['evento_pref'] = 'atendente.comentario';
                             $candidatos[] = $u;
                         }
                     } else {
-                        $candidatos = self::buscarEquipeArea($areaId, $chamado, $extra);
+                        foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                            $m['evento_pref'] = 'atendente.comentario';
+                            $candidatos[] = $m;
+                        }
                     }
                 } else {
                     // Atendente ou equipe comentou: avisa o solicitante.
                     if ($solicitanteId !== '') {
                         $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
                         if ($u !== null) {
+                            $u['evento_pref'] = 'solicitante.comentario';
                             $candidatos[] = $u;
                         }
                     }
                 }
                 break;
 
-            case 'solucionado':
+            case 'atendente.comentario':
+                if ($atendenteId !== '') {
+                    $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'atendente.comentario';
+                        $candidatos[] = $u;
+                    }
+                } else {
+                    foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                        $m['evento_pref'] = 'atendente.comentario';
+                        $candidatos[] = $m;
+                    }
+                }
+                break;
+
+            case 'solicitante.comentario':
                 if ($solicitanteId !== '') {
                     $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
                     if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.comentario';
+                        $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'pendente':
+            case 'solicitante.pendente':
+                if ($solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.pendente';
+                        $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'solucionado':
+            case 'solicitante.solucionado':
+                if ($solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.solucionado';
                         $candidatos[] = $u;
                     }
                 }
@@ -185,15 +286,54 @@ final class Notificacoes
                     if ($atendenteId !== '') {
                         $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
                         if ($u !== null) {
+                            $u['evento_pref'] = 'atendente.fechado';
                             $candidatos[] = $u;
                         }
                     } else {
-                        $candidatos = self::buscarEquipeArea($areaId, $chamado, $extra);
+                        foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                            $m['evento_pref'] = 'atendente.fechado';
+                            $candidatos[] = $m;
+                        }
                     }
                 } elseif ($solicitanteId !== '') {
                     $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
                     if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.fechado';
                         $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'solicitante.fechado':
+                if ($solicitanteId !== '') {
+                    $u = self::buscarUsuario($solicitanteId, 'solicitante', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'solicitante.fechado';
+                        $candidatos[] = $u;
+                    }
+                }
+                break;
+
+            case 'transferido':
+            case 'atendente.transferido':
+                foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                    $m['evento_pref'] = 'atendente.transferido';
+                    $candidatos[] = $m;
+                }
+                break;
+
+            case 'reaberto':
+            case 'atendente.reaberto':
+                if ($atendenteId !== '') {
+                    $u = self::buscarUsuario($atendenteId, 'atendente', $chamado, $extra);
+                    if ($u !== null) {
+                        $u['evento_pref'] = 'atendente.reaberto';
+                        $candidatos[] = $u;
+                    }
+                } else {
+                    foreach (self::buscarEquipeArea($areaId, $chamado, $extra) as $m) {
+                        $m['evento_pref'] = 'atendente.reaberto';
+                        $candidatos[] = $m;
                     }
                 }
                 break;
@@ -225,11 +365,16 @@ final class Notificacoes
             if (isset($porEmail[$emailKey])) {
                 continue;
             }
+            $eventoPref = (string) ($c['evento_pref'] ?? $eventoNorm);
+            if ($cid !== '' && !PreferenciasNotificacao::quer($cid, $eventoPref)) {
+                continue;
+            }
             $porEmail[$emailKey] = true;
             $unicos[] = [
-                'id'    => $cid,
-                'nome'  => (string) ($c['nome'] ?? ''),
-                'email' => $email,
+                'id'          => $cid,
+                'nome'        => (string) ($c['nome'] ?? ''),
+                'email'       => $email,
+                'evento_pref' => $eventoPref,
             ];
         }
 
@@ -244,11 +389,26 @@ final class Notificacoes
         }
 
         return match (strtolower(trim($evento))) {
-            'criado', 'criar', 'aberto', 'novo'                     => 'criado',
+            'criado', 'criar', 'novo'                               => 'criado',
+            'recebido', 'aberto', 'solicitante.criado',
+            'solicitante_criado'                                    => 'recebido',
+            'atendente.criado', 'atendente_criado'                  => 'atendente.criado',
             'atribuido', 'atribuir', 'atribuicao'                   => 'atribuido',
+            'atendente.atribuido', 'atendente_atribuido'            => 'atendente.atribuido',
+            'solicitante.atribuido', 'solicitante_atribuido'        => 'solicitante.atribuido',
             'comentario', 'comentario_publico', 'acompanhar'        => 'comentario',
-            'solucionado', 'solucionar', 'solucao'                  => 'solucionado',
+            'atendente.comentario', 'atendente_comentario'          => 'atendente.comentario',
+            'solicitante.comentario', 'solicitante_comentario'      => 'solicitante.comentario',
+            'pendente', 'solicitante.pendente',
+            'solicitante_pendente', 'aguardando_solicitante'        => 'pendente',
+            'solucionado', 'solucionar', 'solucao',
+            'solicitante.solucionado', 'solicitante_solucionado'    => 'solucionado',
             'fechado', 'fechar'                                     => 'fechado',
+            'solicitante.fechado', 'solicitante_fechado'            => 'solicitante.fechado',
+            'transferido', 'transferir', 'transferencia',
+            'atendente.transferido', 'atendente_transferido'        => 'transferido',
+            'reaberto', 'reabrir', 'reabertura',
+            'atendente.reaberto', 'atendente_reaberto'              => 'reaberto',
             default                                                 => null,
         };
     }
@@ -261,7 +421,7 @@ final class Notificacoes
      */
     private static function identificarAutor(string $eventoNorm, array $chamado, array $extra): ?string
     {
-        if (!empty($extra['automatico'])) {
+        if ($eventoNorm === 'recebido' || !empty($extra['automatico'])) {
             return null;
         }
         foreach (['usuario_id', 'autor_id', 'ator_id'] as $chave) {
@@ -287,30 +447,56 @@ final class Notificacoes
      * @param array<string, mixed> $chamado
      * @return array{0:string,1:string,2:string} [assunto, tituloEvento, resumoEvento]
      */
-    private static function textosEvento(string $eventoNorm, array $chamado): array
+    private static function textosEvento(string $eventoNorm, array $chamado, ?string $eventoPref = null): array
     {
         $id = (string) ($chamado['id'] ?? '');
         $numero = !empty($chamado['numero']) ? '#' . $chamado['numero'] : '#' . substr($id, 0, 8);
         $titulo = self::limparLinha((string) ($chamado['titulo'] ?? t('Chamado')));
         $prefixo = '[Salinas Access Gate] ' . t('Chamado {numero}', ['numero' => $numero]);
+        $chave = $eventoPref !== null && $eventoPref !== '' ? $eventoPref : $eventoNorm;
 
-        return match ($eventoNorm) {
-            'criado' => [
+        return match ($chave) {
+            'criado', 'atendente.criado' => [
                 mb_substr("{$prefixo} — " . t('Novo chamado') . ": {$titulo}", 0, 200),
                 t('Novo chamado aberto na área'),
                 t('Um novo chamado foi registrado na sua área de atendimento e aguarda triagem.'),
             ],
-            'atribuido' => [
+            'recebido', 'solicitante.criado' => [
+                mb_substr("{$prefixo} — " . t('Chamado recebido') . ": {$titulo}", 0, 200),
+                t('Seu chamado foi registrado'),
+                t('Recebemos a sua solicitação de serviço. Acompanhe o andamento pelo sistema.'),
+            ],
+            'atribuido', 'atendente.atribuido' => [
                 mb_substr("{$prefixo} — " . t('Atribuído a você') . ": {$titulo}", 0, 200),
                 t('Chamado atribuído a você'),
                 t('Você foi definido como atendente responsável por este chamado.'),
             ],
-            'comentario' => [
+            'solicitante.atribuido' => [
+                mb_substr("{$prefixo} — " . t('Em atendimento') . ": {$titulo}", 0, 200),
+                t('Chamado atribuído a um atendente'),
+                t('Um atendente assumiu o seu chamado e iniciou o atendimento.'),
+            ],
+            'comentario', 'solicitante.comentario', 'atendente.comentario' => [
                 mb_substr("{$prefixo} — " . t('Novo comentário') . ": {$titulo}", 0, 200),
                 t('Novo comentário público no chamado'),
                 t('Há um novo acompanhamento público registrado neste chamado.'),
             ],
-            'solucionado' => [
+            'pendente', 'solicitante.pendente' => [
+                mb_substr("{$prefixo} — " . t('Aguardando retorno') . ": {$titulo}", 0, 200),
+                t('Chamado pendente (aguardando você)'),
+                t('O atendimento aguarda uma informação ou confirmação sua para prosseguir.'),
+            ],
+            'transferido', 'atendente.transferido' => [
+                mb_substr("{$prefixo} — " . t('Chamado transferido') . ": {$titulo}", 0, 200),
+                t('Chamado transferido para a sua área'),
+                t('Um chamado foi transferido para a sua área de atendimento e aguarda triagem.'),
+            ],
+            'reaberto', 'atendente.reaberto' => [
+                mb_substr("{$prefixo} — " . t('Chamado reaberto') . ": {$titulo}", 0, 200),
+                t('Chamado reaberto pelo solicitante'),
+                t('O solicitante reabriu o chamado para revisão do atendimento.'),
+            ],
+            'solucionado', 'solicitante.solucionado' => [
                 mb_substr("{$prefixo} — " . t('Solucionado') . ": {$titulo}", 0, 200),
                 t('Chamado solucionado'),
                 t('O chamado foi marcado como solucionado. Acesse o sistema para aprovar a solução ou reabrir o atendimento.'),
