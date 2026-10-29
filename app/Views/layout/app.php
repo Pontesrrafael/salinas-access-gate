@@ -9,7 +9,7 @@ $menu = [
         ['/tutoriais', 'Tutoriais', 'relatorio', null],
     ],
     'Operação' => [
-        ['/painel', 'Painel', 'painel', null],
+        ['/painel', 'Painel', 'painel', 'painel.ver'],
         ['/indicadores', 'Indicadores', 'grafico', 'indicadores.ver'],
         ['/portaria', 'Portaria', 'portaria', 'portaria.operar'],
         ['/solicitacoes', 'Solicitações', 'solicit', 'solicitacoes.ver'],

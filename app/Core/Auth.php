@@ -21,6 +21,7 @@ final class Auth
     /** permissão => papéis autorizados */
     private const PERMISSOES = [
         'portaria.operar'          => ['admin', 'porteiro'],
+        'painel.ver'               => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.ver'              => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.criar'            => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'pessoas.editar'           => ['admin', 'supervisor', 'ssma'],

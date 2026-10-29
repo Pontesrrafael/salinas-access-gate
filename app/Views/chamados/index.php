@@ -5,9 +5,10 @@ $filtros += ['q' => '', 'ordem' => '', 'visao' => $fila ? 'abertos' : 'todos'];
 $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
 ?>
 <div class="chamados">
-<nav class="abas" aria-label="<?= e(t('Atalhos de chamados')) ?>">
+<nav class="filtros-rapidos" aria-label="<?= e(t('Atalhos de chamados')) ?>">
   <?php foreach ([['Em aberto', ['visao' => 'abertos']], ['Sem atendente', ['visao' => 'abertos', 'atendente_id' => 'none']], ['Atribuídos a mim', ['visao' => 'abertos', 'atendente_id' => 'me']], ['SLA vencendo ou vencido', ['visao' => 'abertos', 'prazo' => 'alerta']], ['Todos', ['visao' => 'todos']]] as [$rotulo, $query]): ?>
-    <a href="<?= e(url($caminho, ['area_id' => $filtros['area_id'], 'q' => $filtros['q']] + $query)) ?>"><?= e(t($rotulo)) ?></a>
+    <?php $atalhoAtivo = array_diff_assoc($query + ['atendente_id' => '', 'prazo' => ''], array_intersect_key($filtros, $query + ['atendente_id' => '', 'prazo' => ''])) === []; ?>
+    <a class="btn btn-sm <?= $atalhoAtivo ? 'btn-primario' : 'btn-secundario' ?>" href="<?= e(url($caminho, ['area_id' => $filtros['area_id'], 'q' => $filtros['q']] + $query)) ?>"<?= $atalhoAtivo ? ' aria-current="page"' : '' ?>><?= e(t($rotulo)) ?></a>
   <?php endforeach; ?>
 </nav>
 <?php if ($fila && !empty($satisfacaoAreas)): ?>

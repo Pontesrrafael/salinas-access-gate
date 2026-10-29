@@ -920,3 +920,4 @@ body.modo-tv { font-size: 16px; }
   .chamados .filtros .campo, .servicos-config .filtros .campo { flex: 1 1 calc(50% - 12px); min-width: 130px; }
   .chamados .grade-2 > .kpi { padding: 10px 12px; }
 }
+.filtros-rapidos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
