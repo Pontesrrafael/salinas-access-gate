@@ -10,6 +10,7 @@ use App\Core\Http;
 use App\Core\Uuid;
 use App\Services\Chamados;
 use App\Services\FormularioDinamico;
+use InvalidArgumentException;
 
 /**
  * Administração das áreas de suporte, membros, árvore de categorias/SLAs e construtor de formulários dinâmicos.
@@ -185,6 +186,18 @@ final class ServicosConfigController extends Controller
             'ordem'     => $ordem,
         ];
 
+        try {
+            $d += self::dadosSla($_POST);
+            // Uma alteração na área também pode invalidar prazos parcialmente herdados.
+            if ($id !== null) {
+                foreach (Database::all('SELECT * FROM servico_categorias WHERE area_id = ?', [$id]) as $categoria) {
+                    self::validarSlaEfetivo($categoria, $d);
+                }
+            }
+        } catch (InvalidArgumentException $e) {
+            $this->falha($e->getMessage(), '/servicos/config');
+        }
+
         if ($id === null) {
             $id = Uuid::v4();
             $d['ativo'] = 1;
@@ -337,7 +350,8 @@ final class ServicosConfigController extends Controller
 
         $areaId = $existente ? (string) $existente['area_id'] : Http::str('area_id');
         $this->uuidOu404($areaId);
-        if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$areaId])) {
+        $area = Database::one('SELECT * FROM servico_areas WHERE id = ?', [$areaId]);
+        if ($area === null) {
             Http::abort(404, t('Área não encontrada.'));
         }
 
@@ -366,8 +380,12 @@ final class ServicosConfigController extends Controller
             }
         }
 
-        $slaResposta = self::resolverSlaMin('sla_resposta_min', 'sla_resposta_atalho');
-        $slaSolucao = self::resolverSlaMin('sla_solucao_min', 'sla_solucao_atalho');
+        try {
+            $sla = self::dadosSla($_POST);
+            self::validarSlaEfetivo($sla, $area);
+        } catch (InvalidArgumentException $e) {
+            $this->falha($e->getMessage(), $voltar);
+        }
         $urgencia = max(1, min(5, (int) Http::str('urgencia_padrao', '3')));
         $ordem = max(0, min(9999, (int) Http::str('ordem', '0')));
 
@@ -376,10 +394,8 @@ final class ServicosConfigController extends Controller
             'parent_id'              => $parentId,
             'nome'                   => $nome,
             'descricao'              => Http::nstr('descricao', 1000),
-            'sla_resposta_min'       => $slaResposta,
-            'sla_solucao_min'        => $slaSolucao,
+            ...$sla,
             'urgencia_padrao'        => $urgencia,
-            'usar_horario_comercial' => Http::bool('usar_horario_comercial') ? 1 : 0,
             'ordem'                  => $ordem,
         ];
 
@@ -651,18 +667,37 @@ final class ServicosConfigController extends Controller
         return $m === 0 ? $h . ' h' : $h . ' h ' . $m . ' min';
     }
 
-    private static function resolverSlaMin(string $campoMin, string $campoAtalho): ?int
+    /** Validação estrita compartilhada pelos cadastros de área e categoria. */
+    public static function dadosSla(array $entrada): array
     {
-        $manual = Http::str($campoMin);
-        if ($manual !== '' && is_numeric($manual)) {
-            $val = (int) $manual;
-            return $val > 0 ? min(100800, $val) : null;
+        $dados = [];
+        foreach (['resposta', 'solucao'] as $tipo) {
+            $manual = $entrada['sla_' . $tipo . '_min'] ?? '';
+            $atalho = $entrada['sla_' . $tipo . '_atalho'] ?? '';
+            if (!is_string($manual) || !is_string($atalho)) {
+                throw new InvalidArgumentException(t('SLA inválido; informe minutos inteiros entre 1 e 100800.'));
+            }
+            $valor = trim($manual) !== '' ? trim($manual) : trim($atalho);
+            if ($valor !== '' && (!preg_match('/^[0-9]+$/D', $valor) || (float) $valor < 1 || (float) $valor > 100800)) {
+                throw new InvalidArgumentException(t('SLA inválido; informe minutos inteiros entre 1 e 100800.'));
+            }
+            $dados['sla_' . $tipo . '_min'] = $valor === '' ? null : (int) $valor;
         }
-        $atalho = Http::str($campoAtalho);
-        if ($atalho !== '' && is_numeric($atalho)) {
-            $val = (int) $atalho;
-            return $val > 0 ? min(100800, $val) : null;
+        $regime = $entrada['usar_horario_comercial'] ?? '';
+        if (!in_array($regime, ['', '0', '1'], true)) {
+            throw new InvalidArgumentException(t('Selecione um regime de SLA válido.'));
         }
-        return null;
+        $dados['usar_horario_comercial'] = $regime === '' ? null : (int) $regime;
+        self::validarSlaEfetivo($dados, []);
+        return $dados;
+    }
+
+    public static function validarSlaEfetivo(array $categoria, array $area): void
+    {
+        // O calendário não interfere na comparação de durações.
+        $sla = Chamados::slaEfetivo(array_replace($categoria, ['usar_horario_comercial' => 0]), $area);
+        if ($sla['resposta_min'] !== null && $sla['solucao_min'] !== null && $sla['solucao_min'] < $sla['resposta_min']) {
+            throw new InvalidArgumentException(t('O SLA de solução deve ser maior ou igual ao de resposta, incluindo valores herdados.'));
+        }
     }
 }

@@ -20,6 +20,50 @@ $atalhosSla = ServicosConfigController::ATALHOS_SLA;
 $urgencias = Chamados::URGENCIAS;
 $papeisMembro = ServicosConfigController::PAPEIS_MEMBRO;
 $tiposCampo = FormularioDinamico::TIPOS;
+$camposSla = static function (array $dados, ?array $areaHerdada = null) use ($atalhosSla): void {
+    $herdar = $areaHerdada !== null;
+?>
+  <div class="grade-2">
+    <?php foreach (['resposta' => 'SLA padrão de resposta', 'solucao' => 'SLA padrão de solução'] as $tipo => $rotulo): ?>
+      <?php
+        $valor = $dados['sla_' . $tipo . '_min'] ?? null;
+        $atalho = $valor !== null && isset($atalhosSla[(int) $valor]) ? (int) $valor : '';
+        $manual = $valor !== null && $atalho === '' ? (string) $valor : '';
+      ?>
+      <div class="form-pilha">
+        <label class="campo">
+          <span><?= e($herdar ? ($tipo === 'resposta' ? t('SLA de resposta (atalho)') : t('SLA de solução (atalho)')) : t($rotulo)) ?></span>
+          <select name="sla_<?= e($tipo) ?>_atalho">
+            <option value=""><?= e($herdar ? t('Herdar da área') : t('— Sem SLA / personalizado —')) ?></option>
+            <?php foreach ($atalhosSla as $min => $rot): ?>
+              <option value="<?= (int) $min ?>"<?= selected($atalho, $min) ?>><?= e($rot) ?> (<?= (int) $min ?> min)</option>
+            <?php endforeach; ?>
+          </select>
+          <?php if ($herdar): ?>
+            <small><?= e(t('Herdado da área: {valor}', ['valor' => ServicosConfigController::formatarSla(isset($areaHerdada['sla_' . $tipo . '_min']) ? (int) $areaHerdada['sla_' . $tipo . '_min'] : null)])) ?></small>
+          <?php endif; ?>
+        </label>
+        <label class="campo">
+          <span><?= e($tipo === 'resposta' ? t('SLA de resposta (minutos)') : t('SLA de solução (minutos)')) ?></span>
+          <input type="number" name="sla_<?= e($tipo) ?>_min" min="1" max="100800" step="1" value="<?= e($manual) ?>">
+        </label>
+      </div>
+    <?php endforeach; ?>
+    <label class="campo">
+      <span><?= e(t('Regime de contagem do SLA')) ?></span>
+      <select name="usar_horario_comercial">
+        <option value=""<?= selected($dados['usar_horario_comercial'] ?? '', '') ?>><?= e($herdar ? t('Herdar da área') : t('Seguir padrão global')) ?></option>
+        <option value="1"<?= selected($dados['usar_horario_comercial'] ?? '', '1') ?>><?= e(t('Horário comercial')) ?></option>
+        <option value="0"<?= selected($dados['usar_horario_comercial'] ?? '', '0') ?>><?= e(t('Horas corridas (24x7)')) ?></option>
+      </select>
+      <?php if ($herdar): ?>
+        <small><?= e(Chamados::textoSla([], $areaHerdada)) ?></small>
+      <?php endif; ?>
+    </label>
+  </div>
+  <p class="dica"><?= e(t('O valor personalizado em minutos prevalece sobre o atalho. Deixe ambos vazios para herdar ou ficar sem SLA.')) ?></p>
+<?php
+};
 ?>
 <div class="servicos-config">
 
@@ -52,6 +96,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
           <input type="text" name="descricao" maxlength="500" placeholder="<?= e(t('Resumo dos serviços atendidos por esta área')) ?>">
         </label>
       </div>
+      <?php $camposSla([]); ?>
       <div class="form-acoes">
         <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar área')) ?></button>
       </div>
@@ -114,6 +159,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
                     <span><?= e(t('Área ativa para novos chamados')) ?></span>
                   </label>
                 </div>
+                <?php $camposSla($a); ?>
                 <div class="form-acoes">
                   <a class="btn btn-secundario btn-sm" href="<?= e(url('/servicos/config', ['area' => $a['id']])) ?>"><?= e(t('Cancelar')) ?></a>
                   <button class="btn btn-primario btn-sm" type="submit"><?= e(t('Salvar')) ?></button>
@@ -261,36 +307,8 @@ $tiposCampo = FormularioDinamico::TIPOS;
                 <?php endforeach; ?>
               </select>
             </label>
-            <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1" checked> <span><?= e(t('SLA em horário comercial')) ?><br><small><?= e(t('Desmarque para contar 24 horas por dia, 7 dias por semana.')) ?></small></span></label>
           </div>
-          <div class="grade-4">
-            <label class="campo">
-              <span><?= e(t('SLA de resposta (atalho)')) ?></span>
-              <select name="sla_resposta_atalho">
-                <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-                <?php foreach ($atalhosSla as $min => $rot): ?>
-                  <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-            <label class="campo">
-              <span><?= e(t('SLA de resposta (minutos)')) ?></span>
-              <input type="number" name="sla_resposta_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
-            </label>
-            <label class="campo">
-              <span><?= e(t('SLA de solução (atalho)')) ?></span>
-              <select name="sla_solucao_atalho">
-                <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-                <?php foreach ($atalhosSla as $min => $rot): ?>
-                  <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-            <label class="campo">
-              <span><?= e(t('SLA de solução (minutos)')) ?></span>
-              <input type="number" name="sla_solucao_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
-            </label>
-          </div>
+          <?php $camposSla([], $areaAtual); ?>
           <div class="grade-3">
             <label class="campo campo-largo">
               <span><?= e(t('Descrição / orientação para o solicitante')) ?></span>
@@ -327,14 +345,6 @@ $tiposCampo = FormularioDinamico::TIPOS;
         <?php endif; ?>
         <?php foreach ($categorias as $c): ?>
           <?php if ($editarCategoria === $c['id']): ?>
-            <?php
-              $respMin = isset($c['sla_resposta_min']) ? (int) $c['sla_resposta_min'] : 0;
-              $solMin = isset($c['sla_solucao_min']) ? (int) $c['sla_solucao_min'] : 0;
-              $respAtalho = isset($atalhosSla[$respMin]) ? $respMin : '';
-              $respManual = ($respMin > 0 && !isset($atalhosSla[$respMin])) ? (string) $respMin : '';
-              $solAtalho = isset($atalhosSla[$solMin]) ? $solMin : '';
-              $solManual = ($solMin > 0 && !isset($atalhosSla[$solMin])) ? (string) $solMin : '';
-            ?>
             <tr>
               <td colspan="6">
                 <form method="post" action="<?= e(url('/servicos/config/categorias/' . $c['id'])) ?>" class="form-pilha">
@@ -365,36 +375,8 @@ $tiposCampo = FormularioDinamico::TIPOS;
                         <?php endforeach; ?>
                       </select>
                     </label>
-                    <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1"<?= checked($c['usar_horario_comercial'] ?? 1) ?>> <span><?= e(t('SLA em horário comercial')) ?></span></label>
                   </div>
-                  <div class="grade-4">
-                    <label class="campo">
-                      <span><?= e(t('SLA de resposta (atalho)')) ?></span>
-                      <select name="sla_resposta_atalho">
-                        <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-                        <?php foreach ($atalhosSla as $min => $rot): ?>
-                          <option value="<?= (int) $min ?>"<?= selected($respAtalho, $min) ?>><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-                        <?php endforeach; ?>
-                      </select>
-                    </label>
-                    <label class="campo">
-                      <span><?= e(t('SLA de resposta (minutos)')) ?></span>
-                      <input type="number" name="sla_resposta_min" min="1" max="100800" value="<?= e($respManual) ?>">
-                    </label>
-                    <label class="campo">
-                      <span><?= e(t('SLA de solução (atalho)')) ?></span>
-                      <select name="sla_solucao_atalho">
-                        <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-                        <?php foreach ($atalhosSla as $min => $rot): ?>
-                          <option value="<?= (int) $min ?>"<?= selected($solAtalho, $min) ?>><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-                        <?php endforeach; ?>
-                      </select>
-                    </label>
-                    <label class="campo">
-                      <span><?= e(t('SLA de solução (minutos)')) ?></span>
-                      <input type="number" name="sla_solucao_min" min="1" max="100800" value="<?= e($solManual) ?>">
-                    </label>
-                  </div>
+                  <?php $camposSla($c, $areaAtual); ?>
                   <div class="grade-3">
                     <label class="campo">
                       <span><?= e(t('Descrição')) ?></span>
@@ -417,14 +399,15 @@ $tiposCampo = FormularioDinamico::TIPOS;
               </td>
             </tr>
           <?php else: ?>
-            <?php $urgPadrao = (int) ($c['urgencia_padrao'] ?? 3); ?>
+            <?php $urgPadrao = (int) ($c['urgencia_padrao'] ?? 3); $sla = Chamados::slaEfetivo($c, $areaAtual); ?>
             <tr>
               <td data-rotulo="<?= e(t('Categoria (árvore)')) ?>">
                 <strong><?= e(str_repeat('↳ ', (int) ($c['nivel'] ?? 0)) . $c['nome']) ?></strong>
                 <span class="sub"><?= e($c['caminho'] ?? $c['nome']) ?><?= !empty($c['descricao']) ? ' — ' . e($c['descricao']) : '' ?></span>
+                <span class="sub"><?= e(Chamados::textoSla($c, $areaAtual)) ?></span>
               </td>
-              <td data-rotulo="<?= e(t('SLA Resposta')) ?>"><?= e(ServicosConfigController::formatarSla(isset($c['sla_resposta_min']) ? (int) $c['sla_resposta_min'] : null)) ?></td>
-              <td data-rotulo="<?= e(t('SLA Solução')) ?>"><?= e(ServicosConfigController::formatarSla(isset($c['sla_solucao_min']) ? (int) $c['sla_solucao_min'] : null)) ?></td>
+              <td data-rotulo="<?= e(t('SLA Resposta')) ?>"><?= e(ServicosConfigController::formatarSla($sla['resposta_min'])) ?><span class="sub"><?= e($sla['resposta_min'] === null ? t('Sem SLA definido') : (isset($c['sla_resposta_min']) ? t('SLA da categoria') : t('SLA da área'))) ?></span></td>
+              <td data-rotulo="<?= e(t('SLA Solução')) ?>"><?= e(ServicosConfigController::formatarSla($sla['solucao_min'])) ?><span class="sub"><?= e($sla['solucao_min'] === null ? t('Sem SLA definido') : (isset($c['sla_solucao_min']) ? t('SLA da categoria') : t('SLA da área'))) ?></span></td>
               <td class="ocultar-sm" data-rotulo="<?= e(t('Urgência padrão')) ?>"><?= $urgPadrao ?> — <?= e(label_t($urgencias, $urgPadrao, 'Média')) ?></td>
               <td data-rotulo="<?= e(t('Situação')) ?>"><?= (int) $c['ativo'] ? badge(t('Ativa'), 'sucesso') : badge(t('Inativa'), 'neutro') ?></td>
               <td class="acoes">

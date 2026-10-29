@@ -16,6 +16,8 @@ O gerenciamento das áreas, equipes, categorias e formulários fica em **Serviç
    - **Identificador (slug)**: gerado automaticamente a partir do nome quando deixado em branco;
    - **Cor de identificação**: código hexadecimal (`#024B37` por padrão);
    - **Ordem de exibição** e **Descrição** resumida dos serviços atendidos.
+   - **SLA padrão de resposta** e **SLA padrão de solução**: escolha um atalho de `15 min` a `72 h` ou informe minutos personalizados (de `1` a `100800`). O campo personalizado prevalece sobre o atalho; ambos vazios significam sem prazo padrão na área.
+   - **Regime de contagem do SLA**: **Horário comercial**, **Horas corridas (24x7)** ou **Seguir padrão global**. A última opção acompanha `horario_comercial_ativo`; o expediente e os feriados continuam globais.
 2. Clique em **Adicionar área**.
 3. Na listagem **Áreas de atendimento**, clique em **Configurar** na linha da área desejada para gerenciar sua equipe, suas categorias e seu formulário dinâmico, ou em **Editar** para alterar dados cadastrais e ativar/desativar a área.
 
@@ -35,8 +37,13 @@ Cada área possui sua própria árvore hierárquica de categorias e subcategoria
    - **Categoria pai**: selecione `— Raiz (sem categoria pai) —` para categoria de 1º nível ou escolha uma categoria existente da área para criar uma subcategoria;
    - **Urgência padrão** (`1 — Muito alta` a `5 — Muito baixa`, padrão `3 — Média`), unificada com a escala do motor de chamados (`App\Services\Chamados::URGENCIAS`: `1 = Muito alta`, `2 = Alta`, `3 = Média`, `4 = Baixa`, `5 = Muito baixa`);
    - **SLA de resposta** e **SLA de solução**: escolha um dos atalhos rápidos (`15 min`, `30 min`, `1 h`, `2 h`, `4 h`, `8 h`, `24 h`, `72 h`) ou informe o tempo exato em minutos no campo numérico ao lado;
-   - **Regime de contagem do SLA** (`usar_horario_comercial`): define se os prazos da categoria correm apenas dentro do expediente útil configurado em **Configurações → Chamados** ou em horas corridas (24x7).
+   - **Herdar da área**: deixe o atalho vazio e o campo personalizado vazio para usar o prazo padrão da área. A resposta e a solução herdam separadamente; um valor próprio da categoria prevalece, inclusive em subcategorias (não há herança da categoria pai). O valor herdado aparece ao lado do controle; a lista mostra os prazos efetivos e sua origem (**SLA da categoria** ou **SLA da área**).
+   - **Regime de contagem do SLA** (`usar_horario_comercial`): **Herdar da área**, **Horário comercial** ou **Horas corridas (24x7)**. Quando a área também segue o padrão, vale `horario_comercial_ativo`. Um regime explícito da categoria ou da área prevalece sobre esse padrão global.
 2. Clique em **Adicionar categoria**.
+
+A solução deve ter duração maior ou igual à resposta, considerando os valores herdados. A validação ocorre tanto ao salvar a categoria quanto ao alterar a área, verificando suas categorias, inclusive as inativas. Exemplo: área com resposta de `30 min` e solução de `2 h`; categoria sem valores próprios recebe esses dois prazos. Se a categoria definir resposta de `15 min`, mantém solução herdada de `2 h`.
+
+A migração `009_sla_area.sql` adiciona padrões vazios nas áreas e permite `NULL` no regime da categoria, preservando seus valores anteriores. Categorias existentes com `0` ou `1` mantêm a escolha explícita; selecione **Herdar da área** para adotar o padrão. Alterar padrões não reescreve prazos nem calendários dos chamados já abertos. Na transferência, o SLA efetivo do destino começa no momento da operação; a primeira resposta já atendida conserva sua medição anterior.
 
 ### 1.4. Construtor de formulário dinâmico por área e categoria
 O construtor permite criar perguntas extras específicas para uma área inteira ou apenas para uma categoria:
@@ -60,7 +67,7 @@ O construtor permite criar perguntas extras específicas para uma área inteira 
 ### 1.5. Calendário de expediente, notificações SMTP e retenção (Etapa 2)
 Em **Gestão → Configurações → Chamados** (`/configuracoes`) e no arquivo `.env`:
 1. **Calendário de horário comercial**:
-   - `horario_comercial_ativo`: ativa o cálculo em minutos úteis para categorias com `usar_horario_comercial = 1`;
+   - `horario_comercial_ativo`: padrão de regime quando categoria e área não têm escolha própria; `1` conta minutos úteis e `0` conta horas corridas;
    - `horario_dias`: dias úteis no padrão ISO (`1,2,3,4,5` = segunda a sexta-feira);
    - `horario_inicio` e `horario_fim`: janela diária de expediente (padrão `07:00` às `17:00`, em Horário de Mato Grosso – UTC-4);
    - `feriados`: datas `AAAA-MM-DD` (separadas por vírgula ou linha) que não contam no relógio de SLA.
@@ -82,7 +89,7 @@ Em **Serviços → Abrir chamado** (`/chamados/abrir`):
 - **Seleção direta de área e categoria**: ao escolher a **Área de atendimento**, o seletor de **Categoria** é limpo automaticamente (`data-limpar-alvo="categoria_id"`) e o formulário é recarregado (`data-autosubmit`); ao escolher a categoria, os campos específicos e os prazos de SLA da categoria são carregados sem exigir clique extra. O botão **Carregar formulário** permanece disponível como alternativa sem JavaScript.
 - **Beneficiário condicional**: o campo **Nome de quem receberá o atendimento** (`#campo-beneficiario`) só é exibido e marcado como obrigatório quando **O atendimento é para você?** está selecionado como **Não** (`0`), mantendo validação no servidor.
 - **Explicação visível dos níveis de urgência**: o quadro **Como escolher a urgência** (`1 — Muito alta` a `5 — Muito baixa`) vem aberto por padrão para orientar o solicitante no preenchimento.
-- **Aviso dinâmico de SLA**: o texto informativo no rodapé do formulário reflete o regime real da categoria selecionada (expediente comercial configurado ou horas corridas 24x7) e informa os prazos estimados de primeira resposta e solução quando definidos na categoria.
+- **Aviso dinâmico de SLA**: o texto informativo no rodapé usa a mesma regra de herança da gravação e da transferência: categoria → área → sem prazo. Mostra o regime efetivo (comercial ou 24x7) e as durações de primeira resposta e solução, inclusive quando herdadas da área.
 - **Ajuda contextual (`Como usar`)**: todas as telas do módulo (`/chamados/abrir`, `/chamados/meus`, `/chamados/fila`, `/chamados/{id}` e `/servicos/config`) contam com procedimentos passo a passo e tour guiado no botão **Como usar** da barra superior e na central **Tutoriais** (`/tutoriais`).
 
 ---
