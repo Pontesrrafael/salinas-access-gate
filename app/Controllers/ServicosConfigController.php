@@ -138,18 +138,49 @@ final class ServicosConfigController extends Controller
         return '#024B37';
     }
 
+    private function isAdminConfig(): bool
+    {
+        return Auth::can('chamados.configurar');
+    }
+
+    private function autorizarConfiguracao(?string $areaId = null): array
+    {
+        $u = $this->isAdminConfig()
+            ? Auth::authorize('chamados.configurar')
+            : Auth::authorize('chamados.configurar_area');
+
+        if ($areaId !== null && !Auth::gereArea($areaId)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
+
+        return $u;
+    }
+
     public function index(): void
     {
-        Auth::authorize('chamados.configurar');
+        $this->autorizarConfiguracao();
+        $isAdmin = $this->isAdminConfig();
+        $areasGeridas = Auth::areasGeridas();
 
-        $areas = Database::all(
-            'SELECT a.*,
-                    (SELECT COUNT(*) FROM servico_area_membros m WHERE m.area_id = a.id) AS total_membros,
-                    (SELECT COUNT(*) FROM servico_categorias c WHERE c.area_id = a.id) AS total_categorias,
-                    (SELECT COUNT(*) FROM servico_campos f WHERE f.area_id = a.id) AS total_campos
-               FROM servico_areas a
-              ORDER BY a.ativo DESC, a.ordem ASC, a.nome ASC'
-        );
+        $sqlAreas = 'SELECT a.*,
+                            (SELECT COUNT(*) FROM servico_area_membros m WHERE m.area_id = a.id) AS total_membros,
+                            (SELECT COUNT(*) FROM servico_categorias c WHERE c.area_id = a.id) AS total_categorias,
+                            (SELECT COUNT(*) FROM servico_campos f WHERE f.area_id = a.id) AS total_campos
+                       FROM servico_areas a';
+        $ordemAreas = ' ORDER BY a.ativo DESC, a.ordem ASC, a.nome ASC';
+
+        if ($areasGeridas === null) {
+            $areas = Database::all($sqlAreas . $ordemAreas);
+        } elseif ($areasGeridas === []) {
+            $areas = [];
+        } else {
+            $idsAreas = array_values($areasGeridas);
+            $areas = Database::all(
+                $sqlAreas . ' WHERE a.id IN (' . Database::in($idsAreas) . ')' . $ordemAreas,
+                $idsAreas
+            );
+        }
+        $areas = array_values(array_filter($areas, static fn (array $a): bool => Auth::gereArea((string) $a['id'])));
 
         $areaId = Http::str('area');
         $areaAtual = null;
@@ -162,6 +193,11 @@ final class ServicosConfigController extends Controller
         if ($areaAtual === null && $areas !== []) {
             $areaAtual = $areas[0];
             $areaId = (string) $areaAtual['id'];
+        }
+
+        $editarArea = Http::str('editar_area');
+        if ($editarArea !== '' && !Auth::gereArea($editarArea)) {
+            $editarArea = '';
         }
 
         $usuarios = Database::all('SELECT id, nome, email, papel FROM usuarios WHERE ativo = 1 ORDER BY nome');
@@ -222,6 +258,7 @@ final class ServicosConfigController extends Controller
         $this->view('servicos-config/index', [
             'titulo'          => t('Áreas e formulários'),
             'descricao'       => t('Áreas de suporte, equipes, categorias com SLA e formulários dinâmicos'),
+            'isAdmin'         => $isAdmin,
             'areas'           => $areas,
             'areaAtual'       => $areaAtual,
             'corSugerida'     => self::sugerirCorArea($areas),
@@ -230,7 +267,7 @@ final class ServicosConfigController extends Controller
             'membros'         => $membros,
             'categorias'      => $categorias,
             'campos'          => $campos,
-            'editarArea'      => Http::str('editar_area'),
+            'editarArea'      => $editarArea,
             'editarCategoria' => Http::str('editar_categoria'),
             'editarCampo'     => Http::str('editar_campo'),
         ]);
@@ -238,34 +275,61 @@ final class ServicosConfigController extends Controller
 
     public function salvarArea(?string $id = null): void
     {
-        Auth::authorize('chamados.configurar');
-
-        $nome = Http::nstr('nome', 120);
-        if ($nome === null) {
-            $this->falha(t('Informe o nome da área.'), '/servicos/config');
-        }
-
-        $slugInformado = Http::str('slug');
-        $slug = self::gerarSlug($slugInformado !== '' ? $slugInformado : $nome);
-        if ($slug === '') {
-            $this->falha(t('Informe um identificador (slug) válido para a área.'), '/servicos/config');
-        }
-
-        $corInformada = $_POST['cor'] ?? null;
-        if (($corInformada === null || $corInformada === '') && $id === null) {
-            $corBruta = self::sugerirCorArea(Database::all('SELECT cor FROM servico_areas'));
+        if ($id === null) {
+            Auth::authorize('chamados.configurar');
         } else {
-            $corBruta = is_string($corInformada) ? $corInformada : '';
+            $this->uuidOu404($id);
+            $this->autorizarConfiguracao($id);
         }
 
-        try {
-            $cor = self::validarCor($corBruta);
-        } catch (InvalidArgumentException $e) {
-            $this->falha($e->getMessage(), '/servicos/config');
+        $isAdmin = $this->isAdminConfig();
+        $existente = null;
+        if ($id !== null) {
+            $existente = Database::one('SELECT * FROM servico_areas WHERE id = ?', [$id]);
+            if ($existente === null) {
+                Http::abort(404, t('Área não encontrada.'));
+            }
         }
 
-        $ordem = max(0, min(9999, (int) Http::str('ordem', '0')));
-        $descricao = Http::nstr('descricao', 1000);
+        if (!$isAdmin && $existente !== null) {
+            if (array_key_exists('ativo', $_POST) && (int) Http::bool('ativo') !== (int) $existente['ativo']) {
+                Http::abort(403, t('Apenas o Admin/TI pode ativar ou desativar áreas.'));
+            }
+            $nome = Http::nstr('nome', 120) ?? (string) $existente['nome'];
+            $slug = (string) $existente['slug'];
+            $cor = (string) $existente['cor'];
+            $ordem = (int) ($existente['ordem'] ?? 0);
+            $descricao = array_key_exists('descricao', $_POST)
+                ? Http::nstr('descricao', 1000)
+                : ($existente['descricao'] ?? null);
+        } else {
+            $nome = Http::nstr('nome', 120);
+            if ($nome === null) {
+                $this->falha(t('Informe o nome da área.'), '/servicos/config');
+            }
+
+            $slugInformado = Http::str('slug');
+            $slug = self::gerarSlug($slugInformado !== '' ? $slugInformado : $nome);
+            if ($slug === '') {
+                $this->falha(t('Informe um identificador (slug) válido para a área.'), '/servicos/config');
+            }
+
+            $corInformada = $_POST['cor'] ?? null;
+            if (($corInformada === null || $corInformada === '') && $id === null) {
+                $corBruta = self::sugerirCorArea(Database::all('SELECT cor FROM servico_areas'));
+            } else {
+                $corBruta = is_string($corInformada) ? $corInformada : '';
+            }
+
+            try {
+                $cor = self::validarCor($corBruta);
+            } catch (InvalidArgumentException $e) {
+                $this->falha($e->getMessage(), '/servicos/config');
+            }
+
+            $ordem = max(0, min(9999, (int) Http::str('ordem', '0')));
+            $descricao = Http::nstr('descricao', 1000);
+        }
 
         if (Database::value('SELECT 1 FROM servico_areas WHERE (nome = ? OR slug = ?) AND id <> ? LIMIT 1', [$nome, $slug, $id ?? ''])) {
             $this->falha(t('Já existe uma área com este nome ou slug.'), '/servicos/config');
@@ -299,11 +363,7 @@ final class ServicosConfigController extends Controller
             $this->ok(t('Área de atendimento cadastrada.'), '/servicos/config', ['area' => $id]);
         }
 
-        $this->uuidOu404($id);
-        if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$id])) {
-            Http::abort(404, t('Área não encontrada.'));
-        }
-        $d['ativo'] = Http::bool('ativo') ? 1 : 0;
+        $d['ativo'] = $isAdmin ? (Http::bool('ativo') ? 1 : 0) : (int) ($existente['ativo'] ?? 1);
         Database::update('servico_areas', $d, 'id = ?', [$id]);
         Audit::log('servico_areas', $id, 'UPDATE', $d);
         $this->ok(t('Área de atendimento atualizada.'), '/servicos/config', ['area' => $id]);
@@ -316,8 +376,9 @@ final class ServicosConfigController extends Controller
 
     public function salvarMembro(string $id): void
     {
-        Auth::authorize('chamados.configurar');
         $this->uuidOu404($id);
+        $this->autorizarConfiguracao($id);
+        $isAdmin = $this->isAdminConfig();
 
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$id])) {
             Http::abort(404, t('Área não encontrada.'));
@@ -334,11 +395,18 @@ final class ServicosConfigController extends Controller
             $this->falha(t('Usuário inválido ou inativo.'), $voltar);
         }
 
-        $existe = Database::value(
-            'SELECT 1 FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?',
+        $membroAtual = Database::one(
+            'SELECT area_id, usuario_id, papel FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?',
             [$id, $usuarioId]
         );
-        if ($existe) {
+        if ($membroAtual !== null && !Auth::gereArea((string) $membroAtual['area_id'])) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
+        if (!$isAdmin && ($papel !== 'atendente' || ($membroAtual['papel'] ?? null) === 'gestor')) {
+            Http::abort(403, t('Apenas o Admin/TI pode definir ou alterar gestores de área.'));
+        }
+
+        if ($membroAtual !== null) {
             Database::update(
                 'servico_area_membros',
                 ['papel' => $papel],
@@ -360,14 +428,27 @@ final class ServicosConfigController extends Controller
 
     public function removerMembro(string $id, ?string $usuarioId = null): void
     {
-        Auth::authorize('chamados.configurar');
         $this->uuidOu404($id);
+        $this->autorizarConfiguracao($id);
+        $isAdmin = $this->isAdminConfig();
 
         $uid = $usuarioId ?? Http::str('usuario_id');
         $this->uuidOu404($uid);
 
+        $membro = Database::one(
+            'SELECT area_id, usuario_id, papel FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?',
+            [$id, $uid]
+        );
+        $areaAfetada = $membro ? (string) $membro['area_id'] : $id;
+        if (!Auth::gereArea($areaAfetada)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
+        if (!$isAdmin && ($membro['papel'] ?? null) === 'gestor') {
+            Http::abort(403, t('Apenas o Admin/TI pode remover um gestor da área.'));
+        }
+
         $numerosDevolvidos = [];
-        Database::transaction(static function () use ($id, $uid, &$numerosDevolvidos): void {
+        Database::transaction(static function () use ($areaAfetada, $uid, &$numerosDevolvidos): void {
             $abertos = Database::all(
                 "SELECT id, numero, status
                    FROM chamados
@@ -376,7 +457,7 @@ final class ServicosConfigController extends Controller
                     AND status NOT IN ('solucionado', 'fechado')
                   ORDER BY numero ASC
                     FOR UPDATE",
-                [$id, $uid]
+                [$areaAfetada, $uid]
             );
 
             foreach ($abertos as $ch) {
@@ -403,15 +484,15 @@ final class ServicosConfigController extends Controller
 
                 $numerosDevolvidos[] = '#' . $ch['numero'];
                 Audit::log('chamados', $cid, 'devolver_triagem', [
-                    'area_id'            => $id,
+                    'area_id'            => $areaAfetada,
                     'atendente_removido' => $uid,
                     'status_anterior'    => $statusAnterior,
                     'status_novo'        => $novoStatus,
                 ]);
             }
 
-            Database::run('DELETE FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$id, $uid]);
-            Audit::log('servico_area_membros', $id, 'DELETE', [
+            Database::run('DELETE FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$areaAfetada, $uid]);
+            Audit::log('servico_area_membros', $areaAfetada, 'DELETE', [
                 'usuario_id'          => $uid,
                 'chamados_devolvidos' => $numerosDevolvidos,
             ]);
@@ -421,16 +502,16 @@ final class ServicosConfigController extends Controller
             $this->ok(
                 t('Membro removido da área. Chamados devolvidos à triagem: {chamados}.', ['chamados' => implode(', ', $numerosDevolvidos)]),
                 '/servicos/config',
-                ['area' => $id]
+                ['area' => $areaAfetada]
             );
         }
 
-        $this->ok(t('Membro removido da área.'), '/servicos/config', ['area' => $id]);
+        $this->ok(t('Membro removido da área.'), '/servicos/config', ['area' => $areaAfetada]);
     }
 
     public function salvarCategoria(?string $id = null): void
     {
-        Auth::authorize('chamados.configurar');
+        $this->autorizarConfiguracao();
 
         $existente = null;
         if ($id !== null) {
@@ -443,6 +524,9 @@ final class ServicosConfigController extends Controller
 
         $areaId = $existente ? (string) $existente['area_id'] : Http::str('area_id');
         $this->uuidOu404($areaId);
+        if (!Auth::gereArea($areaId)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
         $area = Database::one('SELECT * FROM servico_areas WHERE id = ?', [$areaId]);
         if ($area === null) {
             Http::abort(404, t('Área não encontrada.'));
@@ -508,7 +592,7 @@ final class ServicosConfigController extends Controller
 
     public function salvarCampo(?string $id = null): void
     {
-        Auth::authorize('chamados.configurar');
+        $this->autorizarConfiguracao();
 
         $existente = null;
         if ($id !== null) {
@@ -521,6 +605,9 @@ final class ServicosConfigController extends Controller
 
         $areaId = $existente ? (string) $existente['area_id'] : Http::str('area_id');
         $this->uuidOu404($areaId);
+        if (!Auth::gereArea($areaId)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$areaId])) {
             Http::abort(404, t('Área não encontrada.'));
         }
@@ -593,7 +680,7 @@ final class ServicosConfigController extends Controller
 
     public function moverCampo(string $id): void
     {
-        Auth::authorize('chamados.configurar');
+        $this->autorizarConfiguracao();
         $this->uuidOu404($id);
 
         $campo = Database::one('SELECT * FROM servico_campos WHERE id = ?', [$id]);
@@ -602,6 +689,9 @@ final class ServicosConfigController extends Controller
         }
 
         $areaId = (string) $campo['area_id'];
+        if (!Auth::gereArea($areaId)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
         $direcao = Http::str('direcao');
         if (!in_array($direcao, ['cima', 'baixo'], true)) {
             $this->falha(t('Direção de movimentação inválida.'), '/servicos/config?area=' . urlencode($areaId));
@@ -641,7 +731,7 @@ final class ServicosConfigController extends Controller
 
     public function alternarCampo(string $id): void
     {
-        Auth::authorize('chamados.configurar');
+        $this->autorizarConfiguracao();
         $this->uuidOu404($id);
 
         $campo = Database::one('SELECT id, area_id, rotulo, ativo FROM servico_campos WHERE id = ?', [$id]);
@@ -649,12 +739,17 @@ final class ServicosConfigController extends Controller
             Http::abort(404, t('Campo não encontrado.'));
         }
 
+        $areaId = (string) $campo['area_id'];
+        if (!Auth::gereArea($areaId)) {
+            Http::abort(403, t('Seu perfil não tem permissão para gerenciar esta área.'));
+        }
+
         $novoAtivo = (int) $campo['ativo'] === 1 ? 0 : 1;
         Database::update('servico_campos', ['ativo' => $novoAtivo], 'id = ?', [$id]);
         Audit::log('servico_campos', $id, 'UPDATE', ['rotulo' => $campo['rotulo'], 'ativo' => $novoAtivo]);
 
         $msg = $novoAtivo === 1 ? t('Campo ativado.') : t('Campo desativado.');
-        $this->ok($msg, '/servicos/config', ['area' => (string) $campo['area_id']]);
+        $this->ok($msg, '/servicos/config', ['area' => $areaId]);
     }
 
     /**

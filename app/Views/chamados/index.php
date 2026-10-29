@@ -1,6 +1,12 @@
 <?php
+use App\Core\Auth;
 use App\Services\Chamados;
-slot('acoes', '<a class="btn btn-ouro" href="' . e(url('/chamados/abrir')) . '">' . icon('mais') . e(t('Abrir chamado')) . '</a>');
+
+$gestorArea = $fila && (!empty($gestorArea) || Auth::papel() === 'gestor_area');
+$tituloLista = !$fila ? t('Meus chamados') : ($gestorArea ? t('Backlog das minhas áreas') : t('Fila de atendimento'));
+$acoesHtml = ($gestorArea ? '<a class="btn btn-secundario" href="' . e(url('/servicos/config')) . '">' . icon('config') . e(t('Áreas e formulários')) . '</a> ' : '')
+    . '<a class="btn btn-ouro" href="' . e(url('/chamados/abrir')) . '">' . icon('mais') . e(t('Abrir chamado')) . '</a>';
+slot('acoes', $acoesHtml);
 $filtros += ['q' => '', 'ordem' => '', 'visao' => $fila ? 'abertos' : 'todos'];
 $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
 $satisfacaoAreas = array_filter($satisfacaoAreas ?? [], static fn (array $s): bool => (int) $s['avaliacoes'] > 0 && $s['media'] !== null);
@@ -28,7 +34,7 @@ $satisfacaoAreas = array_filter($satisfacaoAreas ?? [], static fn (array $s): bo
     <input type="hidden" name="visao" value="<?= e($filtros['visao']) ?>">
     <label class="campo"><span><?= e(t('Buscar chamado')) ?></span><input type="search" name="q" maxlength="200" value="<?= e($filtros['q']) ?>" placeholder="<?= e(t('#número, título ou solicitante')) ?>"></label>
     <label class="campo"><span><?= e(t('Ordenar por')) ?></span><select name="ordem"><option value=""><?= e(t('Mais recentes')) ?></option><option value="prioridade"<?= selected($filtros['ordem'], 'prioridade') ?>><?= e(t('Maior prioridade')) ?></option><option value="prazo"<?= selected($filtros['ordem'], 'prazo') ?>><?= e(t('Menor prazo SLA')) ?></option></select></label>
-    <label class="campo"><span><?= e(t('Área de atendimento')) ?></span><select name="area_id"><option value=""><?= e(t('Todas')) ?></option><?php foreach ($areas as $area): ?><option value="<?= e($area['id']) ?>"<?= selected($filtros['area_id'], $area['id']) ?>><?= e($area['nome']) ?></option><?php endforeach; ?></select></label>
+    <label class="campo"><span><?= e(t('Área de atendimento')) ?></span><select name="area_id"><option value=""><?= e($gestorArea ? t('Minhas áreas') : t('Todas')) ?></option><?php foreach ($areas as $area): ?><option value="<?= e($area['id']) ?>"<?= selected($filtros['area_id'], $area['id']) ?>><?= e($area['nome']) ?></option><?php endforeach; ?></select></label>
     <label class="campo"><span><?= e(t('Status')) ?></span><select name="status"><option value=""><?= e(t('Todos')) ?></option><?php foreach (Chamados::STATUS as $valor => $rotulo): ?><option value="<?= e($valor) ?>"<?= selected($filtros['status'], $valor) ?>><?= e(t($rotulo)) ?></option><?php endforeach; ?></select></label>
     <label class="campo"><span><?= e(t('Categoria do serviço')) ?></span><select name="categoria_id"><option value=""><?= e(t('Todas')) ?></option><?php foreach ($categorias as $cat): ?><option value="<?= e($cat['id']) ?>"<?= selected($filtros['categoria_id'], $cat['id']) ?>><?= e($cat['caminho']) ?></option><?php endforeach; ?></select><small><?= e(t('Filtre uma área para carregar categorias e atendentes.')) ?></small></label>
     <label class="campo"><span><?= e(t('Prioridade')) ?></span><select name="prioridade"><option value=""><?= e(t('Todas')) ?></option><?php foreach (Chamados::PRIORIDADES as $valor => $rotulo): ?><option value="<?= $valor ?>"<?= selected($filtros['prioridade'], $valor) ?>><?= e($valor . ' · ' . t($rotulo)) ?></option><?php endforeach; ?></select></label>
@@ -39,7 +45,7 @@ $satisfacaoAreas = array_filter($satisfacaoAreas ?? [], static fn (array $s): bo
   </form>
 </section>
 <section class="cartao sem-padding">
-  <div class="cartao-cabecalho pad"><h2><?= icon('solicit') ?> <?= e($fila ? t('Fila de atendimento') : t('Meus chamados')) ?></h2><?= badge(t('{quantidade} chamados', ['quantidade' => $total])) ?></div>
+  <div class="cartao-cabecalho pad"><h2><?= icon('solicit') ?> <?= e($tituloLista) ?></h2><?= badge(t('{quantidade} chamados', ['quantidade' => $total])) ?></div>
   <?php if (!$lista): ?><p class="mudo vazio"><?= e(t('Nenhum chamado encontrado.')) ?></p><?php else: ?>
   <div class="tabela-rolagem"><table class="tabela chamado-tabela">
     <thead><tr><th><?= e(t('Chamado')) ?></th><th><?= e(t('Solicitante')) ?></th><th><?= e(t('Área')) ?></th><th><?= e(t('Status')) ?></th><th><?= e(t('Prioridade')) ?></th><th><?= e(t('Atendente')) ?></th><th><?= e(t('Prazo de solução')) ?></th></tr></thead>

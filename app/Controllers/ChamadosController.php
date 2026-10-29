@@ -21,7 +21,17 @@ final class ChamadosController extends Controller
 
     private function atende(string $areaId, array $u): bool
     {
-        return $u['papel'] === 'admin' || (bool) Database::value(
+        $papelAtivo = Auth::papel() ?? ($u['papel'] ?? null);
+        if ($papelAtivo === 'admin') {
+            return true;
+        }
+        if (!Auth::can('chamados.atender')) {
+            return false;
+        }
+        if ($papelAtivo === 'gestor_area') {
+            return Auth::gereArea($areaId);
+        }
+        return (bool) Database::value(
             'SELECT 1 FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$areaId, $u['id']]
         );
     }
@@ -138,9 +148,19 @@ final class ChamadosController extends Controller
     private function listar(bool $fila): void
     {
         $u = $this->habilitado($fila ? 'chamados.atender' : 'chamados.abrir');
+        $papelAtivo = Auth::papel() ?? ($u['papel'] ?? null);
+        $gestorArea = $fila && $papelAtivo === 'gestor_area';
+        $areasGeridas = $gestorArea ? array_values(Auth::areasGeridas() ?? []) : [];
         $where = []; $params = [];
         if (!$fila) { $where[] = 'c.solicitante_id = ?'; $params[] = $u['id']; }
-        elseif ($u['papel'] !== 'admin') {
+        elseif ($gestorArea) {
+            if ($areasGeridas === []) {
+                $where[] = '1 = 0';
+            } else {
+                $where[] = 'c.area_id IN (' . Database::in($areasGeridas) . ')';
+                array_push($params, ...$areasGeridas);
+            }
+        } elseif ($papelAtivo !== 'admin') {
             $where[] = 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = c.area_id AND m.usuario_id = ?)';
             $params[] = $u['id'];
         }
@@ -192,9 +212,19 @@ final class ChamadosController extends Controller
             $total = (int) Database::value('SELECT COUNT(*) FROM chamados c WHERE ' . $sqlWhere, $params);
             $lista = Database::all($consulta . ' LIMIT ' . $limite . ' OFFSET ' . $offset, $params);
         }
-        $escopo = $u['papel'] === 'admin' ? '1 = 1' : 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = a.id AND m.usuario_id = ?)';
-        $escopoParams = $u['papel'] === 'admin' ? [] : [$u['id']];
-        if (!$fila) { $escopo = 'a.ativo = 1'; $escopoParams = []; }
+        if (!$fila) {
+            $escopo = 'a.ativo = 1';
+            $escopoParams = [];
+        } elseif ($papelAtivo === 'admin') {
+            $escopo = '1 = 1';
+            $escopoParams = [];
+        } elseif ($gestorArea) {
+            $escopo = $areasGeridas === [] ? '1 = 0' : 'a.id IN (' . Database::in($areasGeridas) . ')';
+            $escopoParams = $areasGeridas;
+        } else {
+            $escopo = 'EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = a.id AND m.usuario_id = ?)';
+            $escopoParams = [$u['id']];
+        }
         $areas = Database::all('SELECT a.id, a.nome FROM servico_areas a WHERE ' . $escopo . ' ORDER BY a.ordem, a.nome', $escopoParams);
         $categorias = []; $membros = [];
         if (in_array($filtros['area_id'], array_column($areas, 'id'), true)) {
@@ -202,7 +232,8 @@ final class ChamadosController extends Controller
             if ($fila) { $membros = $this->membros($filtros['area_id']); }
         }
         $satisfacaoAreas = $fila ? Database::all('SELECT a.id, a.nome, AVG(s.nota) AS media, COUNT(s.chamado_id) AS avaliacoes FROM servico_areas a LEFT JOIN chamados c ON c.area_id = a.id LEFT JOIN chamado_satisfacao s ON s.chamado_id = c.id WHERE ' . $escopo . (Uuid::valid($filtros['area_id']) ? ' AND a.id = ?' : '') . ' GROUP BY a.id, a.nome ORDER BY a.nome', [...$escopoParams, ...(Uuid::valid($filtros['area_id']) ? [$filtros['area_id']] : [])]) : [];
-        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite', 'satisfacaoAreas') + ['titulo' => $fila ? t('Fila de atendimento') : t('Meus chamados')]);
+        $titulo = !$fila ? t('Meus chamados') : ($gestorArea ? t('Backlog das minhas áreas') : t('Fila de atendimento'));
+        $this->view('chamados/index', compact('lista', 'filtros', 'fila', 'gestorArea', 'areas', 'categorias', 'membros', 'total', 'pagina', 'limite', 'satisfacaoAreas') + ['titulo' => $titulo]);
     }
 
     private function membros(string $areaId): array
