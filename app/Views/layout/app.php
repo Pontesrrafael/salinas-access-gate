@@ -76,6 +76,7 @@ $menu = [
     <?php if (($u['auth_origem'] ?? 'local') === 'local'): ?>
       <a class="nav-item<?= $ativo('/conta/mfa') ?>" href="<?= e(url('/conta/mfa')) ?>"><?= icon('escudo') ?><span><?= e(($u['mfa_ativo'] ?? 0) ? t('Duas etapas') : t('Duas etapas (desligada)')) ?></span></a>
     <?php endif; ?>
+    <a class="nav-item<?= $ativo('/conta/notificacoes') ?>" href="<?= e(url('/conta/notificacoes')) ?>"><?= icon('solicit') ?><span><?= e(t('Notificações por e-mail')) ?></span></a>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
       <button type="submit" class="nav-item nav-sair"><?= icon('sair') ?><span><?= e(t('Sair')) ?></span></button>

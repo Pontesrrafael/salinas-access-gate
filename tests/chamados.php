@@ -426,7 +426,7 @@ require dirname(__DIR__) . '/app/routes.php';
 $rotas = (new ReflectionProperty($router, 'routes'))->getValue($router);
 $rotasLegadas = 0;
 foreach ($rotas as $i => [$metodo, $padrao, $handler]) {
-    if (!is_array($handler) || in_array($handler[0], [\App\Controllers\AuthController::class, \App\Controllers\MfaController::class, \App\Controllers\PublicoController::class, \App\Controllers\TutoriaisController::class, \App\Controllers\ChamadosController::class], true)) { continue; }
+    if (!is_array($handler) || in_array($handler[0], [\App\Controllers\AuthController::class, \App\Controllers\MfaController::class, \App\Controllers\ContaNotificacoesController::class, \App\Controllers\PublicoController::class, \App\Controllers\TutoriaisController::class, \App\Controllers\ChamadosController::class], true)) { continue; }
     $processo = proc_open([PHP_BINARY, __FILE__, '--rbac-rota', (string) $i], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
     if (!is_resource($processo)) { throw new RuntimeException('Não foi possível iniciar teste RBAC.'); }
     $saida = stream_get_contents($pipes[1]); $erro = stream_get_contents($pipes[2]);
@@ -596,7 +596,7 @@ try {
     $config = \App\Controllers\ServicosConfigController::class;
     expect($config::dadosSla([]) === ['sla_resposta_min' => null, 'sla_solucao_min' => null, 'usar_horario_comercial' => null], 'Formulário vazio persiste NULL e permite herança.');
     expect($config::dadosSla(['sla_resposta_atalho' => '15', 'sla_solucao_min' => '17', 'sla_solucao_atalho' => '30', 'usar_horario_comercial' => '0']) === ['sla_resposta_min' => 15, 'sla_solucao_min' => 17, 'usar_horario_comercial' => 0], 'Atalho e duração personalizada coexistem com precedência do valor manual.');
-    foreach (['0', '-1', '1.5', '1e2', 'abc', '100801', ['15']] as $invalido) {
+    foreach (['0', '-1', '1.5', '1e2', 'abc', '525601', ['15']] as $invalido) {
         rejeita(fn () => $config::dadosSla(['sla_resposta_min' => $invalido]), 'Entrada inválida não é truncada nem silenciada.');
     }
     rejeita(fn () => $config::dadosSla(['usar_horario_comercial' => '2']), 'Regime inválido recusado.');
