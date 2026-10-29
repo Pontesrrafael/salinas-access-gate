@@ -742,6 +742,7 @@
   "Integração desativada. O Admin/TI deve configurar o token e a organização Infleet no servidor.": "Integration disabled. Admin/IT must configure the Infleet token and organization on the server.",
   "Início": "Start",
   "Início do expediente": "Start of working hours",
+  "Ir para o início": "Go to home",
   "Justifique o motivo da reprovação.": "Provide the reason for rejection.",
   "Já existe uma conta local com o seu e-mail. Peça ao Admin/TI para vinculá-la ao AD.": "A local account with your email already exists. Ask Admin/IT to link it to AD.",
   "Já existe uma sincronização Infleet em andamento.": "An Infleet synchronization is already in progress.",

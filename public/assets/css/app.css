@@ -103,6 +103,7 @@ small { font-size: .82em; }
 }
 .sidebar-logo { background: var(--logo-fundo); padding: 14px 16px; display: flex; justify-content: center; border-bottom: 3px solid var(--ouro); }
 .sidebar-logo img { height: 56px; width: auto; max-width: 100%; }
+.sidebar-logo:focus-visible { outline: 3px solid var(--ouro); outline-offset: -3px; }
 .sidebar nav { flex: 1; overflow-y: auto; padding: 8px 10px 16px; }
 .nav-grupo { font-size: .7rem; text-transform: uppercase; letter-spacing: .09em; color: #9fc3b5; margin: 16px 8px 6px; }
 .nav-item {

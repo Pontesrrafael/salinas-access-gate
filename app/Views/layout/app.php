@@ -55,10 +55,10 @@ $menu = [
 <body<?= !empty($modoTv) ? ' class="modo-tv"' : '' ?>>
 <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-hidden="true">
 <aside class="sidebar">
-  <div class="sidebar-logo">
+  <a class="sidebar-logo" href="<?= e(url('/')) ?>" title="<?= e(t('Ir para o início')) ?>">
     <img class="logo-claro" src="<?= e(asset('img/logo-horizontal.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
     <img class="logo-escuro" src="<?= e(asset('img/logo-horizontal-branco.png')) ?>" alt="Salinas Gold Mineração" width="168" height="56">
-  </div>
+  </a>
   <nav>
     <?php foreach ($menu as $grupo => $itens):
         $visiveis = array_filter($itens, fn ($i) => $i[3] === null || can($i[3]));
