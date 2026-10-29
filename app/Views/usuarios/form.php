@@ -2,6 +2,8 @@
 $novo = $u === null;
 $val = static fn (string $k, string $d = '') => old($old, $k, $u[$k] ?? $d);
 $areasMarcadas = $old['areas'] ?? array_column(array_filter($areas, fn ($a) => !$novo && $a['responsavel_user_id'] === $u['id']), 'id');
+$perfisMarcados = $old ? ($old['perfis'] ?? []) : ($u['perfis'] ?? ['colaborador']);
+if (!is_array($perfisMarcados)) { $perfisMarcados = []; }
 ?>
 <?php $origem = old($old, 'auth_origem', $u['auth_origem'] ?? 'local'); ?>
 <form method="post" action="<?= e($novo ? url('/usuarios') : url('/usuarios/' . $u['id'])) ?>" id="form-usuario" data-tour="formulario">
@@ -39,16 +41,25 @@ $areasMarcadas = $old['areas'] ?? array_column(array_filter($areas, fn ($a) => !
   <?php endif; ?>
   <section class="cartao">
     <h2><?= e(t('Dados de acesso')) ?></h2>
-    <p class="dica"><?= e(t('O perfil Colaborador acessa somente serviços. O atendimento depende do vínculo com uma equipe.')) ?></p>
+    <p class="dica"><?= e(t('Selecione os perfis permitidos e o perfil padrão para o login. O usuário pode trocar o perfil ativo no topo.')) ?></p>
     <div class="grade-3">
       <label class="campo"><span><?= e(t('Nome')) ?> <span class="obrigatorio">*</span></span><input name="nome" required maxlength="150" value="<?= e($val('nome')) ?>"></label>
       <label class="campo"><span><?= e(t('E-mail corporativo')) ?> <span class="obrigatorio">*</span></span><input type="email" name="email" required maxlength="190" value="<?= e($val('email')) ?>" autocomplete="off"></label>
       <label class="campo"><span><?= e(t('Matrícula')) ?></span><input name="matricula" maxlength="50" value="<?= e($val('matricula')) ?>"></label>
-      <label class="campo"><span><?= e(t('Perfil')) ?> <span class="obrigatorio">*</span></span>
+      <label class="campo"><span><?= e(t('Perfil padrão')) ?> <span class="obrigatorio">*</span></span>
         <select name="papel" required><?php foreach (App\Core\Auth::PAPEIS as $k => $r): ?><option value="<?= e($k) ?>"<?= selected($val('papel', 'colaborador'), $k) ?>><?= e(t($r)) ?></option><?php endforeach; ?></select></label>
       <label class="checkbox"><input type="checkbox" name="seguranca_patrimonial" value="1"<?= checked($val('seguranca_patrimonial', '0')) ?>> <span><?= e(t('Segurança Patrimonial')) ?><br><small><?= e(t('Pode autorizar solicitações de qualquer área.')) ?></small></span></label>
       <?php if (!$novo): ?><label class="checkbox"><input type="checkbox" name="ativo" value="1"<?= checked($u['ativo']) ?>> <span><?= e(t('Conta ativa')) ?><br><small><?= e(t('Desativar encerra o acesso imediatamente.')) ?></small></span></label><?php endif; ?>
     </div>
+    <fieldset>
+      <legend><?= e(t('Perfis permitidos')) ?></legend>
+      <div class="grade-3">
+      <?php foreach (App\Core\Auth::PAPEIS as $perfil => $rotulo): ?>
+        <label class="checkbox"><input type="checkbox" name="perfis[]" value="<?= e($perfil) ?>"<?= in_array($perfil, $perfisMarcados, true) ? ' checked' : '' ?>> <span><?= e(t($rotulo)) ?></span></label>
+      <?php endforeach; ?>
+      </div>
+      <p class="dica"><?= e(t('O gestor de área precisa do vínculo como gestor nas áreas de serviço.')) ?></p>
+    </fieldset>
     <div id="bloco-senha"<?= $origem === 'ldap' ? ' hidden' : '' ?>>
     <?php if ($novo): ?>
       <label class="campo"><span><?= e(t('Senha inicial')) ?></span><input type="password" name="senha" maxlength="72" autocomplete="new-password">
@@ -56,6 +67,7 @@ $areasMarcadas = $old['areas'] ?? array_column(array_filter($areas, fn ($a) => !
     <?php else: ?>
       <label class="checkbox"><input type="checkbox" name="redefinir_senha" value="1"> <span><?= e(t('Gerar nova senha temporária')) ?><br><small><?= e(t('A senha será exibida uma única vez após salvar.')) ?></small></span></label>
     <?php endif; ?>
+    </div>
   </section>
 
   <section class="cartao">

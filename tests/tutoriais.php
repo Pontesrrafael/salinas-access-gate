@@ -9,6 +9,7 @@ function role(?string $role, bool $membroArea = false): void {
     (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
     (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $role === null ? null : ['id' => 'test-' . $role, 'papel' => $role]);
     (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, $role === null ? false : $membroArea);
+    (new ReflectionProperty(Auth::class, 'areasGeridas'))->setValue(null, []);
 }
 role(null); expect(Tutoriais::permitidos() === [], 'Visitante não pode receber conteúdo autenticado.');
 foreach (array_keys(Auth::PAPEIS) as $role) {
@@ -36,4 +37,4 @@ expect(Tutoriais::daTela('/chamados/chamado-teste')['id'] === 'chamados-fila', '
 role('ssma'); expect(Tutoriais::daTela('/portaria') === null, 'SSMA não opera portaria.');
 role('supervisor'); expect(Tutoriais::daTela('/infleet/percursos')['id'] === 'infleet', 'Subrota de integração precisa de ajuda.');
 role('admin'); expect(Tutoriais::daTela('/servicos/config')['id'] === 'servicos-config', 'Admin/TI recebe tutorial de Áreas e formulários.');
-echo "Tutoriais: permissões dos quatro perfis, conteúdo e subrotas OK.\n";
+echo 'Tutoriais: permissões dos ' . count(Auth::PAPEIS) . " perfis, conteúdo e subrotas OK.\n";

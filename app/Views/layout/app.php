@@ -20,7 +20,7 @@ $menu = [
         ['/chamados/abrir', 'Abrir chamado', 'mais', 'chamados.abrir'],
         ['/chamados/meus', 'Meus chamados', 'solicit', 'chamados.abrir'],
         ['/chamados/fila', 'Fila de atendimento', 'pessoas', 'chamados.atender'],
-        ['/servicos/config', 'Áreas e formulários', 'config', 'chamados.configurar'],
+        ['/servicos/config', 'Áreas e formulários', 'config', 'chamados.configurar_area'],
     ],
     'Cadastros' => [
         ['/pessoas', 'Pessoas', 'pessoas', 'pessoas.ver'],
@@ -35,6 +35,8 @@ $menu = [
         ['/configuracoes', 'Configurações', 'config', 'configuracoes.gerir'],
     ],
 ];
+if (App\Core\Auth::is('colaborador')) { unset($menu['Ajuda']); }
+$perfis = App\Core\Auth::perfis();
 ?><!doctype html>
 <html lang="<?= e(App\Core\I18n::current()) ?>"<?= tema_attr() ?>>
 <head>
@@ -71,7 +73,7 @@ $menu = [
   </nav>
   <div class="sidebar-rodape">
     <div class="usuario-nome"><?= e($u['nome'] ?? '') ?></div>
-    <div class="usuario-papel"><?= e(papel_label($u['papel'] ?? null)) ?><?= ($u['seguranca_patrimonial'] ?? 0) ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
+    <div class="usuario-papel"><?= e(papel_label(App\Core\Auth::papel())) ?><?= App\Core\Auth::isSegurancaPatrimonial() ? ' · ' . e(t('Seg. Patrimonial')) : '' ?></div>
     <?= botao_tema() ?>
     <?php if (($u['auth_origem'] ?? 'local') === 'local'): ?>
       <a class="nav-item<?= $ativo('/conta/mfa') ?>" href="<?= e(url('/conta/mfa')) ?>"><?= icon('escudo') ?><span><?= e(($u['mfa_ativo'] ?? 0) ? t('Duas etapas') : t('Duas etapas (desligada)')) ?></span></a>
@@ -94,6 +96,21 @@ $menu = [
     <div class="topo-acoes"<?= !empty($acoes) ? ' data-tour="acoes"' : '' ?>>
       <?php if ($tutorialAtual): ?><button type="button" class="btn btn-secundario" data-tutorial-open="<?= e($tutorialAtual['id']) ?>"><?= e(t('Como usar')) ?></button><?php endif; ?>
       <?= $acoes ?? '' /* HTML da aplicação */ ?>
+      <?php if (count($perfis) > 1): ?>
+      <details class="seletor-idioma">
+        <summary><?= e(t('Perfil: {perfil}', ['perfil' => papel_label(App\Core\Auth::perfilAtivo())])) ?></summary>
+        <ul class="idioma-opcoes">
+          <?php foreach ($perfis as $perfil): $perfilAtual = $perfil === App\Core\Auth::perfilAtivo(); ?>
+          <li><form method="post" action="<?= e(url('/conta/perfil')) ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="perfil" value="<?= e($perfil) ?>">
+            <input type="hidden" name="voltar" value="<?= e($path . (empty($_SERVER['QUERY_STRING']) ? '' : '?' . $_SERVER['QUERY_STRING'])) ?>">
+            <button type="submit" class="btn btn-fantasma"<?= $perfilAtual ? ' disabled aria-current="true"' : '' ?>><?= e(papel_label($perfil)) ?><?= $perfilAtual ? ' · ' . e(t('Ativo')) : '' ?></button>
+          </form></li>
+          <?php endforeach; ?>
+        </ul>
+      </details>
+      <?php endif; ?>
       <?= seletor_idioma() ?>
     </div>
   </header>

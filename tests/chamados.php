@@ -413,7 +413,7 @@ foreach (array_keys($matriz) as $permissao) {
 }
 expect(!Auth::isSegurancaPatrimonial(), 'Colaborador ignora sinal residual de segurança patrimonial.');
 (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
-expect(Auth::can('chamados.atender'), 'Membro colaborador pode acessar atendimento, sujeito ao escopo por área.');
+expect(!Auth::can('chamados.atender'), 'Solicitante não atende mesmo com vínculo residual em uma equipe.');
 (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $salvo);
 (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, null);
 putenv('LDAP_GROUP_COLABORADOR=CN=Servicos,DC=teste');
@@ -447,7 +447,7 @@ $tmp = tempnam(App::root('storage'), 'rollback-');
 try {
     $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['REQUEST_URI'] = '/chamados';
     $propSettings->setValue(null, ['chamados_ativo' => '1', 'email_ativo' => '0']);
-    $ator = ['id' => '11111111-1111-4111-8111-111111111111', 'nome' => 'Colaborador teste', 'papel' => 'colaborador', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'email' => 'teste@example.test'];
+    $ator = ['id' => '11111111-1111-4111-8111-111111111111', 'nome' => 'Atendente teste', 'papel' => 'supervisor', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'email' => 'teste@example.test'];
     (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $ator);
     (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
     $pdo = new ChamadoTestePdo(static fn ($sql, $params) => str_starts_with($sql, 'SELECT COUNT(*)') ? [[0]] : []);

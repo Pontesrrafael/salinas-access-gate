@@ -51,7 +51,8 @@ final class LdapUsuarios
         if (!$cfg['auto_provision']) {
             return ['usuario' => null, 'erro' => 'Usuário de rede ainda não cadastrado no Access Gate. Solicite o acesso ao Admin/TI.'];
         }
-        $papel = self::papelPorGrupos($entrada['grupos']);
+        $perfis = self::perfisPorGrupos($entrada['grupos']);
+        $papel = $perfis[0] ?? null;
         if ($papel === null) {
             return ['usuario' => null, 'erro' => 'Seu usuário de rede não pertence a nenhum grupo autorizado do Access Gate.'];
         }
@@ -59,7 +60,7 @@ final class LdapUsuarios
             return ['usuario' => null, 'erro' => 'Já existe uma conta local com o seu e-mail. Peça ao Admin/TI para vinculá-la ao AD.'];
         }
         $id = self::criar($entrada, $papel, Ldap::segurancaPatrimonial($entrada['grupos']), null);
-        Audit::log('usuarios', $id, 'LDAP_PROVISIONAMENTO', ['login' => $entrada['login'], 'papel' => $papel], $id);
+        Audit::log('usuarios', $id, 'LDAP_PROVISIONAMENTO', ['login' => $entrada['login'], 'papel' => $papel, 'perfis' => $perfis], $id);
         $u = Database::one('SELECT * FROM usuarios WHERE id = ?', [$id]);
         return ['usuario' => $u, 'erro' => null];
     }
@@ -67,24 +68,28 @@ final class LdapUsuarios
     /** Cria usuário vinculado ao AD (usado pelo provisionamento e pelo cadastro do admin). */
     public static function criar(array $e, string $papel, bool $segPatrimonial, ?string $pessoaId): string
     {
+        if (!isset(Auth::PAPEIS[$papel])) { throw new \InvalidArgumentException('Perfil inválido.'); }
         $id = Uuid::v4();
-        Database::insert('usuarios', [
-            'id'                    => $id,
-            'nome'                  => $e['nome'] ?: $e['login'],
-            'email'                 => $e['email'] ?: mb_strtolower($e['login']) . '@ad.local',
-            'senha_hash'            => Auth::hash(bin2hex(random_bytes(24))), // inutilizável: senha fica no AD
-            'auth_origem'           => 'ldap',
-            'ldap_guid'             => $e['guid'],
-            'ldap_usuario'          => mb_strtolower($e['login']),
-            'ldap_dn'               => $e['dn'],
-            'ldap_sincronizado_em'  => date('Y-m-d H:i:s'),
-            'papel'                 => $papel,
-            'matricula'             => $e['matricula'],
-            'ativo'                 => 1,
-            'must_change_password'  => 0,
-            'seguranca_patrimonial' => $papel !== 'colaborador' && $segPatrimonial ? 1 : 0,
-            'pessoa_id'             => $pessoaId ?? self::pessoaPorMatricula($e['matricula'], null),
-        ]);
+        Database::transaction(function () use ($id, $e, $papel, $segPatrimonial, $pessoaId): void {
+            Database::insert('usuarios', [
+                'id'                    => $id,
+                'nome'                  => $e['nome'] ?: $e['login'],
+                'email'                 => $e['email'] ?: mb_strtolower($e['login']) . '@ad.local',
+                'senha_hash'            => Auth::hash(bin2hex(random_bytes(24))), // inutilizável: senha fica no AD
+                'auth_origem'           => 'ldap',
+                'ldap_guid'             => $e['guid'],
+                'ldap_usuario'          => mb_strtolower($e['login']),
+                'ldap_dn'               => $e['dn'],
+                'ldap_sincronizado_em'  => date('Y-m-d H:i:s'),
+                'papel'                 => $papel,
+                'matricula'             => $e['matricula'],
+                'ativo'                 => 1,
+                'must_change_password'  => 0,
+                'seguranca_patrimonial' => $segPatrimonial ? 1 : 0,
+                'pessoa_id'             => $pessoaId ?? self::pessoaPorMatricula($e['matricula'], null),
+            ]);
+            self::gravarPerfis($id, array_values(array_unique([$papel, ...self::perfisPorGrupos($e['grupos'])])));
+        });
         return $id;
     }
 
@@ -114,18 +119,24 @@ final class LdapUsuarios
             $upd['pessoa_id'] = $p;
         }
         $mudancas = [];
+        $perfis = null;
         if ($cfg['sync_roles']) {
-            $papel = self::papelPorGrupos($e['grupos']);
+            $perfis = self::perfisPorGrupos($e['grupos']);
+            $papel = $perfis[0] ?? null;
             if ($papel === null) {
                 self::desativar($u, 'Removido dos grupos do Access Gate no AD');
                 return null;
             }
             // Protege o último administrador ativo
-            if ($u['papel'] === 'admin' && $papel !== 'admin'
-                && !(int) Database::value("SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1 AND id <> ?", [$u['id']])) {
-                $papel = 'admin';
+            $anteriores = array_column(Database::all('SELECT perfil FROM usuario_perfis WHERE usuario_id = ?', [$u['id']]), 'perfil');
+            if (in_array('admin', $anteriores, true) && !in_array('admin', $perfis, true)
+                && !self::outroAdmin($u['id'])) {
+                $perfis[] = 'admin';
             }
-            $seg = $papel !== 'colaborador' && Ldap::segurancaPatrimonial($e['grupos']) ? 1 : 0;
+            // Preserva a escolha de padrão enquanto ela continuar concedida pelo AD.
+            $papel = in_array($u['papel'], $perfis, true) ? $u['papel'] : $perfis[0];
+            $seg = Ldap::segurancaPatrimonial($e['grupos']) ? 1 : 0;
+            if ($anteriores !== $perfis) { $mudancas['perfis'] = [$anteriores, $perfis]; }
             if ($papel !== $u['papel']) {
                 $mudancas['papel'] = [$u['papel'], $papel];
             }
@@ -135,7 +146,10 @@ final class LdapUsuarios
             $upd['papel'] = $papel;
             $upd['seguranca_patrimonial'] = $seg;
         }
-        Database::update('usuarios', $upd, 'id = ?', [$u['id']]);
+        Database::transaction(function () use ($u, $upd, $perfis): void {
+            Database::update('usuarios', $upd, 'id = ?', [$u['id']]);
+            if ($perfis !== null) { self::gravarPerfis($u['id'], $perfis); }
+        });
         if ($mudancas || $origem !== 'LOGIN') {
             Audit::log('usuarios', $u['id'], 'LDAP_SINCRONIZACAO', ['origem' => $origem, 'mudancas' => $mudancas], $origem === 'LOGIN' ? $u['id'] : null);
         }
@@ -147,8 +161,8 @@ final class LdapUsuarios
         if ((int) $u['ativo'] === 0) {
             return;
         }
-        if ($u['papel'] === 'admin'
-            && !(int) Database::value("SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1 AND id <> ?", [$u['id']])) {
+        if (Database::value("SELECT 1 FROM usuario_perfis WHERE usuario_id = ? AND perfil = 'admin'", [$u['id']])
+            && !self::outroAdmin($u['id'])) {
             return; // nunca desativa o último admin automaticamente
         }
         Database::update('usuarios', ['ativo' => 0], 'id = ?', [$u['id']]);
@@ -182,13 +196,39 @@ final class LdapUsuarios
         return $r;
     }
 
-    /** Grupo exclusivo de serviços, sem mudar a prioridade dos grupos legados. */
+    /** Compatibilidade: o primeiro grupo continua sendo o padrão no provisionamento. */
     public static function papelPorGrupos(array $grupos): ?string
     {
-        $legado = Ldap::papelPorGrupos($grupos);
-        if ($legado !== null) { return $legado; }
-        $dn = strtolower(trim((string) \App\Core\Env::get('LDAP_GROUP_COLABORADOR', '')));
-        return $dn !== '' && in_array($dn, array_map('strtolower', $grupos), true) ? 'colaborador' : null;
+        return self::perfisPorGrupos($grupos)[0] ?? null;
+    }
+
+    /** Todos os grupos mapeados concedem perfis; não altera identificadores do diretório. */
+    public static function perfisPorGrupos(array $grupos): array
+    {
+        $mapa = [...Ldap::mapaGrupos(),
+            'gestor_area' => (string) \App\Core\Env::get('LDAP_GROUP_GESTOR_AREA', ''),
+            'colaborador' => (string) \App\Core\Env::get('LDAP_GROUP_COLABORADOR', ''),
+        ];
+        $grupos = array_map(static fn (string $g): string => strtolower(trim($g)), $grupos);
+        $perfis = [];
+        foreach ($mapa as $perfil => $dn) {
+            $dn = strtolower(trim($dn));
+            if ($dn !== '' && in_array($dn, $grupos, true)) { $perfis[] = $perfil; }
+        }
+        return $perfis;
+    }
+
+    private static function gravarPerfis(string $id, array $perfis): void
+    {
+        Database::run('DELETE FROM usuario_perfis WHERE usuario_id = ?', [$id]);
+        foreach ($perfis as $perfil) {
+            Database::insert('usuario_perfis', ['usuario_id' => $id, 'perfil' => $perfil]);
+        }
+    }
+
+    private static function outroAdmin(string $id): bool
+    {
+        return (bool) Database::value("SELECT 1 FROM usuarios u JOIN usuario_perfis p ON p.usuario_id = u.id AND p.perfil = 'admin' WHERE u.ativo = 1 AND u.id <> ? LIMIT 1", [$id]);
     }
 
     /** Colaborador ativo com a mesma matrícula e ainda sem usuário vinculado. */
