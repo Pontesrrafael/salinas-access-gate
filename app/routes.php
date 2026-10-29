@@ -8,6 +8,7 @@ use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
 use App\Controllers\ChamadosController;
 use App\Controllers\ContaNotificacoesController;
+use App\Controllers\PerfilController;
 use App\Controllers\ServicosConfigController;
 use App\Controllers\DashboardController;
 use App\Controllers\IndicadoresController;
@@ -90,6 +91,7 @@ $router->post('/chamados/{id}/acompanhar', [ChamadosController::class, 'acompanh
 $router->post('/chamados/{id}/atribuir', [ChamadosController::class, 'atribuir']);
 $router->post('/chamados/{id}/status', [ChamadosController::class, 'status']);
 $router->post('/chamados/{id}/prorrogar', [ChamadosController::class, 'prorrogar']);
+$router->post('/conta/perfil', [PerfilController::class, 'trocar']);
 $router->get('/conta/notificacoes', [ContaNotificacoesController::class, 'index']);
 $router->post('/conta/notificacoes', [ContaNotificacoesController::class, 'salvar']);
 $router->get('/servicos/config', [ServicosConfigController::class, 'index']);

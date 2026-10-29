@@ -1,5 +1,6 @@
 <?php
 /**
+ * @var ?bool $isAdmin
  * @var array<int, array<string, mixed>> $areas
  * @var ?array<string, mixed> $areaAtual
  * @var ?string $corSugerida
@@ -13,14 +14,18 @@
  * @var string $editarCampo
  */
 use App\Controllers\ServicosConfigController;
+use App\Core\Auth;
 use App\Services\Chamados;
 use App\Services\FormularioDinamico;
 
-slot('acoes', '<a class="btn btn-secundario" href="' . e(url('/configuracoes')) . '">' . icon('config') . e(t('Expediente e feriados')) . '</a>');
+$isAdmin = isset($isAdmin) ? (bool) $isAdmin : Auth::can('chamados.configurar');
+if ($isAdmin) {
+    slot('acoes', '<a class="btn btn-secundario" href="' . e(url('/configuracoes')) . '">' . icon('config') . e(t('Expediente e feriados')) . '</a>');
+}
 
 $atalhosSla = ServicosConfigController::ATALHOS_SLA;
 $urgencias = Chamados::URGENCIAS;
-$papeisMembro = ServicosConfigController::PAPEIS_MEMBRO;
+$papeisMembro = $isAdmin ? ServicosConfigController::PAPEIS_MEMBRO : ['atendente' => 'Atendente'];
 $tiposCampo = FormularioDinamico::TIPOS;
 $paletaCores = $paletaCores ?? ServicosConfigController::PALETA_CORES;
 $corSugerida = isset($corSugerida) && is_string($corSugerida) && $corSugerida !== ''
@@ -85,6 +90,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
 };
 ?>
 <div class="servicos-config">
+<?php if ($isAdmin): ?>
 <datalist id="paleta-cores-area">
   <?php foreach ($paletaCores as $corOpcao): ?>
     <option value="<?= e($corOpcao) ?>"><?= e($corOpcao) ?></option>
@@ -128,6 +134,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
     </form>
   </details>
 </section>
+<?php endif; ?>
 
 <section class="cartao sem-padding" data-tour="filtros">
   <div class="cartao-cabecalho pad">
@@ -138,8 +145,10 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
       <thead>
         <tr>
           <th><?= e(t('Área')) ?></th>
-          <th class="ocultar-sm"><?= e(t('Slug')) ?></th>
-          <th class="ocultar-md"><?= e(t('Cor')) ?></th>
+          <?php if ($isAdmin): ?>
+            <th class="ocultar-sm"><?= e(t('Slug')) ?></th>
+            <th class="ocultar-md"><?= e(t('Cor')) ?></th>
+          <?php endif; ?>
           <th class="ocultar-sm"><?= e(t('Equipe / Categorias / Campos')) ?></th>
           <th><?= e(t('Situação')) ?></th>
           <th></th>
@@ -147,44 +156,53 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
       </thead>
       <tbody>
       <?php if ($areas === []): ?>
-        <tr><td colspan="6" class="vazio mudo"><?= e(t('Nenhuma área de suporte cadastrada.')) ?></td></tr>
+        <tr><td colspan="<?= $isAdmin ? 6 : 4 ?>" class="vazio mudo"><?= e(t('Nenhuma área de suporte cadastrada.')) ?></td></tr>
       <?php endif; ?>
       <?php foreach ($areas as $a): ?>
         <?php $selecionada = $areaAtual && $areaAtual['id'] === $a['id']; ?>
         <?php $corArea = ServicosConfigController::normalizarCor($a['cor'] ?? null); ?>
         <?php if ($editarArea === $a['id']): ?>
           <tr>
-            <td colspan="6">
+            <td colspan="<?= $isAdmin ? 6 : 4 ?>">
               <form method="post" action="<?= e(url('/servicos/config/areas/' . $a['id'])) ?>" class="form-pilha">
                 <?= csrf_field() ?>
-                <div class="grade-4">
-                  <label class="campo">
-                    <span><?= e(t('Nome da área')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
-                    <input type="text" name="nome" required maxlength="120" value="<?= e($a['nome']) ?>">
-                  </label>
-                  <label class="campo">
-                    <span><?= e(t('Identificador (slug)')) ?></span>
-                    <input type="text" name="slug" required maxlength="60" value="<?= e($a['slug']) ?>">
-                  </label>
-                  <label class="campo">
-                    <span><?= e(t('Cor de identificação')) ?></span>
-                    <input type="color" name="cor" value="<?= e($corArea) ?>" list="paleta-cores-area">
-                  </label>
-                  <label class="campo">
-                    <span><?= e(t('Ordem de exibição')) ?></span>
-                    <input type="number" name="ordem" min="0" max="9999" value="<?= (int) ($a['ordem'] ?? 0) ?>">
-                  </label>
-                </div>
-                <div class="grade-2 compacta">
-                  <label class="campo">
-                    <span><?= e(t('Descrição da área')) ?></span>
-                    <input type="text" name="descricao" maxlength="500" value="<?= e($a['descricao'] ?? '') ?>">
-                  </label>
-                  <label class="checkbox">
-                    <input type="checkbox" name="ativo" value="1"<?= checked($a['ativo']) ?>>
-                    <span><?= e(t('Área ativa para novos chamados')) ?></span>
-                  </label>
-                </div>
+                <?php if ($isAdmin): ?>
+                  <div class="grade-4">
+                    <label class="campo">
+                      <span><?= e(t('Nome da área')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+                      <input type="text" name="nome" required maxlength="120" value="<?= e($a['nome']) ?>">
+                    </label>
+                    <label class="campo">
+                      <span><?= e(t('Identificador (slug)')) ?></span>
+                      <input type="text" name="slug" required maxlength="60" value="<?= e($a['slug']) ?>">
+                    </label>
+                    <label class="campo">
+                      <span><?= e(t('Cor de identificação')) ?></span>
+                      <input type="color" name="cor" value="<?= e($corArea) ?>" list="paleta-cores-area">
+                    </label>
+                    <label class="campo">
+                      <span><?= e(t('Ordem de exibição')) ?></span>
+                      <input type="number" name="ordem" min="0" max="9999" value="<?= (int) ($a['ordem'] ?? 0) ?>">
+                    </label>
+                  </div>
+                  <div class="grade-2 compacta">
+                    <label class="campo">
+                      <span><?= e(t('Descrição da área')) ?></span>
+                      <input type="text" name="descricao" maxlength="500" value="<?= e($a['descricao'] ?? '') ?>">
+                    </label>
+                    <label class="checkbox">
+                      <input type="checkbox" name="ativo" value="1"<?= checked($a['ativo']) ?>>
+                      <span><?= e(t('Área ativa para novos chamados')) ?></span>
+                    </label>
+                  </div>
+                <?php else: ?>
+                  <div class="grade-2 compacta">
+                    <label class="campo campo-largo">
+                      <span><?= e(t('Descrição da área')) ?></span>
+                      <input type="text" name="descricao" maxlength="500" value="<?= e($a['descricao'] ?? '') ?>">
+                    </label>
+                  </div>
+                <?php endif; ?>
                 <?php $camposSla($a); ?>
                 <div class="form-acoes">
                   <a class="btn btn-secundario btn-sm" href="<?= e(url('/servicos/config', ['area' => $a['id']])) ?>"><?= e(t('Cancelar')) ?></a>
@@ -200,11 +218,13 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
               <strong><?= e($a['nome']) ?></strong>
               <?php if (!empty($a['descricao'])): ?><span class="sub"><?= e($a['descricao']) ?></span><?php endif; ?>
             </td>
-            <td class="ocultar-sm mono" data-rotulo="<?= e(t('Slug')) ?>"><?= e($a['slug']) ?></td>
-            <td class="ocultar-md" data-rotulo="<?= e(t('Cor')) ?>">
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="<?= e($corArea) ?>"/></svg>
-              <code class="mono"><?= e($corArea) ?></code>
-            </td>
+            <?php if ($isAdmin): ?>
+              <td class="ocultar-sm mono" data-rotulo="<?= e(t('Slug')) ?>"><?= e($a['slug']) ?></td>
+              <td class="ocultar-md" data-rotulo="<?= e(t('Cor')) ?>">
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="<?= e($corArea) ?>"/></svg>
+                <code class="mono"><?= e($corArea) ?></code>
+              </td>
+            <?php endif; ?>
             <td class="ocultar-sm" data-rotulo="<?= e(t('Equipe / Categorias / Campos')) ?>">
               <?= (int) ($a['total_membros'] ?? 0) ?> <?= e(t('membro(s)')) ?> ·
               <?= (int) ($a['total_categorias'] ?? 0) ?> <?= e(t('categoria(s)')) ?> ·
@@ -233,7 +253,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
   <section class="cartao sem-padding">
     <div class="cartao-cabecalho pad">
       <h2><?= icon('usuarios') ?> <?= e(t('Equipe da área')) ?>: <?= e($areaAtual['nome']) ?></h2>
-      <?= badge($areaAtual['slug'], 'ouro') ?>
+      <?php if ($isAdmin): ?><?= badge($areaAtual['slug'], 'ouro') ?><?php endif; ?>
     </div>
     <div class="cartao">
       <form method="post" action="<?= e(url('/servicos/config/areas/' . $areaId . '/membros')) ?>" class="filtros">
@@ -292,11 +312,13 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
               <?php endif; ?>
             </td>
             <td class="acoes">
-              <form method="post" action="<?= e(url('/servicos/config/areas/' . $areaId . '/membros/' . $m['usuario_id'] . '/remover')) ?>">
-                <?= csrf_field() ?>
-                <input type="hidden" name="usuario_id" value="<?= e($m['usuario_id']) ?>">
-                <button class="btn btn-fantasma btn-sm" type="submit"><?= icon('lixo', 'icon icon-sm') ?> <?= e(t('Remover')) ?></button>
-              </form>
+              <?php if ($isAdmin || ($m['papel'] ?? '') !== 'gestor'): ?>
+                <form method="post" action="<?= e(url('/servicos/config/areas/' . $areaId . '/membros/' . $m['usuario_id'] . '/remover')) ?>">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="usuario_id" value="<?= e($m['usuario_id']) ?>">
+                  <button class="btn btn-fantasma btn-sm" type="submit"><?= icon('lixo', 'icon icon-sm') ?> <?= e(t('Remover')) ?></button>
+                </form>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -349,7 +371,11 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
               <input type="number" name="ordem" min="0" max="9999" value="0">
             </label>
           </div>
-          <p class="dica"><?= e(t('O expediente, os dias úteis, os feriados, o e-mail e a retenção de chamados são definidos em')) ?> <a href="<?= e(url('/configuracoes')) ?>"><?= e(t('Configurações')) ?> → <?= e(t('Chamados')) ?></a>.</p>
+          <?php if ($isAdmin): ?>
+            <p class="dica"><?= e(t('O expediente, os dias úteis, os feriados, o e-mail e a retenção de chamados são definidos em')) ?> <a href="<?= e(url('/configuracoes')) ?>"><?= e(t('Configurações')) ?> → <?= e(t('Chamados')) ?></a>.</p>
+          <?php else: ?>
+            <p class="dica"><?= e(t('O expediente, os dias úteis e os feriados seguem o calendário global definido pela administração (TI).')) ?></p>
+          <?php endif; ?>
           <div class="form-acoes">
             <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar categoria')) ?></button>
           </div>

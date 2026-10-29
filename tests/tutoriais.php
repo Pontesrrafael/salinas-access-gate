@@ -1,15 +1,28 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/app/bootstrap.php';
-use App\Core\Auth;
+use App\Core\{Auth, Session};
 use App\Services\Tutoriais;
 
 function expect(bool $ok, string $label): void { if (!$ok) { throw new RuntimeException($label); } }
-function role(?string $role, bool $membroArea = false): void {
-    (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
-    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $role === null ? null : ['id' => 'test-' . $role, 'papel' => $role]);
-    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, $role === null ? false : $membroArea);
-    (new ReflectionProperty(Auth::class, 'areasGeridas'))->setValue(null, []);
+function setAuthProp(string $name, mixed $value): void {
+    $ref = new ReflectionClass(Auth::class);
+    if ($ref->hasProperty($name)) {
+        $ref->getProperty($name)->setValue(null, $value);
+    }
+}
+function role(?string $role, bool $membroArea = false, ?array $areasGeridas = null): void {
+    if ($role === null) {
+        Session::forget('perfil_ativo');
+    } else {
+        Session::set('perfil_ativo', $role);
+    }
+    setAuthProp('loaded', true);
+    setAuthProp('user', $role === null ? null : ['id' => 'test-' . $role, 'papel' => $role, 'papel_padrao' => $role]);
+    setAuthProp('perfis', $role === null ? [] : [$role]);
+    setAuthProp('perfilAtivo', $role);
+    setAuthProp('membroArea', $role === null ? false : $membroArea);
+    setAuthProp('areasGeridas', $areasGeridas ?? ($role === 'gestor_area' ? ['area-teste'] : []));
 }
 role(null); expect(Tutoriais::permitidos() === [], 'Visitante não pode receber conteúdo autenticado.');
 foreach (array_keys(Auth::PAPEIS) as $role) {
@@ -30,10 +43,21 @@ expect(Tutoriais::daTela('/chamados/abrir')['id'] === 'chamados-abrir', 'Todos o
 expect(Tutoriais::daTela('/chamados/meus')['id'] === 'chamados-meus', 'Todos os perfis autenticados consultam seus chamados.');
 expect(Tutoriais::daTela('/chamados/fila') === null, 'Fila de atendimento exige vínculo na área ou Admin/TI.');
 expect(Tutoriais::daTela('/chamados/chamado-teste')['id'] === 'chamados-meus', 'Detalhe do chamado usa tutorial de solicitante quando sem fila.');
-expect(Tutoriais::daTela('/servicos/config') === null, 'Áreas e formulários é restrito ao Admin/TI.');
+expect(Tutoriais::daTela('/servicos/config') === null, 'Áreas e formulários é restrito ao Admin/TI ou Gestor de área.');
 role('porteiro', true);
 expect(Tutoriais::daTela('/chamados/fila')['id'] === 'chamados-fila', 'Membro de área recebe tutorial da fila.');
 expect(Tutoriais::daTela('/chamados/chamado-teste')['id'] === 'chamados-fila', 'Membro de área recebe tutorial de atendimento no detalhe do chamado.');
+role('colaborador');
+expect(isset(Tutoriais::permitidos()['solicitante']), 'Solicitante recebe roteiro do perfil Solicitante.');
+expect(Tutoriais::daTela('/chamados/abrir')['id'] === 'chamados-abrir', 'Solicitante recebe tutorial de abertura de chamado.');
+expect(Tutoriais::daTela('/chamados/fila') === null, 'Solicitante não acessa fila de atendimento.');
+expect(Tutoriais::daTela('/servicos/config') === null, 'Solicitante não configura áreas.');
+if (isset(Auth::PAPEIS['gestor_area'])) {
+    role('gestor_area', true, ['area-teste']);
+    expect(isset(Tutoriais::permitidos()['gestor-area']), 'Gestor de área recebe roteiro do perfil Gestor de área.');
+    expect(Tutoriais::daTela('/servicos/config')['id'] === 'gestor-area', 'Gestor de área recebe tutorial específico em Áreas e formulários.');
+    expect(Tutoriais::daTela('/chamados/fila')['id'] === 'chamados-fila', 'Gestor de área recebe tutorial da fila.');
+}
 role('ssma'); expect(Tutoriais::daTela('/portaria') === null, 'SSMA não opera portaria.');
 role('supervisor'); expect(Tutoriais::daTela('/infleet/percursos')['id'] === 'infleet', 'Subrota de integração precisa de ajuda.');
 role('admin'); expect(Tutoriais::daTela('/servicos/config')['id'] === 'servicos-config', 'Admin/TI recebe tutorial de Áreas e formulários.');

@@ -225,10 +225,14 @@ switch ($cmd) {
             err($e);
         }
         $id = Uuid::v4();
-        Database::insert('usuarios', [
-            'id' => $id, 'nome' => $nome, 'email' => $email, 'senha_hash' => Auth::hash($senha),
-            'papel' => 'admin', 'ativo' => 1, 'must_change_password' => $temporaria ? 1 : 0,
-        ]);
+        // Usuário e concessão do perfil Admin na mesma transação (migração 013: perfis em usuario_perfis).
+        Database::transaction(static function () use ($id, $nome, $email, $senha, $temporaria): void {
+            Database::insert('usuarios', [
+                'id' => $id, 'nome' => $nome, 'email' => $email, 'senha_hash' => Auth::hash($senha),
+                'papel' => 'admin', 'ativo' => 1, 'must_change_password' => $temporaria ? 1 : 0,
+            ]);
+            Database::insert('usuario_perfis', ['usuario_id' => $id, 'perfil' => 'admin']);
+        });
         Audit::log('usuarios', $id, 'CREATE_ADMIN_CLI', ['email' => $email], $id);
         ok("Admin criado: {$email}");
         if ($temporaria) {

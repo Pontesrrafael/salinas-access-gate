@@ -43,7 +43,7 @@ jobs:
       - name: Regras de segurança (RBAC e utilidades HTTP)
         run: php tests/regras.php
       - name: Chamados por área (prioridade, SLA, status, formulário dinâmico)
-        run: php tests/chamados.php && php tests/formulario_dinamico.php && php tests/email.php && php tests/retencao_chamados.php && php tests/preferencias_notificacao.php && php tests/prorrogacao.php
+        run: php tests/chamados.php && php tests/formulario_dinamico.php && php tests/email.php && php tests/retencao_chamados.php && php tests/preferencias_notificacao.php && php tests/prorrogacao.php && php tests/perfis.php
       - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
         run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)

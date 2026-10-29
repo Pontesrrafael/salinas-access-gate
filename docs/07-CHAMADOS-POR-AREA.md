@@ -1,14 +1,27 @@
 # Solicitação de Serviços e Chamados por Área
 
-Data: 28/10/2026 · Salinas Gold Mineração LTDA · TI
+Data: 29/10/2026 · Salinas Gold Mineração LTDA · TI
 
-Módulo de solicitação de serviços e acompanhamento de chamados internos (inspirado no fluxo ITIL/GLPI da Salinas), integrado ao padrão visual e de governança do **Salinas Access Gate**. Permite que áreas de suporte — como **SSMA**, **Facilities**, **Meio Ambiente**, **Suprimentos** e novas áreas cadastradas pelo Admin/TI — recebam, priorizem e solucionem demandas com controle de SLA, horário comercial, prorrogação justificada de prazos, notificações por e-mail com preferências individuais por usuário, pesquisa de satisfação, ajuda contextual (**Como usar**) e retenção LGPD.
+Módulo de solicitação de serviços e acompanhamento de chamados internos (inspirado no fluxo ITIL/GLPI da Salinas), integrado ao padrão visual e de governança do **Salinas Access Gate**. Permite que áreas de suporte — como **SSMA**, **Facilities**, **Meio Ambiente**, **Suprimentos** e novas áreas cadastradas pelo Admin/TI — recebam, priorizem e solucionem demandas com controle de SLA, horário comercial, prorrogação justificada de prazos, notificações por e-mail com preferências individuais por usuário, pesquisa de satisfação, múltiplos perfis com troca de perfil ativo no topo (ver [`docs/10-PERFIS.md`](10-PERFIS.md)), ajuda contextual (**Como usar**) e retenção LGPD.
 
 ---
 
-## 1. Guia do Administrador (`chamados.configurar` e `configuracoes.gerir`)
+## 1. Guia do Administrador (`chamados.configurar`) e do Gestor de Área (`chamados.configurar_area`)
 
-O gerenciamento das áreas, equipes, categorias e formulários fica em **Serviços → Áreas e formulários** (`/servicos/config`), e os parâmetros globais de expediente, feriados, e-mail e retenção ficam em **Gestão → Configurações → Chamados** (`/configuracoes`), restritos ao perfil **Admin/TI**. A tela **Áreas e formulários** traz atalho direto (**Expediente e feriados**) no topo e na seção de categorias para **Configurações → Chamados**. Todas as alterações exigem token CSRF e são registradas na trilha de auditoria (`audit_log`).
+O gerenciamento das áreas, equipes, categorias e formulários fica em **Serviços → Áreas e formulários** (`/servicos/config`), acessível ao **Admin/TI** (`chamados.configurar`, visão completa) e ao perfil **Gestor de área (serviços)** (`chamados.configurar_area`, escopo restrito às áreas em que o usuário está vinculado como `gestor` em `servico_area_membros`). Os parâmetros globais de expediente, feriados, e-mail e retenção ficam em **Gestão → Configurações → Chamados** (`/configuracoes`), exclusivos do **Admin/TI**. Para o Admin/TI, a tela **Áreas e formulários** traz atalho direto (**Expediente e feriados**) no topo e na seção de categorias para **Configurações → Chamados**. Todas as alterações exigem token CSRF e são registradas na trilha de auditoria (`audit_log`).
+
+### 1.0. Escopo do perfil Gestor de área (`gestor_area`) em `/servicos/config`
+Quando o usuário atua com o perfil ativo **Gestor de área (serviços)**:
+- **Leitura restrita às áreas geridas**: a tela lista apenas as áreas retornadas por `Auth::areasGeridas()` (vínculo `papel = 'gestor'` em `servico_area_membros`). Caso não gerencie nenhuma área, a tela informa que não há áreas vinculadas e orienta a procurar o Admin/TI.
+- **O que o Gestor de área pode editar nas suas áreas**:
+  - Dados operacionais da área gerida: **Nome da área**, **Ordem**, **Descrição**, **SLA padrão de resposta**, **SLA padrão de solução** e **Regime de contagem do SLA**;
+  - **Equipe de atendentes**: vincular usuários ativos como **Atendente** (`papel = 'atendente'`) e remover atendentes da área (com devolução automática dos chamados abertos à triagem);
+  - **Categorias e SLAs**: cadastrar e editar categorias e subcategorias, urgência padrão, prazos de SLA e regime comercial/24x7 da área gerida;
+  - **Construtor de formulário dinâmico**: criar, editar, reordenar e ativar/desativar campos das áreas sob sua gestão.
+- **Restrições aplicadas no servidor e na interface**:
+  - Não exibe nem permite **Nova área de suporte**, ativação/desativação da área (`ativo`), alteração de **Identificador (slug)** ou **Cor de identificação** (`cor`), nem atalhos para `/configuracoes`;
+  - Não permite conceder, alterar ou remover o papel **Gestor** (`papel = 'gestor'`) em `servico_area_membros`;
+  - Toda ação `POST` (`salvarArea`, `salvarMembro`, `removerMembro`, `salvarCategoria`, `salvarCampo`, `moverCampo`, `alternarCampo`) carrega o registro afetado no banco de dados e valida `Auth::gereArea($areaId)` sobre a área real do registro, sem confiar no `area_id` enviado pelo formulário.
 
 ### 1.1. Cadastrar e editar áreas de suporte
 1. No bloco recolhível **Nova área de suporte**, informe:
@@ -82,14 +95,15 @@ Em **Gestão → Configurações → Chamados** (`/configuracoes`) e no arquivo 
 
 ---
 
-## 2. Abertura de Chamados e Ajuda Contextual (`chamados.abrir`)
+## 2. Abertura de Chamados, Perfil Solicitante e Ajuda Contextual (`chamados.abrir`)
 
 Em **Serviços → Abrir chamado** (`/chamados/abrir`):
+- **Perfil Solicitante (`colaborador`, rótulo `Solicitante (serviços)`)**: quando o perfil ativo no seletor do topo é **Solicitante (serviços)**, o menu apresenta exclusivamente a seção **Serviços** (`Abrir chamado` e `Meus chamados`) e o rodapé da conta (`Notificações por e-mail` e `Duas etapas`). Mesmo que a conta possua vínculo em `servico_area_membros`, o perfil ativo Solicitante não exibe a fila de atendimento nem permite consultar detalhes, notas internas ou anexos restritos de chamados de terceiros — para atuar como atendente ou gestor, basta alternar o perfil ativo no topo da tela.
 - **Seleção direta de área e categoria**: ao escolher a **Área de atendimento**, o seletor de **Categoria** é limpo automaticamente (`data-limpar-alvo="categoria_id"`) e o formulário é recarregado (`data-autosubmit`); ao escolher a categoria, os campos específicos e os prazos de SLA da categoria são carregados sem exigir clique extra. O botão **Carregar formulário** permanece disponível como alternativa sem JavaScript.
 - **Beneficiário condicional**: o campo **Nome de quem receberá o atendimento** (`#campo-beneficiario`) só é exibido e marcado como obrigatório quando **O atendimento é para você?** está selecionado como **Não** (`0`), mantendo validação no servidor.
 - **Explicação visível dos níveis de urgência**: o quadro **Como escolher a urgência** (`1 — Muito alta` a `5 — Muito baixa`) vem aberto por padrão para orientar o solicitante no preenchimento.
 - **Aviso dinâmico de SLA**: o texto informativo no rodapé usa a mesma regra de herança da gravação e da transferência: categoria → área → sem prazo. Mostra o regime efetivo (comercial ou 24x7) e as durações de primeira resposta e solução, inclusive quando herdadas da área.
-- **Ajuda contextual (`Como usar`)**: todas as telas do módulo (`/chamados/abrir`, `/chamados/meus`, `/chamados/fila`, `/chamados/{id}` e `/servicos/config`) contam com procedimentos passo a passo e tour guiado no botão **Como usar** da barra superior e na central **Tutoriais** (`/tutoriais`).
+- **Ajuda contextual (`Como usar`)**: todas as telas do módulo (`/chamados/abrir`, `/chamados/meus`, `/chamados/fila`, `/chamados/{id}` e `/servicos/config`) contam com procedimentos passo a passo e tour guiado no botão **Como usar** da barra superior e na central **Tutoriais** (`/tutoriais`), incluindo os roteiros específicos **Solicitante** (`solicitante`) e **Gestor de área** (`gestor-area`).
 
 ---
 
@@ -97,7 +111,11 @@ Em **Serviços → Abrir chamado** (`/chamados/abrir`):
 
 Usuários vinculados a pelo menos uma área de suporte (ou com perfil **Admin/TI**) acessam **Serviços → Fila de atendimento** (`/chamados/fila`):
 
-### 3.1. Triagem, marcador de cor da área, filtros e indicadores da fila
+### 3.1. Triagem, backlog do gestor, marcador de cor da área, filtros e indicadores da fila
+- **Escopo por perfil ativo**:
+  - **Admin/TI (`admin`)**: visualiza e atende chamados de todas as áreas;
+  - **Gestor de área (`gestor_area`, rótulo `Gestor de área (serviços)`)**: a fila exibe o título **Backlog das minhas áreas**, restringindo listagem, filtro de áreas (`Minhas áreas`), indicadores de satisfação e acesso a detalhes/atendimento (`ChamadosController::atende`) exclusivamente às áreas em que o usuário possui vínculo `papel = 'gestor'` (`Auth::areasGeridas()` / `Auth::gereArea()`), além de apresentar atalho direto para **Áreas e formulários** (`/servicos/config`);
+  - **Demais perfis com vínculo de equipe (`supervisor`, `ssma`, `porteiro`)**: visualizam na **Fila de atendimento** as áreas em que são membros (`atendente` ou `gestor` em `servico_area_membros`).
 - Filtre os chamados por **Área**, **Status**, **Categoria**, **Prioridade**, **Atendente responsável** e **Situação do prazo** (`No prazo`, `Vencendo` quando resta ≤ 20% do tempo, ou `Vencido`).
 - **Marcador de cor da área**: na **Fila de atendimento** e em **Meus chamados**, cada chamado exibe um pequeno marcador circular SVG (`fill="#RRGGBB"`, validado por expressão regular com fallback seguro para `#024B37` e `aria-hidden="true"`, sem estilos inline para conformidade com a CSP) antes do nome da área, facilitando a distinção visual imediata entre áreas como **SSMA**, **Facilities**, **Meio Ambiente** e **Suprimentos**.
 - A **Prioridade (1 a 6)** é calculada automaticamente pela matriz **Urgência (`1 = Muito alta` .. `5 = Muito baixa`) × Impacto (`1 = Muito alto` .. `4 = Baixo`)** definida no chamado.
