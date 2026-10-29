@@ -163,7 +163,7 @@ final class ChamadosController extends Controller
         // antes da paginação; lê lotes pequenos para não carregar a fila inteira em memória.
         $sqlWhere = $where ? implode(' AND ', $where) : '1 = 1';
         [$pagina, $limite, $offset] = $this->paginacao();
-        $consulta = 'SELECT c.*, a.nome AS area_nome, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ($filtros['ordem'] === 'prioridade' ? ' ORDER BY c.prioridade, c.created_at, c.numero' : ' ORDER BY c.created_at DESC, c.numero DESC');
+        $consulta = 'SELECT c.*, a.nome AS area_nome, a.cor AS area_cor, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ($filtros['ordem'] === 'prioridade' ? ' ORDER BY c.prioridade, c.created_at, c.numero' : ' ORDER BY c.created_at DESC, c.numero DESC');
         if (isset(Chamados::PRAZOS[$filtros['prazo']]) || $filtros['prazo'] === 'alerta' || $filtros['ordem'] === 'prazo') {
             $agora = new DateTimeImmutable();
             $total = 0; $lista = []; $cursor = 0; $ordenaveis = [];
@@ -182,7 +182,7 @@ final class ChamadosController extends Controller
                 usort($ordenaveis, static fn ($a, $b) => [$a['prazo'], $a['numero']] <=> [$b['prazo'], $b['numero']]);
                 $ids = array_column(array_slice($ordenaveis, $offset, $limite), 'id');
                 if ($ids) {
-                    $porId = array_column(Database::all('SELECT c.*, a.nome AS area_nome, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ' AND c.id IN (' . Database::in($ids) . ')', [...$params, ...$ids]), null, 'id');
+                    $porId = array_column(Database::all('SELECT c.*, a.nome AS area_nome, a.cor AS area_cor, cat.nome AS categoria_nome, u.nome AS atendente_nome, s.nome AS solicitante_nome FROM chamados c JOIN servico_areas a ON a.id = c.area_id JOIN servico_categorias cat ON cat.id = c.categoria_id LEFT JOIN usuarios u ON u.id = c.atendente_id LEFT JOIN usuarios s ON s.id = c.solicitante_id WHERE ' . $sqlWhere . ' AND c.id IN (' . Database::in($ids) . ')', [...$params, ...$ids]), null, 'id');
                     foreach ($ids as $id) { if (isset($porId[$id])) { $lista[] = $porId[$id]; } }
                 }
             }

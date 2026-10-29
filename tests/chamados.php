@@ -38,7 +38,7 @@ function chamadoFixture(): array
         'created_at' => '2026-10-28 08:00:00', 'prazo_resposta' => '2026-10-28 09:00:00',
         'prazo_solucao' => '2026-10-28 18:00:00', 'pendente_desde' => '2026-10-28 10:00:00',
         'segundos_pendente' => 0, 'respondido_em' => null, 'solucionado_em' => null, 'fechado_em' => null,
-        'area_nome' => 'Facilities', 'categoria_nome' => 'Manutenção',
+        'area_nome' => 'Facilities', 'area_cor' => '#1D4ED8', 'categoria_nome' => 'Manutenção',
     ];
 }
 
@@ -109,7 +109,12 @@ if (PHP_SAPI === 'cli-server') {
     }
     $view = in_array($_GET['view'] ?? '', ['abrir', 'index', 'detalhe'], true) ? $_GET['view'] : 'detalhe';
     $status = ($_GET['status'] ?? '') === 'fechado' ? 'fechado' : 'pendente';
-    View::render('chamados/' . $view, chamadoViewFixture($view, true, $status));
+    $fixture = chamadoViewFixture($view, true, $status);
+    if ($view === 'index') {
+        if (($_GET['avaliacoes'] ?? '') === 'nenhuma') { $fixture['satisfacaoAreas'] = [['nome' => 'SSMA', 'media' => null, 'avaliacoes' => '0']]; }
+        if (($_GET['fila'] ?? '') === '0') { $fixture['fila'] = false; $fixture['titulo'] = t('Meus chamados'); }
+    }
+    View::render('chamados/' . $view, $fixture);
     return;
 }
 
@@ -361,6 +366,42 @@ expect(str_contains($html, '/chamados/anexos/fixture-anexo') && substr_count($ht
 $html = View::partial('chamados/index', chamadoViewFixture('index'));
 foreach (['name="q"', 'value="me"', 'value="none"', 'value="prioridade"', 'value="prazo"', 'Primeira resposta', 'Pessoa de teste'] as $texto) { expect(str_contains($html, $texto), 'Fila contém busca, triagem, ordenação, solicitante e resposta.'); }
 
+// Revisão de produção: estatísticas vazias não ocupam espaço; o marcador nunca recebe HTML do cadastro.
+foreach ([[], [['nome' => 'Sem avaliações', 'media' => null, 'avaliacoes' => '0']]] as $semAvaliacoes) {
+    $fixture = chamadoViewFixture('index');
+    $fixture['satisfacaoAreas'] = $semAvaliacoes;
+    $html = View::partial('chamados/index', $fixture);
+    expect(!str_contains($html, 'chamado-satisfacao') && !str_contains($html, 'Satisfação por área'), 'Cartão inteiro ausente sem áreas avaliadas.');
+}
+$fixture = chamadoViewFixture('index');
+$fixture['satisfacaoAreas'] = [
+    ['nome' => 'Área avaliada <teste>', 'media' => '4.25', 'avaliacoes' => '4'],
+    ['nome' => 'Área sem notas', 'media' => null, 'avaliacoes' => '0'],
+    ['nome' => 'Outra avaliada', 'media' => '5.0', 'avaliacoes' => '1'],
+];
+$html = View::partial('chamados/index', $fixture);
+expect(preg_match('/<details\b([^>]*\bchamado-satisfacao\b[^>]*)>(.*?)<\/details>/s', $html, $cartao) === 1, 'Satisfação usa details nativo, sem JavaScript.');
+expect(!preg_match('/\sopen(?:\s|=|$)/', $cartao[1]) && str_contains($cartao[2], '<summary><h2>'), 'Cartão começa recolhido e mantém título acessível.');
+expect(substr_count($cartao[2], 'class="kpi"') === 2 && str_contains($cartao[2], 'Área avaliada &lt;teste&gt;') && str_contains($cartao[2], 'Outra avaliada'), 'Só áreas avaliadas aparecem, com nomes escapados.');
+expect(!str_contains($cartao[2], 'Área sem notas') && !str_contains($cartao[2], '— / 5') && str_contains($cartao[2], '4,3 / 5') && str_contains($cartao[2], '4 avaliações'), 'Médias e contagens preservadas sem cartões vazios.');
+foreach ([true, false] as $fila) {
+    foreach (['#1D4ED8', '#a1b2c3', null, '', 'red', '#abc', '#12345678', "#123456\n", '#123456" onload="alert(1)', '<script>alert(1)</script>'] as $cor) {
+        $fixture = chamadoViewFixture('index');
+        $fixture['fila'] = $fila;
+        $fixture['lista'][0]['area_cor'] = $cor;
+        $fixture['lista'][0]['area_nome'] = 'Área <img src=x onerror=alert(1)>';
+        $html = View::partial('chamados/index', $fixture);
+        expect(preg_match('/<svg\b[^>]*class="chamado-area-cor"[^>]*>(.*?)<\/svg>/s', $html, $marcador) === 1, 'Fila e meus chamados exibem o marcador.');
+        $esperada = in_array($cor, ['#1D4ED8', '#a1b2c3'], true) ? $cor : '#024B37';
+        expect(str_contains($marcador[1], 'fill="' . $esperada . '"') && str_contains($marcador[0], 'aria-hidden="true"') && str_contains($marcador[0], 'focusable="false"'), 'Só hexadecimal completo é aceito; marcador decorativo usa padrão seguro nos demais casos.');
+        expect(str_contains($html, 'Área &lt;img src=x onerror=alert(1)&gt;') && !preg_match('/<(script|style)\b|\s(?:style|onload|onclick)=/i', $html), 'Cor e nome não injetam atributos, HTML ou estilos inline.');
+        if (!$fila) { expect(!str_contains($html, 'chamado-satisfacao'), 'Meus chamados mantém satisfação fora da listagem.'); }
+    }
+}
+$fixture = chamadoViewFixture('index');
+unset($fixture['lista'][0]['area_cor']);
+expect(str_contains(View::partial('chamados/index', $fixture), 'fill="#024B37"'), 'Registro legado sem cor usa o padrão.');
+
 // RBAC: mesmo um sinal legado de segurança patrimonial não amplia o novo perfil.
 $salvo = Auth::user();
 (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'colaborador', 'papel' => 'colaborador', 'seguranca_patrimonial' => 1]);
@@ -420,6 +461,32 @@ try {
         expect(str_contains($consulta[0], $atendente === 'none' ? 'c.atendente_id IS NULL' : 'c.atendente_id = ?') && str_contains($consulta[0], 'ORDER BY c.prioridade'), 'Atalho aplica filtro e ordenação no servidor.');
         $pdo->consultas = [];
     }
+
+    // Exercita a consulta paginada e a segunda leitura usada na ordenação por prazo nas duas listagens.
+    $baseLista = array_replace(chamadoFixture(), ['area_cor' => '#B54708']);
+    $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($baseLista): array {
+        if (str_starts_with($sql, 'SELECT c.*')) {
+            expect(str_contains($sql, 'a.cor AS area_cor'), 'Toda consulta de listagem carrega a cor da área, inclusive leitura por IDs.');
+            return [$baseLista];
+        }
+        return str_starts_with($sql, 'SELECT COUNT(*)') ? [[1]] : [];
+    });
+    $propPdo->setValue(null, $pdo);
+    foreach (['fila', 'meus'] as $metodo) {
+        foreach (['', 'prazo'] as $ordem) {
+            $pdo->consultas = [];
+            $_GET = ['ordem' => $ordem]; $_POST = [];
+            ob_start(); (new \App\Controllers\ChamadosController())->$metodo(); $htmlLista = ob_get_clean();
+            expect(str_contains($htmlLista, 'fill="#B54708"'), 'Controller entrega a cor da área à view em ' . $metodo . '/' . $ordem . '.');
+            $consultasLista = array_values(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT c.*')));
+            expect(count($consultasLista) === ($ordem === 'prazo' ? 2 : 1), 'Ordenação por prazo exercita também a consulta por IDs.');
+            foreach ($consultasLista as [$sql, $params]) {
+                expect(str_contains($sql, $metodo === 'fila' ? 'm.area_id = c.area_id AND m.usuario_id = ?' : 'c.solicitante_id = ?') && in_array($ator['id'], $params, true), 'Marcador preserva o escopo de autorização da listagem.');
+            }
+        }
+    }
+    $pdo = new ChamadoTestePdo(static fn ($sql, $params) => []);
+    $propPdo->setValue(null, $pdo);
     $_GET = [];
     ob_start(); (new \App\Controllers\ChamadosController())->abrir(); ob_end_clean();
     $consulta = current(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT a.id, a.nome, a.descricao')));

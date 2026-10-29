@@ -922,3 +922,9 @@ body.modo-tv { font-size: 16px; }
   .chamados .grade-2 > .kpi { padding: 10px 12px; }
 }
 .filtros-rapidos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+
+/* Revisão da fila: satisfação recolhida por padrão, inclusive no celular, e cor da área sem estilo inline. */
+.chamado-satisfacao > summary { min-height: 28px; }
+.chamado-satisfacao > summary:focus-visible { outline: 3px solid var(--ouro); outline-offset: 3px; }
+.chamado-area-cor { vertical-align: -1px; margin-right: 6px; }
+.chamado-area-cor circle { stroke: var(--borda-forte); stroke-width: 1; }

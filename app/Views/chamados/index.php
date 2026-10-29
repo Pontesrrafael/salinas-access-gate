@@ -3,6 +3,7 @@ use App\Services\Chamados;
 slot('acoes', '<a class="btn btn-ouro" href="' . e(url('/chamados/abrir')) . '">' . icon('mais') . e(t('Abrir chamado')) . '</a>');
 $filtros += ['q' => '', 'ordem' => '', 'visao' => $fila ? 'abertos' : 'todos'];
 $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
+$satisfacaoAreas = array_filter($satisfacaoAreas ?? [], static fn (array $s): bool => (int) $s['avaliacoes'] > 0 && $s['media'] !== null);
 ?>
 <div class="chamados">
 <nav class="filtros-rapidos" aria-label="<?= e(t('Atalhos de chamados')) ?>">
@@ -11,16 +12,16 @@ $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
     <a class="btn btn-sm <?= $atalhoAtivo ? 'btn-primario' : 'btn-secundario' ?>" href="<?= e(url($caminho, ['area_id' => $filtros['area_id'], 'q' => $filtros['q']] + $query)) ?>"<?= $atalhoAtivo ? ' aria-current="page"' : '' ?>><?= e(t($rotulo)) ?></a>
   <?php endforeach; ?>
 </nav>
-<?php if ($fila && !empty($satisfacaoAreas)): ?>
-<section class="cartao">
-  <h2><?= e(t('Satisfação por área')) ?></h2>
+<?php if ($fila && $satisfacaoAreas): ?>
+<details class="cartao secao-recolhivel chamado-satisfacao">
+  <summary><h2><?= e(t('Satisfação por área')) ?></h2></summary>
   <p class="dica"><?= e(t('Histórico de avaliações da área, independente dos demais filtros da fila.')) ?></p>
   <div class="grade-2">
     <?php foreach ($satisfacaoAreas as $s): ?>
-      <div class="kpi"><span class="kpi-rotulo"><?= e($s['nome']) ?></span><strong class="kpi-valor"><?= $s['media'] === null ? '—' : e(number_format((float) $s['media'], 1, \App\Core\I18n::current() === 'en' ? '.' : ',', '')) ?> / 5</strong><small><?= e(t('{quantidade} avaliações', ['quantidade' => $s['avaliacoes']])) ?></small></div>
+      <div class="kpi"><span class="kpi-rotulo"><?= e($s['nome']) ?></span><strong class="kpi-valor"><?= e(number_format((float) $s['media'], 1, \App\Core\I18n::current() === 'en' ? '.' : ',', '')) ?> / 5</strong><small><?= e(t('{quantidade} avaliações', ['quantidade' => $s['avaliacoes']])) ?></small></div>
     <?php endforeach; ?>
   </div>
-</section>
+</details>
 <?php endif; ?>
 <section class="cartao">
   <form method="get" action="<?= e(url($caminho)) ?>" class="filtros" data-tour="filtros">
@@ -42,11 +43,15 @@ $caminho = $fila ? '/chamados/fila' : '/chamados/meus';
   <?php if (!$lista): ?><p class="mudo vazio"><?= e(t('Nenhum chamado encontrado.')) ?></p><?php else: ?>
   <div class="tabela-rolagem"><table class="tabela chamado-tabela">
     <thead><tr><th><?= e(t('Chamado')) ?></th><th><?= e(t('Solicitante')) ?></th><th><?= e(t('Área')) ?></th><th><?= e(t('Status')) ?></th><th><?= e(t('Prioridade')) ?></th><th><?= e(t('Atendente')) ?></th><th><?= e(t('Prazo de solução')) ?></th></tr></thead>
-    <tbody><?php foreach ($lista as $c): $situacao = Chamados::situacaoSolucao($c, new DateTimeImmutable()); ?>
+    <tbody><?php foreach ($lista as $c):
+        $situacao = Chamados::situacaoSolucao($c, new DateTimeImmutable());
+        $corArea = (string) ($c['area_cor'] ?? '');
+        $corArea = preg_match('/\A#[0-9a-fA-F]{6}\z/', $corArea) === 1 ? $corArea : '#024B37';
+    ?>
       <tr>
         <td data-rotulo="<?= e(t('Chamado')) ?>"><a href="<?= e(url('/chamados/' . $c['id'])) ?>"><strong>#<?= e($c['numero']) ?> · <?= e($c['titulo']) ?></strong></a><span class="sub"><?= e(fmt_data_hora($c['created_at'])) ?></span></td>
         <td data-rotulo="<?= e(t('Solicitante')) ?>"><?= e($c['solicitante_nome'] ?? t('Solicitante anonimizado')) ?><?php if ($c['beneficiario_nome']): ?><span class="sub"><?= e($c['beneficiario_nome']) ?></span><?php endif; ?></td>
-        <td data-rotulo="<?= e(t('Área')) ?>"><?= e($c['area_nome']) ?><span class="sub"><?= e($c['categoria_nome']) ?></span></td>
+        <td data-rotulo="<?= e(t('Área')) ?>"><svg class="chamado-area-cor" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><circle cx="6" cy="6" r="5" fill="<?= e($corArea) ?>" /></svg><?= e($c['area_nome']) ?><span class="sub"><?= e($c['categoria_nome']) ?></span></td>
         <td data-rotulo="<?= e(t('Status')) ?>"><?= badge(t(Chamados::STATUS[$c['status']]), Chamados::corStatus($c['status'])) ?></td>
         <td data-rotulo="<?= e(t('Prioridade')) ?>"><?= badge($c['prioridade'] . ' · ' . t(Chamados::PRIORIDADES[$c['prioridade']]), Chamados::corPrioridade((int) $c['prioridade'])) ?></td>
         <td data-rotulo="<?= e(t('Atendente')) ?>"><?= e($c['atendente_nome'] ?? t('Sem atendente')) ?></td>
