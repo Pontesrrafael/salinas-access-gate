@@ -11,49 +11,55 @@
  * @var string $editarCampo
  */
 use App\Controllers\ServicosConfigController;
+use App\Services\Chamados;
 use App\Services\FormularioDinamico;
 
+slot('acoes', '<a class="btn btn-secundario" href="' . e(url('/configuracoes')) . '">' . icon('config') . e(t('Expediente e feriados')) . '</a>');
+
 $atalhosSla = ServicosConfigController::ATALHOS_SLA;
-$urgencias = ServicosConfigController::URGENCIAS;
+$urgencias = Chamados::URGENCIAS;
 $papeisMembro = ServicosConfigController::PAPEIS_MEMBRO;
 $tiposCampo = FormularioDinamico::TIPOS;
 ?>
+<div class="servicos-config">
 
 <section class="cartao">
-  <h2><?= e(t('Nova área de suporte')) ?></h2>
-  <form method="post" action="<?= e(url('/servicos/config/areas')) ?>" class="form-pilha">
-    <?= csrf_field() ?>
-    <div class="grade-4">
-      <label class="campo">
-        <span><?= e(t('Nome da área')) ?> <span class="obrigatorio">*</span></span>
-        <input type="text" name="nome" required maxlength="120" placeholder="<?= e(t('Ex.: Manutenção Elétrica')) ?>">
-      </label>
-      <label class="campo">
-        <span><?= e(t('Identificador (slug)')) ?></span>
-        <input type="text" name="slug" maxlength="60" placeholder="<?= e(t('Automático se vazio')) ?>">
-      </label>
-      <label class="campo">
-        <span><?= e(t('Cor de identificação')) ?></span>
-        <input type="color" name="cor" value="#024B37">
-      </label>
-      <label class="campo">
-        <span><?= e(t('Ordem de exibição')) ?></span>
-        <input type="number" name="ordem" min="0" max="9999" value="0">
-      </label>
-    </div>
-    <div class="grade-2 compacta">
-      <label class="campo campo-largo">
-        <span><?= e(t('Descrição da área')) ?></span>
-        <input type="text" name="descricao" maxlength="500" placeholder="<?= e(t('Resumo dos serviços atendidos por esta área')) ?>">
-      </label>
-    </div>
-    <div class="form-acoes">
-      <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar área')) ?></button>
-    </div>
-  </form>
+  <details class="secao-recolhivel" open>
+    <summary><?= e(t('Nova área de suporte')) ?></summary>
+    <form method="post" action="<?= e(url('/servicos/config/areas')) ?>" class="form-pilha">
+      <?= csrf_field() ?>
+      <div class="grade-4">
+        <label class="campo">
+          <span><?= e(t('Nome da área')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+          <input type="text" name="nome" required maxlength="120" placeholder="<?= e(t('Ex.: Manutenção Elétrica')) ?>">
+        </label>
+        <label class="campo">
+          <span><?= e(t('Identificador (slug)')) ?></span>
+          <input type="text" name="slug" maxlength="60" placeholder="<?= e(t('Automático se vazio')) ?>">
+        </label>
+        <label class="campo">
+          <span><?= e(t('Cor de identificação')) ?></span>
+          <input type="color" name="cor" value="#024B37">
+        </label>
+        <label class="campo">
+          <span><?= e(t('Ordem de exibição')) ?></span>
+          <input type="number" name="ordem" min="0" max="9999" value="0">
+        </label>
+      </div>
+      <div class="grade-2 compacta">
+        <label class="campo campo-largo">
+          <span><?= e(t('Descrição da área')) ?></span>
+          <input type="text" name="descricao" maxlength="500" placeholder="<?= e(t('Resumo dos serviços atendidos por esta área')) ?>">
+        </label>
+      </div>
+      <div class="form-acoes">
+        <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar área')) ?></button>
+      </div>
+    </form>
+  </details>
 </section>
 
-<section class="cartao sem-padding">
+<section class="cartao sem-padding" data-tour="filtros">
   <div class="cartao-cabecalho pad">
     <h2><?= e(t('Áreas de atendimento')) ?></h2>
   </div>
@@ -82,7 +88,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
                 <?= csrf_field() ?>
                 <div class="grade-4">
                   <label class="campo">
-                    <span><?= e(t('Nome da área')) ?> <span class="obrigatorio">*</span></span>
+                    <span><?= e(t('Nome da área')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
                     <input type="text" name="nome" required maxlength="120" value="<?= e($a['nome']) ?>">
                   </label>
                   <label class="campo">
@@ -117,18 +123,18 @@ $tiposCampo = FormularioDinamico::TIPOS;
           </tr>
         <?php else: ?>
           <tr>
-            <td>
+            <td data-rotulo="<?= e(t('Área')) ?>">
               <strong><?= e($a['nome']) ?></strong>
               <?php if (!empty($a['descricao'])): ?><span class="sub"><?= e($a['descricao']) ?></span><?php endif; ?>
             </td>
-            <td class="ocultar-sm mono"><?= e($a['slug']) ?></td>
-            <td class="ocultar-md"><code class="mono"><?= e($a['cor']) ?></code></td>
-            <td class="ocultar-sm">
+            <td class="ocultar-sm mono" data-rotulo="<?= e(t('Slug')) ?>"><?= e($a['slug']) ?></td>
+            <td class="ocultar-md" data-rotulo="<?= e(t('Cor')) ?>"><code class="mono"><?= e($a['cor']) ?></code></td>
+            <td class="ocultar-sm" data-rotulo="<?= e(t('Equipe / Categorias / Campos')) ?>">
               <?= (int) ($a['total_membros'] ?? 0) ?> <?= e(t('membro(s)')) ?> ·
               <?= (int) ($a['total_categorias'] ?? 0) ?> <?= e(t('categoria(s)')) ?> ·
               <?= (int) ($a['total_campos'] ?? 0) ?> <?= e(t('campo(s)')) ?>
             </td>
-            <td><?= (int) $a['ativo'] ? badge(t('Ativa'), 'sucesso') : badge(t('Inativa'), 'neutro') ?></td>
+            <td data-rotulo="<?= e(t('Situação')) ?>"><?= (int) $a['ativo'] ? badge(t('Ativa'), 'sucesso') : badge(t('Inativa'), 'neutro') ?></td>
             <td class="acoes">
               <a class="btn <?= $selecionada ? 'btn-primario' : 'btn-secundario' ?> btn-sm" href="<?= e(url('/servicos/config', ['area' => $a['id']])) ?>">
                 <?= icon('config', 'icon icon-sm') ?> <?= e($selecionada ? t('Selecionada') : t('Configurar')) ?>
@@ -157,7 +163,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
       <form method="post" action="<?= e(url('/servicos/config/areas/' . $areaId . '/membros')) ?>" class="filtros">
         <?= csrf_field() ?>
         <label class="campo">
-          <span><?= e(t('Usuário ativo')) ?> <span class="obrigatorio">*</span></span>
+          <span><?= e(t('Usuário ativo')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
           <select name="usuario_id" required>
             <option value=""><?= e(t('— Selecione —')) ?></option>
             <?php foreach ($usuarios as $u): ?>
@@ -183,18 +189,32 @@ $tiposCampo = FormularioDinamico::TIPOS;
             <th><?= e(t('Nome')) ?></th>
             <th class="ocultar-sm"><?= e(t('E-mail')) ?></th>
             <th><?= e(t('Papel na área')) ?></th>
+            <th><?= e(t('Chamados abertos')) ?></th>
             <th></th>
           </tr>
         </thead>
         <tbody>
         <?php if ($membros === []): ?>
-          <tr><td colspan="4" class="vazio mudo"><?= e(t('Nenhum membro vinculado a esta área.')) ?></td></tr>
+          <tr><td colspan="5" class="vazio mudo"><?= e(t('Nenhum membro vinculado a esta área.')) ?></td></tr>
         <?php endif; ?>
         <?php foreach ($membros as $m): ?>
+          <?php
+            $abertosQtd = (int) ($m['chamados_abertos'] ?? 0);
+            $abertosLista = is_array($m['chamados_lista'] ?? null) ? $m['chamados_lista'] : [];
+            $abertosNumeros = implode(', ', array_map(static fn (array $ch): string => '#' . $ch['numero'], $abertosLista));
+          ?>
           <tr>
-            <td><strong><?= e($m['nome']) ?></strong></td>
-            <td class="ocultar-sm mudo"><?= e($m['email']) ?></td>
-            <td><?= $m['papel'] === 'gestor' ? badge(t('Gestor'), 'ouro') : badge(t('Atendente'), 'info') ?></td>
+            <td data-rotulo="<?= e(t('Nome')) ?>"><strong><?= e($m['nome']) ?></strong></td>
+            <td class="ocultar-sm mudo" data-rotulo="<?= e(t('E-mail')) ?>"><?= e($m['email']) ?></td>
+            <td data-rotulo="<?= e(t('Papel na área')) ?>"><?= $m['papel'] === 'gestor' ? badge(t('Gestor'), 'ouro') : badge(t('Atendente'), 'info') ?></td>
+            <td data-rotulo="<?= e(t('Chamados abertos')) ?>">
+              <?php if ($abertosQtd > 0): ?>
+                <?= badge(t('{n} em aberto', ['n' => $abertosQtd]), 'aviso') ?>
+                <span class="sub"><?= e($abertosNumeros) ?> · <?= e(t('Ao remover, voltam para a triagem')) ?></span>
+              <?php else: ?>
+                <span class="mudo">0</span>
+              <?php endif; ?>
+            </td>
             <td class="acoes">
               <form method="post" action="<?= e(url('/servicos/config/areas/' . $areaId . '/membros/' . $m['usuario_id'] . '/remover')) ?>">
                 <?= csrf_field() ?>
@@ -214,76 +234,79 @@ $tiposCampo = FormularioDinamico::TIPOS;
       <h2><?= e(t('Categorias e SLAs')) ?> — <?= e($areaAtual['nome']) ?></h2>
     </div>
     <div class="cartao">
-      <h3><?= e(t('Nova categoria')) ?></h3>
-      <form method="post" action="<?= e(url('/servicos/config/categorias')) ?>" class="form-pilha">
-        <?= csrf_field() ?>
-        <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
-        <div class="grade-3">
-          <label class="campo">
-            <span><?= e(t('Nome da categoria')) ?> <span class="obrigatorio">*</span></span>
-            <input type="text" name="nome" required maxlength="150" placeholder="<?= e(t('Ex.: Manutenção Predial')) ?>">
-          </label>
-          <label class="campo">
-            <span><?= e(t('Categoria pai (hierarquia)')) ?></span>
-            <select name="parent_id">
-              <option value=""><?= e(t('— Raiz (sem categoria pai) —')) ?></option>
-              <?php foreach ($categorias as $cat): ?>
-                <option value="<?= e($cat['id']) ?>"><?= e(str_repeat('— ', (int) ($cat['nivel'] ?? 0)) . $cat['nome']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="campo">
-            <span><?= e(t('Urgência padrão')) ?></span>
-            <select name="urgencia_padrao">
-              <?php foreach ($urgencias as $nivel => $rot): ?>
-                <option value="<?= (int) $nivel ?>"<?= selected($nivel, 3) ?>><?= e(t($rot)) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1" checked> <span><?= e(t('SLA em horário comercial')) ?><br><small><?= e(t('Desmarque para contar 24 horas por dia, 7 dias por semana.')) ?></small></span></label>
-        </div>
-        <div class="grade-4">
-          <label class="campo">
-            <span><?= e(t('SLA de resposta (atalho)')) ?></span>
-            <select name="sla_resposta_atalho">
-              <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-              <?php foreach ($atalhosSla as $min => $rot): ?>
-                <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="campo">
-            <span><?= e(t('SLA de resposta (minutos)')) ?></span>
-            <input type="number" name="sla_resposta_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
-          </label>
-          <label class="campo">
-            <span><?= e(t('SLA de solução (atalho)')) ?></span>
-            <select name="sla_solucao_atalho">
-              <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
-              <?php foreach ($atalhosSla as $min => $rot): ?>
-                <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="campo">
-            <span><?= e(t('SLA de solução (minutos)')) ?></span>
-            <input type="number" name="sla_solucao_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
-          </label>
-        </div>
-        <div class="grade-3">
-          <label class="campo campo-largo">
-            <span><?= e(t('Descrição / orientação para o solicitante')) ?></span>
-            <input type="text" name="descricao" maxlength="500">
-          </label>
-          <label class="campo">
-            <span><?= e(t('Ordem')) ?></span>
-            <input type="number" name="ordem" min="0" max="9999" value="0">
-          </label>
-        </div>
-        <div class="form-acoes">
-          <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar categoria')) ?></button>
-        </div>
-      </form>
+      <details class="secao-recolhivel" open>
+        <summary><?= e(t('Nova categoria')) ?></summary>
+        <form method="post" action="<?= e(url('/servicos/config/categorias')) ?>" class="form-pilha">
+          <?= csrf_field() ?>
+          <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
+          <div class="grade-3">
+            <label class="campo">
+              <span><?= e(t('Nome da categoria')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+              <input type="text" name="nome" required maxlength="150" placeholder="<?= e(t('Ex.: Manutenção Predial')) ?>">
+            </label>
+            <label class="campo">
+              <span><?= e(t('Categoria pai (hierarquia)')) ?></span>
+              <select name="parent_id">
+                <option value=""><?= e(t('— Raiz (sem categoria pai) —')) ?></option>
+                <?php foreach ($categorias as $cat): ?>
+                  <option value="<?= e($cat['id']) ?>"><?= e(str_repeat('— ', (int) ($cat['nivel'] ?? 0)) . $cat['nome']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="campo">
+              <span><?= e(t('Urgência padrão')) ?></span>
+              <select name="urgencia_padrao">
+                <?php foreach ($urgencias as $nivel => $rot): ?>
+                  <option value="<?= (int) $nivel ?>"<?= selected($nivel, 3) ?>><?= (int) $nivel ?> — <?= e(t($rot)) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="checkbox"><input type="checkbox" name="usar_horario_comercial" value="1" checked> <span><?= e(t('SLA em horário comercial')) ?><br><small><?= e(t('Desmarque para contar 24 horas por dia, 7 dias por semana.')) ?></small></span></label>
+          </div>
+          <div class="grade-4">
+            <label class="campo">
+              <span><?= e(t('SLA de resposta (atalho)')) ?></span>
+              <select name="sla_resposta_atalho">
+                <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
+                <?php foreach ($atalhosSla as $min => $rot): ?>
+                  <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="campo">
+              <span><?= e(t('SLA de resposta (minutos)')) ?></span>
+              <input type="number" name="sla_resposta_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
+            </label>
+            <label class="campo">
+              <span><?= e(t('SLA de solução (atalho)')) ?></span>
+              <select name="sla_solucao_atalho">
+                <option value=""><?= e(t('— Sem SLA / personalizado —')) ?></option>
+                <?php foreach ($atalhosSla as $min => $rot): ?>
+                  <option value="<?= (int) $min ?>"><?= e($rot) ?> (<?= (int) $min ?> min)</option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="campo">
+              <span><?= e(t('SLA de solução (minutos)')) ?></span>
+              <input type="number" name="sla_solucao_min" min="1" max="100800" placeholder="<?= e(t('Opcional')) ?>">
+            </label>
+          </div>
+          <div class="grade-3">
+            <label class="campo campo-largo">
+              <span><?= e(t('Descrição / orientação para o solicitante')) ?></span>
+              <input type="text" name="descricao" maxlength="500">
+            </label>
+            <label class="campo">
+              <span><?= e(t('Ordem')) ?></span>
+              <input type="number" name="ordem" min="0" max="9999" value="0">
+            </label>
+          </div>
+          <p class="dica"><?= e(t('O expediente, os dias úteis, os feriados, o e-mail e a retenção de chamados são definidos em')) ?> <a href="<?= e(url('/configuracoes')) ?>"><?= e(t('Configurações')) ?> → <?= e(t('Chamados')) ?></a>.</p>
+          <div class="form-acoes">
+            <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar categoria')) ?></button>
+          </div>
+        </form>
+      </details>
     </div>
 
     <div class="tabela-rolagem">
@@ -319,7 +342,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
                   <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
                   <div class="grade-3">
                     <label class="campo">
-                      <span><?= e(t('Nome da categoria')) ?> <span class="obrigatorio">*</span></span>
+                      <span><?= e(t('Nome da categoria')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
                       <input type="text" name="nome" required maxlength="150" value="<?= e($c['nome']) ?>">
                     </label>
                     <label class="campo">
@@ -338,7 +361,7 @@ $tiposCampo = FormularioDinamico::TIPOS;
                       <span><?= e(t('Urgência padrão')) ?></span>
                       <select name="urgencia_padrao">
                         <?php foreach ($urgencias as $nivel => $rot): ?>
-                          <option value="<?= (int) $nivel ?>"<?= selected($c['urgencia_padrao'] ?? 3, $nivel) ?>><?= e(t($rot)) ?></option>
+                          <option value="<?= (int) $nivel ?>"<?= selected($c['urgencia_padrao'] ?? 3, $nivel) ?>><?= (int) $nivel ?> — <?= e(t($rot)) ?></option>
                         <?php endforeach; ?>
                       </select>
                     </label>
@@ -394,15 +417,16 @@ $tiposCampo = FormularioDinamico::TIPOS;
               </td>
             </tr>
           <?php else: ?>
+            <?php $urgPadrao = (int) ($c['urgencia_padrao'] ?? 3); ?>
             <tr>
-              <td>
+              <td data-rotulo="<?= e(t('Categoria (árvore)')) ?>">
                 <strong><?= e(str_repeat('↳ ', (int) ($c['nivel'] ?? 0)) . $c['nome']) ?></strong>
                 <span class="sub"><?= e($c['caminho'] ?? $c['nome']) ?><?= !empty($c['descricao']) ? ' — ' . e($c['descricao']) : '' ?></span>
               </td>
-              <td><?= e(ServicosConfigController::formatarSla(isset($c['sla_resposta_min']) ? (int) $c['sla_resposta_min'] : null)) ?></td>
-              <td><?= e(ServicosConfigController::formatarSla(isset($c['sla_solucao_min']) ? (int) $c['sla_solucao_min'] : null)) ?></td>
-              <td class="ocultar-sm"><?= e(label_t($urgencias, (int) ($c['urgencia_padrao'] ?? 3), '3 — Média')) ?></td>
-              <td><?= (int) $c['ativo'] ? badge(t('Ativa'), 'sucesso') : badge(t('Inativa'), 'neutro') ?></td>
+              <td data-rotulo="<?= e(t('SLA Resposta')) ?>"><?= e(ServicosConfigController::formatarSla(isset($c['sla_resposta_min']) ? (int) $c['sla_resposta_min'] : null)) ?></td>
+              <td data-rotulo="<?= e(t('SLA Solução')) ?>"><?= e(ServicosConfigController::formatarSla(isset($c['sla_solucao_min']) ? (int) $c['sla_solucao_min'] : null)) ?></td>
+              <td class="ocultar-sm" data-rotulo="<?= e(t('Urgência padrão')) ?>"><?= $urgPadrao ?> — <?= e(label_t($urgencias, $urgPadrao, 'Média')) ?></td>
+              <td data-rotulo="<?= e(t('Situação')) ?>"><?= (int) $c['ativo'] ? badge(t('Ativa'), 'sucesso') : badge(t('Inativa'), 'neutro') ?></td>
               <td class="acoes">
                 <a class="btn btn-fantasma btn-sm" href="<?= e(url('/servicos/config', ['area' => $areaId, 'editar_categoria' => $c['id']])) ?>">
                   <?= icon('editar', 'icon icon-sm') ?> <?= e(t('Editar')) ?>
@@ -421,53 +445,55 @@ $tiposCampo = FormularioDinamico::TIPOS;
       <h2><?= e(t('Construtor de formulário')) ?> — <?= e($areaAtual['nome']) ?></h2>
     </div>
     <div class="cartao">
-      <h3><?= e(t('Adicionar campo ao formulário')) ?></h3>
-      <form method="post" action="<?= e(url('/servicos/config/campos')) ?>" class="form-pilha">
-        <?= csrf_field() ?>
-        <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
-        <div class="grade-3">
-          <label class="campo">
-            <span><?= e(t('Rótulo do campo')) ?> <span class="obrigatorio">*</span></span>
-            <input type="text" name="rotulo" required maxlength="200" placeholder="<?= e(t('Ex.: Local exato da ocorrência')) ?>">
-          </label>
-          <label class="campo">
-            <span><?= e(t('Tipo de resposta')) ?> <span class="obrigatorio">*</span></span>
-            <select name="tipo">
-              <?php foreach ($tiposCampo as $tk => $trot): ?>
-                <option value="<?= e($tk) ?>"><?= e(t($trot)) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="campo">
-            <span><?= e(t('Aplicar na categoria')) ?></span>
-            <select name="categoria_id">
-              <option value=""><?= e(t('— Todas as categorias da área —')) ?></option>
-              <?php foreach ($categorias as $cat): ?>
-                <option value="<?= e($cat['id']) ?>"><?= e($cat['caminho'] ?? $cat['nome']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-        </div>
-        <div class="grade-2 compacta">
-          <label class="campo">
-            <span><?= e(t('Opções (uma por linha, para Lista ou Múltipla escolha)')) ?></span>
-            <textarea name="opcoes" rows="3" placeholder="<?= e("Opção 1\nOpção 2\nOpção 3") ?>"></textarea>
-          </label>
-          <div class="form-pilha">
+      <details class="secao-recolhivel" open>
+        <summary><?= e(t('Adicionar campo ao formulário')) ?></summary>
+        <form method="post" action="<?= e(url('/servicos/config/campos')) ?>" class="form-pilha">
+          <?= csrf_field() ?>
+          <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
+          <div class="grade-3">
             <label class="campo">
-              <span><?= e(t('Texto de ajuda (opcional)')) ?></span>
-              <input type="text" name="ajuda" maxlength="500" placeholder="<?= e(t('Instrução exibida abaixo do campo')) ?>">
+              <span><?= e(t('Rótulo do campo')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+              <input type="text" name="rotulo" required maxlength="200" placeholder="<?= e(t('Ex.: Local exato da ocorrência')) ?>">
             </label>
-            <label class="checkbox">
-              <input type="checkbox" name="obrigatorio" value="1">
-              <span><?= e(t('Preenchimento obrigatório na abertura do chamado')) ?></span>
+            <label class="campo">
+              <span><?= e(t('Tipo de resposta')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+              <select name="tipo">
+                <?php foreach ($tiposCampo as $tk => $trot): ?>
+                  <option value="<?= e($tk) ?>"><?= e(t($trot)) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="campo">
+              <span><?= e(t('Aplicar na categoria')) ?></span>
+              <select name="categoria_id">
+                <option value=""><?= e(t('— Todas as categorias da área —')) ?></option>
+                <?php foreach ($categorias as $cat): ?>
+                  <option value="<?= e($cat['id']) ?>"><?= e($cat['caminho'] ?? $cat['nome']) ?></option>
+                <?php endforeach; ?>
+              </select>
             </label>
           </div>
-        </div>
-        <div class="form-acoes">
-          <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar campo')) ?></button>
-        </div>
-      </form>
+          <div class="grade-2 compacta">
+            <label class="campo">
+              <span><?= e(t('Opções (uma por linha, para Lista ou Múltipla escolha)')) ?></span>
+              <textarea name="opcoes" rows="3" placeholder="<?= e("Opção 1\nOpção 2\nOpção 3") ?>"></textarea>
+            </label>
+            <div class="form-pilha">
+              <label class="campo">
+                <span><?= e(t('Texto de ajuda (opcional)')) ?></span>
+                <input type="text" name="ajuda" maxlength="500" placeholder="<?= e(t('Instrução exibida abaixo do campo')) ?>">
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" name="obrigatorio" value="1">
+                <span><?= e(t('Preenchimento obrigatório na abertura do chamado')) ?></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-acoes">
+            <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar campo')) ?></button>
+          </div>
+        </form>
+      </details>
     </div>
 
     <div class="tabela-rolagem">
@@ -495,11 +521,11 @@ $tiposCampo = FormularioDinamico::TIPOS;
                   <input type="hidden" name="area_id" value="<?= e($areaId) ?>">
                   <div class="grade-3">
                     <label class="campo">
-                      <span><?= e(t('Rótulo do campo')) ?> <span class="obrigatorio">*</span></span>
+                      <span><?= e(t('Rótulo do campo')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
                       <input type="text" name="rotulo" required maxlength="200" value="<?= e($f['rotulo']) ?>">
                     </label>
                     <label class="campo">
-                      <span><?= e(t('Tipo de resposta')) ?> <span class="obrigatorio">*</span></span>
+                      <span><?= e(t('Tipo de resposta')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
                       <select name="tipo">
                         <?php foreach ($tiposCampo as $tk => $trot): ?>
                           <option value="<?= e($tk) ?>"<?= selected($f['tipo'], $tk) ?>><?= e(t($trot)) ?></option>
@@ -547,17 +573,17 @@ $tiposCampo = FormularioDinamico::TIPOS;
             </tr>
           <?php else: ?>
             <tr>
-              <td>
+              <td data-rotulo="<?= e(t('Campo')) ?>">
                 <strong><?= e($f['rotulo']) ?></strong>
                 <?php if (!empty($f['ajuda'])): ?><span class="sub"><?= e($f['ajuda']) ?></span><?php endif; ?>
                 <?php if (!empty($f['opcoes_lista'])): ?>
                   <span class="sub"><?= e(t('Opções')) ?>: <?= e(implode(' · ', $f['opcoes_lista'])) ?></span>
                 <?php endif; ?>
               </td>
-              <td><?= e(label_t($tiposCampo, $f['tipo'], (string) $f['tipo'])) ?></td>
-              <td class="ocultar-sm"><?= !empty($f['categoria_nome']) ? e($f['categoria_nome']) : '<span class="mudo">' . e(t('Todas as categorias')) . '</span>' ?></td>
-              <td><?= (int) $f['obrigatorio'] ? badge(t('Sim'), 'aviso') : badge(t('Não'), 'neutro') ?></td>
-              <td><?= (int) $f['ativo'] ? badge(t('Ativo'), 'sucesso') : badge(t('Inativo'), 'neutro') ?></td>
+              <td data-rotulo="<?= e(t('Tipo')) ?>"><?= e(label_t($tiposCampo, $f['tipo'], (string) $f['tipo'])) ?></td>
+              <td class="ocultar-sm" data-rotulo="<?= e(t('Categoria')) ?>"><?= !empty($f['categoria_nome']) ? e($f['categoria_nome']) : '<span class="mudo">' . e(t('Todas as categorias')) . '</span>' ?></td>
+              <td data-rotulo="<?= e(t('Obrigatório')) ?>"><?= (int) $f['obrigatorio'] ? badge(t('Sim'), 'aviso') : badge(t('Não'), 'neutro') ?></td>
+              <td data-rotulo="<?= e(t('Situação')) ?>"><?= (int) $f['ativo'] ? badge(t('Ativo'), 'sucesso') : badge(t('Inativo'), 'neutro') ?></td>
               <td class="acoes">
                 <form method="post" action="<?= e(url('/servicos/config/campos/' . $f['id'] . '/mover')) ?>">
                   <?= csrf_field() ?>
@@ -596,3 +622,4 @@ $tiposCampo = FormularioDinamico::TIPOS;
     </section>
   <?php endif; ?>
 <?php endif; ?>
+</div>

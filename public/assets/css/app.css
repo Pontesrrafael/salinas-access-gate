@@ -892,3 +892,31 @@ body.modo-tv { font-size: 16px; }
   .chamados .btn { white-space: normal; }
   .chamados .paginacao { flex-wrap: wrap; }
 }
+
+
+/* Chamados e Áreas/Formulários: acessibilidade de fieldset, detalhes recolhíveis e responsividade 375 px. */
+.servicos-config { min-width: 0; }
+.servicos-config h2, .servicos-config h3, .servicos-config p, .servicos-config td, .servicos-config a { overflow-wrap: anywhere; }
+.chamados fieldset, .servicos-config fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.chamados legend, .servicos-config legend { padding: 0; margin-bottom: 6px; font-size: .86rem; font-weight: 600; color: var(--texto-2); }
+.ajuda-urgencia { background: var(--superficie-2); border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 14px; }
+.ajuda-urgencia > summary { margin-top: 0; font-weight: 700; }
+.ajuda-urgencia[open] > summary { margin-bottom: 8px; }
+.secao-recolhivel > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 0; font-size: .95rem; font-weight: 700; color: var(--verde); list-style: none; }
+.secao-recolhivel > summary::-webkit-details-marker { display: none; }
+.secao-recolhivel > summary::after { content: "+"; font-size: 1.1rem; font-weight: 700; line-height: 1; }
+.secao-recolhivel[open] > summary { margin-bottom: 12px; }
+.secao-recolhivel[open] > summary::after { content: "−"; }
+@media (max-width: 600px) {
+  .servicos-config .tabela, .servicos-config .tabela tbody, .servicos-config .tabela tr, .servicos-config .tabela td { display: block; width: 100%; }
+  .servicos-config .tabela thead { display: none; }
+  .servicos-config .tabela tr { border-bottom: 2px solid var(--borda-forte); padding: 6px 0; }
+  .servicos-config .tabela td { border: 0; padding: 6px 12px; }
+  .servicos-config .tabela td[data-rotulo]::before { content: attr(data-rotulo); display: block; font-size: .74rem; color: var(--cinza); font-weight: 700; }
+  .chamados .tabela .acoes, .servicos-config .tabela .acoes { text-align: left; white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chamados .tabela .acoes > *, .servicos-config .tabela .acoes > * { margin-left: 0; }
+  .servicos-config .btn { white-space: normal; max-width: 100%; }
+  .chamados .form-acoes .btn, .servicos-config .form-acoes .btn, .servicos-config .filtros .btn { flex: 1 1 auto; }
+  .chamados .filtros .campo, .servicos-config .filtros .campo { flex: 1 1 calc(50% - 12px); min-width: 130px; }
+  .chamados .grade-2 > .kpi { padding: 10px 12px; }
+}

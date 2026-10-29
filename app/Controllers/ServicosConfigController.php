@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Http;
 use App\Core\Uuid;
+use App\Services\Chamados;
 use App\Services\FormularioDinamico;
 
 /**
@@ -26,18 +27,35 @@ final class ServicosConfigController extends Controller
         4320 => '72 h',
     ];
 
+    /**
+     * Escala única alinhada ao motor Chamados::URGENCIAS (1 = Muito alta … 5 = Muito baixa).
+     */
     public const URGENCIAS = [
-        1 => '1 — Muito Baixa',
-        2 => '2 — Baixa',
+        1 => '1 — Muito alta',
+        2 => '2 — Alta',
         3 => '3 — Média',
-        4 => '4 — Alta',
-        5 => '5 — Muito Alta',
+        4 => '4 — Baixa',
+        5 => '5 — Muito baixa',
     ];
 
     public const PAPEIS_MEMBRO = [
         'atendente' => 'Atendente',
         'gestor'    => 'Gestor',
     ];
+
+    /**
+     * Rótulos de urgência numerados a partir de Chamados::URGENCIAS.
+     *
+     * @return array<int, string>
+     */
+    public static function urgencias(): array
+    {
+        $lista = [];
+        foreach (Chamados::URGENCIAS as $nivel => $rotulo) {
+            $lista[(int) $nivel] = $nivel . ' — ' . t($rotulo);
+        }
+        return $lista;
+    }
 
     public function index(): void
     {
@@ -80,6 +98,26 @@ final class ServicosConfigController extends Controller
                 [$areaId]
             );
 
+            $chamadosAbertosMembros = Database::all(
+                "SELECT id, numero, titulo, status, atendente_id
+                   FROM chamados
+                  WHERE area_id = ?
+                    AND atendente_id IS NOT NULL
+                    AND status NOT IN ('solucionado', 'fechado')
+                  ORDER BY numero ASC",
+                [$areaId]
+            );
+            $porAtendente = [];
+            foreach ($chamadosAbertosMembros as $ch) {
+                $porAtendente[(string) $ch['atendente_id']][] = $ch;
+            }
+            foreach ($membros as &$m) {
+                $abertos = $porAtendente[(string) $m['usuario_id']] ?? [];
+                $m['chamados_abertos'] = count($abertos);
+                $m['chamados_lista'] = $abertos;
+            }
+            unset($m);
+
             $categoriasRaw = Database::all(
                 'SELECT * FROM servico_categorias WHERE area_id = ? ORDER BY ordem ASC, nome ASC',
                 [$areaId]
@@ -101,8 +139,8 @@ final class ServicosConfigController extends Controller
         }
 
         $this->view('servicos-config/index', [
-            'titulo'          => 'Configuração de Chamados',
-            'descricao'       => 'Áreas de suporte, equipes, categorias com SLA e formulários dinâmicos',
+            'titulo'          => t('Áreas e formulários'),
+            'descricao'       => t('Áreas de suporte, equipes, categorias com SLA e formulários dinâmicos'),
             'areas'           => $areas,
             'areaAtual'       => $areaAtual,
             'usuarios'        => $usuarios,
@@ -121,13 +159,13 @@ final class ServicosConfigController extends Controller
 
         $nome = Http::nstr('nome', 120);
         if ($nome === null) {
-            $this->falha('Informe o nome da área.', '/servicos/config');
+            $this->falha(t('Informe o nome da área.'), '/servicos/config');
         }
 
         $slugInformado = Http::str('slug');
         $slug = self::gerarSlug($slugInformado !== '' ? $slugInformado : $nome);
         if ($slug === '') {
-            $this->falha('Informe um identificador (slug) válido para a área.', '/servicos/config');
+            $this->falha(t('Informe um identificador (slug) válido para a área.'), '/servicos/config');
         }
 
         $corBruta = Http::str('cor', '#024B37');
@@ -136,7 +174,7 @@ final class ServicosConfigController extends Controller
         $descricao = Http::nstr('descricao', 1000);
 
         if (Database::value('SELECT 1 FROM servico_areas WHERE (nome = ? OR slug = ?) AND id <> ? LIMIT 1', [$nome, $slug, $id ?? ''])) {
-            $this->falha('Já existe uma área com este nome ou slug.', '/servicos/config');
+            $this->falha(t('Já existe uma área com este nome ou slug.'), '/servicos/config');
         }
 
         $d = [
@@ -152,17 +190,17 @@ final class ServicosConfigController extends Controller
             $d['ativo'] = 1;
             Database::insert('servico_areas', ['id' => $id, ...$d]);
             Audit::log('servico_areas', $id, 'INSERT', $d);
-            $this->ok('Área de atendimento cadastrada.', '/servicos/config', ['area' => $id]);
+            $this->ok(t('Área de atendimento cadastrada.'), '/servicos/config', ['area' => $id]);
         }
 
         $this->uuidOu404($id);
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$id])) {
-            Http::abort(404, 'Área não encontrada.');
+            Http::abort(404, t('Área não encontrada.'));
         }
         $d['ativo'] = Http::bool('ativo') ? 1 : 0;
         Database::update('servico_areas', $d, 'id = ?', [$id]);
         Audit::log('servico_areas', $id, 'UPDATE', $d);
-        $this->ok('Área de atendimento atualizada.', '/servicos/config', ['area' => $id]);
+        $this->ok(t('Área de atendimento atualizada.'), '/servicos/config', ['area' => $id]);
     }
 
     public function adicionarMembro(string $id): void
@@ -176,7 +214,7 @@ final class ServicosConfigController extends Controller
         $this->uuidOu404($id);
 
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$id])) {
-            Http::abort(404, 'Área não encontrada.');
+            Http::abort(404, t('Área não encontrada.'));
         }
 
         $usuarioId = Http::str('usuario_id');
@@ -184,10 +222,10 @@ final class ServicosConfigController extends Controller
         $voltar = '/servicos/config?area=' . urlencode($id);
 
         if (!Uuid::valid($usuarioId) || !array_key_exists($papel, self::PAPEIS_MEMBRO)) {
-            $this->falha('Selecione um usuário ativo e o papel na área.', $voltar);
+            $this->falha(t('Selecione um usuário ativo e o papel na área.'), $voltar);
         }
         if (!Database::value('SELECT 1 FROM usuarios WHERE id = ? AND ativo = 1', [$usuarioId])) {
-            $this->falha('Usuário inválido ou inativo.', $voltar);
+            $this->falha(t('Usuário inválido ou inativo.'), $voltar);
         }
 
         $existe = Database::value(
@@ -211,7 +249,7 @@ final class ServicosConfigController extends Controller
             Audit::log('servico_area_membros', $id, 'INSERT', ['usuario_id' => $usuarioId, 'papel' => $papel]);
         }
 
-        $this->ok('Membro da área salvo.', '/servicos/config', ['area' => $id]);
+        $this->ok(t('Membro da área salvo.'), '/servicos/config', ['area' => $id]);
     }
 
     public function removerMembro(string $id, ?string $usuarioId = null): void
@@ -222,9 +260,66 @@ final class ServicosConfigController extends Controller
         $uid = $usuarioId ?? Http::str('usuario_id');
         $this->uuidOu404($uid);
 
-        Database::run('DELETE FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$id, $uid]);
-        Audit::log('servico_area_membros', $id, 'DELETE', ['usuario_id' => $uid]);
-        $this->ok('Membro removido da área.', '/servicos/config', ['area' => $id]);
+        $numerosDevolvidos = [];
+        Database::transaction(static function () use ($id, $uid, &$numerosDevolvidos): void {
+            $abertos = Database::all(
+                "SELECT id, numero, status
+                   FROM chamados
+                  WHERE area_id = ?
+                    AND atendente_id = ?
+                    AND status NOT IN ('solucionado', 'fechado')
+                  ORDER BY numero ASC
+                    FOR UPDATE",
+                [$id, $uid]
+            );
+
+            foreach ($abertos as $ch) {
+                $cid = (string) $ch['id'];
+                $statusAnterior = (string) $ch['status'];
+                $novoStatus = $statusAnterior === 'atribuido' ? 'novo' : $statusAnterior;
+
+                Database::update(
+                    'chamados',
+                    ['atendente_id' => null, 'status' => $novoStatus],
+                    'id = ?',
+                    [$cid]
+                );
+
+                if ($novoStatus !== $statusAnterior) {
+                    Database::insert('chamado_acompanhamentos', [
+                        'id'         => Uuid::v4(),
+                        'chamado_id' => $cid,
+                        'usuario_id' => Auth::id(),
+                        'tipo'       => 'status',
+                        'texto'      => $novoStatus,
+                    ]);
+                }
+
+                $numerosDevolvidos[] = '#' . $ch['numero'];
+                Audit::log('chamados', $cid, 'devolver_triagem', [
+                    'area_id'            => $id,
+                    'atendente_removido' => $uid,
+                    'status_anterior'    => $statusAnterior,
+                    'status_novo'        => $novoStatus,
+                ]);
+            }
+
+            Database::run('DELETE FROM servico_area_membros WHERE area_id = ? AND usuario_id = ?', [$id, $uid]);
+            Audit::log('servico_area_membros', $id, 'DELETE', [
+                'usuario_id'          => $uid,
+                'chamados_devolvidos' => $numerosDevolvidos,
+            ]);
+        });
+
+        if ($numerosDevolvidos !== []) {
+            $this->ok(
+                t('Membro removido da área. Chamados devolvidos à triagem: {chamados}.', ['chamados' => implode(', ', $numerosDevolvidos)]),
+                '/servicos/config',
+                ['area' => $id]
+            );
+        }
+
+        $this->ok(t('Membro removido da área.'), '/servicos/config', ['area' => $id]);
     }
 
     public function salvarCategoria(?string $id = null): void
@@ -236,20 +331,20 @@ final class ServicosConfigController extends Controller
             $this->uuidOu404($id);
             $existente = Database::one('SELECT * FROM servico_categorias WHERE id = ?', [$id]);
             if ($existente === null) {
-                Http::abort(404, 'Categoria não encontrada.');
+                Http::abort(404, t('Categoria não encontrada.'));
             }
         }
 
         $areaId = $existente ? (string) $existente['area_id'] : Http::str('area_id');
         $this->uuidOu404($areaId);
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$areaId])) {
-            Http::abort(404, 'Área não encontrada.');
+            Http::abort(404, t('Área não encontrada.'));
         }
 
         $voltar = '/servicos/config?area=' . urlencode($areaId);
         $nome = Http::nstr('nome', 150);
         if ($nome === null) {
-            $this->falha('Informe o nome da categoria.', $voltar);
+            $this->falha(t('Informe o nome da categoria.'), $voltar);
         }
 
         $parentId = Http::str('parent_id');
@@ -257,16 +352,16 @@ final class ServicosConfigController extends Controller
             $parentId = null;
         } else {
             if (!Uuid::valid($parentId)) {
-                $this->falha('Categoria pai inválida.', $voltar);
+                $this->falha(t('Categoria pai inválida.'), $voltar);
             }
             $pai = Database::one('SELECT id, area_id FROM servico_categorias WHERE id = ?', [$parentId]);
             if (!$pai || $pai['area_id'] !== $areaId) {
-                $this->falha('A categoria pai deve pertencer à mesma área.', $voltar);
+                $this->falha(t('A categoria pai deve pertencer à mesma área.'), $voltar);
             }
             if ($id !== null) {
                 $todas = Database::all('SELECT id, parent_id FROM servico_categorias WHERE area_id = ?', [$areaId]);
                 if (self::criaCicloCategoria($todas, $id, $parentId)) {
-                    $this->falha('Uma categoria não pode ser filha de si mesma ou de uma subcategoria sua.', $voltar);
+                    $this->falha(t('Uma categoria não pode ser filha de si mesma ou de uma subcategoria sua.'), $voltar);
                 }
             }
         }
@@ -277,15 +372,15 @@ final class ServicosConfigController extends Controller
         $ordem = max(0, min(9999, (int) Http::str('ordem', '0')));
 
         $d = [
-            'area_id'          => $areaId,
-            'parent_id'        => $parentId,
-            'nome'             => $nome,
-            'descricao'        => Http::nstr('descricao', 1000),
-            'sla_resposta_min' => $slaResposta,
-            'sla_solucao_min'  => $slaSolucao,
-            'urgencia_padrao'  => $urgencia,
+            'area_id'                => $areaId,
+            'parent_id'              => $parentId,
+            'nome'                   => $nome,
+            'descricao'              => Http::nstr('descricao', 1000),
+            'sla_resposta_min'       => $slaResposta,
+            'sla_solucao_min'        => $slaSolucao,
+            'urgencia_padrao'        => $urgencia,
             'usar_horario_comercial' => Http::bool('usar_horario_comercial') ? 1 : 0,
-            'ordem'            => $ordem,
+            'ordem'                  => $ordem,
         ];
 
         if ($id === null) {
@@ -293,13 +388,13 @@ final class ServicosConfigController extends Controller
             $d['ativo'] = 1;
             Database::insert('servico_categorias', ['id' => $id, ...$d]);
             Audit::log('servico_categorias', $id, 'INSERT', $d);
-            $this->ok('Categoria cadastrada.', '/servicos/config', ['area' => $areaId]);
+            $this->ok(t('Categoria cadastrada.'), '/servicos/config', ['area' => $areaId]);
         }
 
         $d['ativo'] = Http::bool('ativo') ? 1 : 0;
         Database::update('servico_categorias', $d, 'id = ?', [$id]);
         Audit::log('servico_categorias', $id, 'UPDATE', $d);
-        $this->ok('Categoria atualizada.', '/servicos/config', ['area' => $areaId]);
+        $this->ok(t('Categoria atualizada.'), '/servicos/config', ['area' => $areaId]);
     }
 
     public function salvarCampo(?string $id = null): void
@@ -311,21 +406,21 @@ final class ServicosConfigController extends Controller
             $this->uuidOu404($id);
             $existente = Database::one('SELECT * FROM servico_campos WHERE id = ?', [$id]);
             if ($existente === null) {
-                Http::abort(404, 'Campo não encontrado.');
+                Http::abort(404, t('Campo não encontrado.'));
             }
         }
 
         $areaId = $existente ? (string) $existente['area_id'] : Http::str('area_id');
         $this->uuidOu404($areaId);
         if (!Database::value('SELECT 1 FROM servico_areas WHERE id = ?', [$areaId])) {
-            Http::abort(404, 'Área não encontrada.');
+            Http::abort(404, t('Área não encontrada.'));
         }
 
         $voltar = '/servicos/config?area=' . urlencode($areaId);
         $rotulo = Http::nstr('rotulo', 200);
         $tipo = Http::str('tipo', 'texto');
         if ($rotulo === null || !array_key_exists($tipo, FormularioDinamico::TIPOS)) {
-            $this->falha('Informe o rótulo e um tipo válido para o campo.', $voltar);
+            $this->falha(t('Informe o rótulo e um tipo válido para o campo.'), $voltar);
         }
 
         $categoriaId = Http::str('categoria_id');
@@ -333,7 +428,7 @@ final class ServicosConfigController extends Controller
             $categoriaId = null;
         } else {
             if (!Uuid::valid($categoriaId) || !Database::value('SELECT 1 FROM servico_categorias WHERE id = ? AND area_id = ?', [$categoriaId, $areaId])) {
-                $this->falha('A categoria selecionada para o campo é inválida.', $voltar);
+                $this->falha(t('A categoria selecionada para o campo é inválida.'), $voltar);
             }
         }
 
@@ -341,7 +436,7 @@ final class ServicosConfigController extends Controller
         if (in_array($tipo, ['lista', 'multipla'], true)) {
             $listaOpcoes = FormularioDinamico::decodificarOpcoes(Http::str('opcoes'));
             if ($listaOpcoes === []) {
-                $this->falha('Informe ao menos uma opção (uma por linha) para campos de lista ou múltipla escolha.', $voltar);
+                $this->falha(t('Informe ao menos uma opção (uma por linha) para campos de lista ou múltipla escolha.'), $voltar);
             }
             $opcoesJson = json_encode($listaOpcoes, JSON_UNESCAPED_UNICODE);
         }
@@ -370,7 +465,7 @@ final class ServicosConfigController extends Controller
             ];
             Database::insert('servico_campos', $d);
             Audit::log('servico_campos', $id, 'INSERT', $d);
-            $this->ok('Campo adicionado ao formulário.', '/servicos/config', ['area' => $areaId]);
+            $this->ok(t('Campo adicionado ao formulário.'), '/servicos/config', ['area' => $areaId]);
         }
 
         $d = [
@@ -384,7 +479,7 @@ final class ServicosConfigController extends Controller
         ];
         Database::update('servico_campos', $d, 'id = ?', [$id]);
         Audit::log('servico_campos', $id, 'UPDATE', $d);
-        $this->ok('Campo atualizado.', '/servicos/config', ['area' => $areaId]);
+        $this->ok(t('Campo atualizado.'), '/servicos/config', ['area' => $areaId]);
     }
 
     public function moverCampo(string $id): void
@@ -394,13 +489,13 @@ final class ServicosConfigController extends Controller
 
         $campo = Database::one('SELECT * FROM servico_campos WHERE id = ?', [$id]);
         if ($campo === null) {
-            Http::abort(404, 'Campo não encontrado.');
+            Http::abort(404, t('Campo não encontrado.'));
         }
 
         $areaId = (string) $campo['area_id'];
         $direcao = Http::str('direcao');
         if (!in_array($direcao, ['cima', 'baixo'], true)) {
-            $this->falha('Direção de movimentação inválida.', '/servicos/config?area=' . urlencode($areaId));
+            $this->falha(t('Direção de movimentação inválida.'), '/servicos/config?area=' . urlencode($areaId));
         }
 
         $irmaos = Database::all(
@@ -432,7 +527,7 @@ final class ServicosConfigController extends Controller
             }
         }
 
-        $this->ok('Ordem dos campos atualizada.', '/servicos/config', ['area' => $areaId]);
+        $this->ok(t('Ordem dos campos atualizada.'), '/servicos/config', ['area' => $areaId]);
     }
 
     public function alternarCampo(string $id): void
@@ -442,14 +537,14 @@ final class ServicosConfigController extends Controller
 
         $campo = Database::one('SELECT id, area_id, rotulo, ativo FROM servico_campos WHERE id = ?', [$id]);
         if ($campo === null) {
-            Http::abort(404, 'Campo não encontrado.');
+            Http::abort(404, t('Campo não encontrado.'));
         }
 
         $novoAtivo = (int) $campo['ativo'] === 1 ? 0 : 1;
         Database::update('servico_campos', ['ativo' => $novoAtivo], 'id = ?', [$id]);
         Audit::log('servico_campos', $id, 'UPDATE', ['rotulo' => $campo['rotulo'], 'ativo' => $novoAtivo]);
 
-        $msg = $novoAtivo === 1 ? 'Campo ativado.' : 'Campo desativado.';
+        $msg = $novoAtivo === 1 ? t('Campo ativado.') : t('Campo desativado.');
         $this->ok($msg, '/servicos/config', ['area' => (string) $campo['area_id']]);
     }
 
