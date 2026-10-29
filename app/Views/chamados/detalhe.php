@@ -38,7 +38,7 @@ slot('acoes', '<a class="btn btn-secundario" href="' . e(url($atende ? '/chamado
     <p><strong><?= e(t('Prazo de resposta')) ?></strong><span class="sub"><?= e($c['prazo_resposta'] ? fmt_data_hora($c['prazo_resposta']) : t('Sem SLA definido')) ?></span>
     <?php if ($c['prazo_resposta']): $respostaSituacao = Chamados::situacaoResposta($c, $agora); ?><?= badge(t(Chamados::PRAZOS[$respostaSituacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$respostaSituacao]) ?><?php endif; ?>
     <?php if ($c['respondido_em']): ?><span class="sub"><?= e(t('Respondido em')) ?> <?= e(fmt_data_hora($c['respondido_em'])) ?></span><?php endif; ?></p>
-    <p><strong><?= e(t('Prazo de solução')) ?></strong><span class="sub"><?= e($prazoSolucao ? fmt_data_hora($prazoSolucao->format('Y-m-d H:i:s')) : t('Sem SLA definido')) ?></span><?php if ($prazoSolucao): ?><?= badge(t(Chamados::PRAZOS[$situacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$situacao]) ?><?php endif; ?></p>
+    <p><strong><?= e(t('Prazo de solução')) ?></strong><span class="sub"><?= e($prazoSolucao ? fmt_data_hora($prazoSolucao->format('Y-m-d H:i:s')) : t('Sem SLA definido')) ?></span><?php if ($prazoSolucao): ?><?= badge(t(Chamados::PRAZOS[$situacao]), ['no_prazo' => 'sucesso', 'vencendo' => 'aviso', 'vencido' => 'perigo'][$situacao]) ?><?php endif; ?><?php if (!empty($c['prazo_prorrogado_min']) && (int) $c['prazo_prorrogado_min'] > 0): ?><span class="sub"><?= e(t('Prorrogado em +{tempo}', ['tempo' => \App\Controllers\ServicosConfigController::formatarSla((int) $c['prazo_prorrogado_min'])])) ?></span><?php endif; ?></p>
   </div>
   <p class="dica"><?= e(Chamados::calendarioChamado($c) === null ? t('SLA em horas corridas (24x7).') : t('SLA em horário comercial, descontando dias sem expediente e feriados.')) ?> <?= e(t('O prazo de solução pausa enquanto o chamado estiver pendente.')) ?></p>
 </section>
@@ -97,6 +97,43 @@ slot('acoes', '<a class="btn btn-secundario" href="' . e(url($atende ? '/chamado
     <label class="campo"><span><?= e(t('Solução ou justificativa')) ?></span><textarea name="status_texto" rows="3" maxlength="20000"><?= e(old($old, 'status_texto')) ?></textarea><small><?= e(t('Obrigatório para solucionar ou reabrir. Este texto é público.')) ?></small></label>
     <label class="campo"><span><?= e(t('Anexos')) ?></span><input name="anexos[]" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp"><small><?= e(t('PDF, JPG, PNG ou WEBP, até 4 MB por arquivo.')) ?></small></label>
     <div class="form-acoes"><button class="btn btn-primario" type="submit"><?= e(t('Atualizar status')) ?></button></div>
+  </form>
+</section>
+<?php endif; ?>
+<?php if ($atende && $c['status'] !== 'fechado'): ?>
+<section class="cartao">
+  <h2><?= icon('relogio') ?> <?= e(t('Prorrogar prazo de solução')) ?></h2>
+  <form method="post" action="<?= e(url('/chamados/' . $c['id'] . '/prorrogar')) ?>" class="form-pilha">
+    <?= csrf_field() ?>
+    <div class="grade-3">
+      <label class="campo">
+        <span><?= e(t('Atalho de prorrogação')) ?></span>
+        <select name="prorrogacao_atalho">
+          <option value=""><?= e(t('— Valor personalizado —')) ?></option>
+          <?php foreach (Chamados::ATALHOS_PRORROGACAO as $minAtalho => $rotAtalho): ?>
+            <option value="<?= (int) $minAtalho ?>"<?= selected(old($old, 'prorrogacao_atalho'), $minAtalho) ?>><?= e(t($rotAtalho)) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label class="campo">
+        <span><?= e(t('Tempo adicional (personalizado)')) ?></span>
+        <input type="number" name="prorrogacao_valor" min="1" max="525600" step="1" value="<?= e(old($old, 'prorrogacao_valor')) ?>" placeholder="<?= e(t('Ex.: 7')) ?>">
+      </label>
+      <label class="campo">
+        <span><?= e(t('Unidade')) ?></span>
+        <select name="prorrogacao_unidade">
+          <?php foreach (Chamados::UNIDADES_PRAZO as $uCod => $uRot): ?>
+            <option value="<?= e($uCod) ?>"<?= selected(old($old, 'prorrogacao_unidade', 'd'), $uCod) ?>><?= e(t($uRot)) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+    </div>
+    <label class="campo">
+      <span><?= e(t('Motivo da prorrogação')) ?> <span class="obrigatorio" aria-hidden="true">*</span></span>
+      <textarea name="prorrogacao_motivo" rows="2" required maxlength="2000" placeholder="<?= e(t('Justifique a necessidade de prazo adicional (visível na linha do tempo)')) ?>"><?= e(old($old, 'prorrogacao_motivo')) ?></textarea>
+    </label>
+    <p class="dica"><?= e(t('O valor personalizado prevalece sobre o atalho. A prorrogação respeita o calendário do chamado (horário comercial ou 24x7) e fica registrada na linha do tempo e na auditoria.')) ?></p>
+    <div class="form-acoes"><button class="btn btn-secundario" type="submit"><?= icon('relogio', 'icon icon-sm') ?> <?= e(t('Prorrogar prazo')) ?></button></div>
   </form>
 </section>
 <?php endif; ?>

@@ -29,7 +29,10 @@ final class Chamados
     ];
     public const PRIORIDADES = [1 => 'Crítica', 2 => 'Muito alta', 3 => 'Alta', 4 => 'Média', 5 => 'Baixa', 6 => 'Muito baixa'];
     public const PRAZOS = ['no_prazo' => 'No prazo', 'vencendo' => 'Vencendo', 'vencido' => 'Vencido'];
-    public const TIPOS = ['comentario' => 'Comentário público', 'interno' => 'Nota interna', 'solucao' => 'Solução', 'status' => 'Status', 'atribuicao' => 'Atribuição'];
+    public const TIPOS = ['comentario' => 'Comentário público', 'interno' => 'Nota interna', 'solucao' => 'Solução', 'status' => 'Status', 'atribuicao' => 'Atribuição', 'prorrogacao' => 'Prorrogação de prazo'];
+    public const ATALHOS_PRORROGACAO = [1440 => '+1 dia', 4320 => '+3 dias', 10080 => '+7 dias', 21600 => '+15 dias'];
+    public const UNIDADES_PRAZO = ['min' => 'Minutos', 'h' => 'Horas', 'd' => 'Dias'];
+    public const MAX_PRAZO_MINUTOS = 525600; // 365 dias
 
     /**
      * Matriz inspirada no GLPI, com seis níveis locais (1 = mais crítico).
@@ -93,6 +96,7 @@ final class Chamados
         return [
             'area_id' => $categoria['area_id'], 'categoria_id' => $categoria['id'],
             'atendente_id' => null, 'status' => 'novo', 'segundos_pendente' => 0, 'pendente_desde' => null,
+            'prazo_prorrogado_min' => 0,
             'sla_inicio' => $agora->format('Y-m-d H:i:s'),
             'sla_resposta_snapshot' => empty($chamado['respondido_em']) ? null : ($chamado['sla_resposta_snapshot'] ?? json_encode([
                 'inicio' => $chamado['sla_inicio'] ?? $chamado['created_at'],
@@ -390,5 +394,67 @@ final class Chamados
         unset($categoria);
         usort($categorias, static fn ($a, $b) => strnatcasecmp($a['caminho'], $b['caminho']));
         return $categorias;
+    }
+
+    /**
+     * Converte um valor inteiro acompanhado de unidade (min, h, d) em minutos, validando limites (1 min até 365 dias).
+     */
+    public static function converterParaMinutos(mixed $valor, mixed $unidade = 'min'): int
+    {
+        if (!is_int($valor) && !is_string($valor)) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        $str = trim((string) $valor);
+        if ($str === '' || !preg_match('/^[0-9]+$/D', $str)) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        if (!is_string($unidade)) {
+            throw new InvalidArgumentException(t('Unidade de tempo inválida.'));
+        }
+        $fator = match (strtolower(trim($unidade))) {
+            '', 'min', 'minuto', 'minutos', 'm' => 1,
+            'h', 'hr', 'hora', 'horas'          => 60,
+            'd', 'dia', 'dias'                  => 1440,
+            default                             => throw new InvalidArgumentException(t('Unidade de tempo inválida.')),
+        };
+        $numero = (float) $str;
+        $total = $numero * $fator;
+        if ($numero < 1 || $total < 1 || $total > self::MAX_PRAZO_MINUTOS) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        return (int) $total;
+    }
+
+    /**
+     * Prorroga o prazo de solução do chamado em $minutos, respeitando o calendário do chamado e a pausa de pendente.
+     *
+     * @param array<string, mixed> $chamado
+     * @return array{prazo_solucao:string, prazo_prorrogado_min:int, segundos_pendente?:int, pendente_desde?:string}
+     */
+    public static function prorrogar(array $chamado, int $minutos, DateTimeImmutable $agora): array
+    {
+        if (($chamado['status'] ?? '') === 'fechado') {
+            throw new InvalidArgumentException(t('Não é permitido prorrogar um chamado fechado.'));
+        }
+        if ($minutos < 1 || $minutos > self::MAX_PRAZO_MINUTOS) {
+            throw new InvalidArgumentException(t('SLA inválido; informe um prazo entre 1 minuto e 365 dias.'));
+        }
+        $calendario = self::calendarioChamado($chamado);
+        $tinhaPrazo = !empty($chamado['prazo_solucao']);
+        $base = $tinhaPrazo ? new DateTimeImmutable((string) $chamado['prazo_solucao']) : $agora;
+        $novoPrazo = self::somarSegundos($base, $minutos * 60, $calendario);
+        $acumulado = max(0, (int) ($chamado['prazo_prorrogado_min'] ?? 0)) + $minutos;
+
+        $mudancas = [
+            'prazo_solucao'        => $novoPrazo->format('Y-m-d H:i:s'),
+            'prazo_prorrogado_min' => $acumulado,
+        ];
+        if (!$tinhaPrazo) {
+            $mudancas['segundos_pendente'] = 0;
+            if (($chamado['status'] ?? '') === 'pendente') {
+                $mudancas['pendente_desde'] = $agora->format('Y-m-d H:i:s');
+            }
+        }
+        return $mudancas;
     }
 }
