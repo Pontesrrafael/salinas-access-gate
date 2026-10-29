@@ -45,6 +45,24 @@ final class ServicosConfigController extends Controller
     ];
 
     /**
+     * Paleta fixa de 8 cores com contraste WCAG AA (>= 4.5:1) sobre fundo branco (#FFFFFF).
+     *
+     * @var list<string>
+     */
+    public const PALETA_CORES = [
+        '#024B37', // Verde institucional Salinas (Facilities — contraste 10.17:1)
+        '#B54708', // Laranja (SSMA — contraste 5.44:1)
+        '#3E7B27', // Verde-folha (Meio Ambiente — contraste 5.16:1)
+        '#1D4ED8', // Azul (Suprimentos — contraste 6.70:1)
+        '#7E22CE', // Roxo (contraste 6.98:1)
+        '#B91C1C', // Vermelho (contraste 6.48:1)
+        '#0F766E', // Verde-petróleo (contraste 5.47:1)
+        '#BE185D', // Magenta escuro (contraste 6.04:1)
+    ];
+
+    public const CORES_AREA = self::PALETA_CORES;
+
+    /**
      * Rótulos de urgência numerados a partir de Chamados::URGENCIAS.
      *
      * @return array<int, string>
@@ -56,6 +74,56 @@ final class ServicosConfigController extends Controller
             $lista[(int) $nivel] = $nivel . ' — ' . t($rotulo);
         }
         return $lista;
+    }
+
+    /**
+     * Sugere automaticamente a primeira cor da paleta fixa de 8 cores ainda não usada pelas áreas informadas.
+     * Aceita lista de linhas (`['cor' => '#RRGGBB']`) ou lista simples de strings `#RRGGBB`.
+     *
+     * @param array<int, array<string, mixed>|string> $areas
+     */
+    public static function sugerirCorArea(array $areas = []): string
+    {
+        $usadas = [];
+        foreach ($areas as $item) {
+            $cor = is_array($item) ? ($item['cor'] ?? '') : $item;
+            if (is_string($cor) && preg_match('/^#[0-9A-Fa-f]{6}$/D', trim($cor))) {
+                $usadas[strtoupper(trim($cor))] = true;
+            }
+        }
+        foreach (self::PALETA_CORES as $corPaleta) {
+            $hex = strtoupper($corPaleta);
+            if (!isset($usadas[$hex])) {
+                return $hex;
+            }
+        }
+        return self::PALETA_CORES[0];
+    }
+
+    /**
+     * Valida estritamente uma cor no formato hexadecimal #RRGGBB e a normaliza em maiúsculas.
+     */
+    public static function validarCor(mixed $cor): string
+    {
+        if (!is_string($cor)) {
+            throw new InvalidArgumentException(t('Informe uma cor válida no formato #RRGGBB.'));
+        }
+        $limpa = strtoupper(trim($cor));
+        if (!preg_match('/^#[0-9A-F]{6}$/D', $limpa)) {
+            throw new InvalidArgumentException(t('Informe uma cor válida no formato #RRGGBB.'));
+        }
+        return $limpa;
+    }
+
+    /**
+     * Normaliza a cor para exibição segura em atributos SVG fill, usando #024B37 se inválida.
+     */
+    public static function normalizarCor(mixed $cor): string
+    {
+        if (is_string($cor) && preg_match('/^#[0-9A-Fa-f]{6}$/D', trim($cor))) {
+            return strtoupper(trim($cor));
+        }
+        return '#024B37';
     }
 
     public function index(): void
@@ -144,6 +212,8 @@ final class ServicosConfigController extends Controller
             'descricao'       => t('Áreas de suporte, equipes, categorias com SLA e formulários dinâmicos'),
             'areas'           => $areas,
             'areaAtual'       => $areaAtual,
+            'corSugerida'     => self::sugerirCorArea($areas),
+            'paletaCores'     => self::PALETA_CORES,
             'usuarios'        => $usuarios,
             'membros'         => $membros,
             'categorias'      => $categorias,
@@ -169,8 +239,19 @@ final class ServicosConfigController extends Controller
             $this->falha(t('Informe um identificador (slug) válido para a área.'), '/servicos/config');
         }
 
-        $corBruta = Http::str('cor', '#024B37');
-        $cor = preg_match('/^#[0-9A-Fa-f]{6}$/', $corBruta) ? strtoupper($corBruta) : '#024B37';
+        $corInformada = $_POST['cor'] ?? null;
+        if (($corInformada === null || $corInformada === '') && $id === null) {
+            $corBruta = self::sugerirCorArea(Database::all('SELECT cor FROM servico_areas'));
+        } else {
+            $corBruta = is_string($corInformada) ? $corInformada : '';
+        }
+
+        try {
+            $cor = self::validarCor($corBruta);
+        } catch (InvalidArgumentException $e) {
+            $this->falha($e->getMessage(), '/servicos/config');
+        }
+
         $ordem = max(0, min(9999, (int) Http::str('ordem', '0')));
         $descricao = Http::nstr('descricao', 1000);
 

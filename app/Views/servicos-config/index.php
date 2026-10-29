@@ -2,6 +2,8 @@
 /**
  * @var array<int, array<string, mixed>> $areas
  * @var ?array<string, mixed> $areaAtual
+ * @var ?string $corSugerida
+ * @var ?array<int, string> $paletaCores
  * @var array<int, array<string, mixed>> $usuarios
  * @var array<int, array<string, mixed>> $membros
  * @var array<int, array<string, mixed>> $categorias
@@ -20,6 +22,10 @@ $atalhosSla = ServicosConfigController::ATALHOS_SLA;
 $urgencias = Chamados::URGENCIAS;
 $papeisMembro = ServicosConfigController::PAPEIS_MEMBRO;
 $tiposCampo = FormularioDinamico::TIPOS;
+$paletaCores = $paletaCores ?? ServicosConfigController::PALETA_CORES;
+$corSugerida = isset($corSugerida) && is_string($corSugerida) && $corSugerida !== ''
+    ? ServicosConfigController::normalizarCor($corSugerida)
+    : ServicosConfigController::sugerirCorArea($areas);
 $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($atalhosSla): void {
     $herdar = $areaHerdada !== null;
 ?>
@@ -66,6 +72,11 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
 };
 ?>
 <div class="servicos-config">
+<datalist id="paleta-cores-area">
+  <?php foreach ($paletaCores as $corOpcao): ?>
+    <option value="<?= e($corOpcao) ?>"><?= e($corOpcao) ?></option>
+  <?php endforeach; ?>
+</datalist>
 
 <section class="cartao">
   <details class="secao-recolhivel" open>
@@ -83,7 +94,8 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
         </label>
         <label class="campo">
           <span><?= e(t('Cor de identificação')) ?></span>
-          <input type="color" name="cor" value="#024B37">
+          <input type="color" name="cor" value="<?= e($corSugerida) ?>" list="paleta-cores-area">
+          <small><?= e(t('Sugerida automaticamente: {cor}', ['cor' => $corSugerida])) ?></small>
         </label>
         <label class="campo">
           <span><?= e(t('Ordem de exibição')) ?></span>
@@ -126,6 +138,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
       <?php endif; ?>
       <?php foreach ($areas as $a): ?>
         <?php $selecionada = $areaAtual && $areaAtual['id'] === $a['id']; ?>
+        <?php $corArea = ServicosConfigController::normalizarCor($a['cor'] ?? null); ?>
         <?php if ($editarArea === $a['id']): ?>
           <tr>
             <td colspan="6">
@@ -142,7 +155,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
                   </label>
                   <label class="campo">
                     <span><?= e(t('Cor de identificação')) ?></span>
-                    <input type="color" name="cor" value="<?= e($a['cor'] ?: '#024B37') ?>">
+                    <input type="color" name="cor" value="<?= e($corArea) ?>" list="paleta-cores-area">
                   </label>
                   <label class="campo">
                     <span><?= e(t('Ordem de exibição')) ?></span>
@@ -170,11 +183,15 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
         <?php else: ?>
           <tr>
             <td data-rotulo="<?= e(t('Área')) ?>">
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="<?= e($corArea) ?>"/></svg>
               <strong><?= e($a['nome']) ?></strong>
               <?php if (!empty($a['descricao'])): ?><span class="sub"><?= e($a['descricao']) ?></span><?php endif; ?>
             </td>
             <td class="ocultar-sm mono" data-rotulo="<?= e(t('Slug')) ?>"><?= e($a['slug']) ?></td>
-            <td class="ocultar-md" data-rotulo="<?= e(t('Cor')) ?>"><code class="mono"><?= e($a['cor']) ?></code></td>
+            <td class="ocultar-md" data-rotulo="<?= e(t('Cor')) ?>">
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="<?= e($corArea) ?>"/></svg>
+              <code class="mono"><?= e($corArea) ?></code>
+            </td>
             <td class="ocultar-sm" data-rotulo="<?= e(t('Equipe / Categorias / Campos')) ?>">
               <?= (int) ($a['total_membros'] ?? 0) ?> <?= e(t('membro(s)')) ?> ·
               <?= (int) ($a['total_categorias'] ?? 0) ?> <?= e(t('categoria(s)')) ?> ·

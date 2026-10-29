@@ -14,7 +14,7 @@ O gerenciamento das áreas, equipes, categorias e formulários fica em **Serviç
 1. No bloco recolhível **Nova área de suporte**, informe:
    - **Nome da área** (ex.: `Manutenção Elétrica`, `Facilities`, `Suprimentos`);
    - **Identificador (slug)**: gerado automaticamente a partir do nome quando deixado em branco;
-   - **Cor de identificação**: código hexadecimal (`#024B37` por padrão);
+   - **Cor de identificação**: código hexadecimal validado no formato `#RRGGBB`, utilizado como marcador visual circular antes do nome da área na **Fila de atendimento**, em **Meus chamados** e na listagem administrativa. Ao abrir o cadastro de uma nova área, o sistema sugere automaticamente a primeira cor ainda não utilizada de uma paleta fixa de 8 cores com contraste WCAG AA sobre fundo branco (`ServicosConfigController::PALETA_CORES`: `#024B37`, `#B54708`, `#3E7B27`, `#1D4ED8`, `#7E22CE`, `#B91C1C`, `#0F766E`, `#BE185D`), mantendo o seletor de cor livre para troca pelo administrador. As quatro áreas da semente recebem cores distintas na migração `010_cores_areas.sql` (`SSMA` `#B54708` laranja, `Facilities` `#024B37` verde da marca, `Meio Ambiente` `#3E7B27` verde-folha e `Suprimentos` `#1D4ED8` azul), aplicadas somente quando a área ainda estiver com a cor padrão `#024B37` para não sobrescrever escolhas anteriores do administrador;
    - **Ordem de exibição** e **Descrição** resumida dos serviços atendidos.
    - **SLA padrão de resposta** e **SLA padrão de solução**: escolha um atalho de `15 min` a `72 h` ou informe minutos personalizados (de `1` a `100800`). O campo personalizado prevalece sobre o atalho; ambos vazios significam sem prazo padrão na área.
    - **Regime de contagem do SLA**: **Horário comercial**, **Horas corridas (24x7)** ou **Seguir padrão global**. A última opção acompanha `horario_comercial_ativo`; o expediente e os feriados continuam globais.
@@ -98,10 +98,11 @@ Em **Serviços → Abrir chamado** (`/chamados/abrir`):
 
 Usuários vinculados a pelo menos uma área de suporte (ou com perfil **Admin/TI**) acessam **Serviços → Fila de atendimento** (`/chamados/fila`):
 
-### 3.1. Triagem, filtros e indicadores da fila
+### 3.1. Triagem, marcador de cor da área, filtros e indicadores da fila
 - Filtre os chamados por **Área**, **Status**, **Categoria**, **Prioridade**, **Atendente responsável** e **Situação do prazo** (`No prazo`, `Vencendo` quando resta ≤ 20% do tempo, ou `Vencido`).
+- **Marcador de cor da área**: na **Fila de atendimento** e em **Meus chamados**, cada chamado exibe um pequeno marcador circular SVG (`fill="#RRGGBB"`, validado por expressão regular com fallback seguro para `#024B37` e `aria-hidden="true"`, sem estilos inline para conformidade com a CSP) antes do nome da área, facilitando a distinção visual imediata entre áreas como **SSMA**, **Facilities**, **Meio Ambiente** e **Suprimentos**.
 - A **Prioridade (1 a 6)** é calculada automaticamente pela matriz **Urgência (`1 = Muito alta` .. `5 = Muito baixa`) × Impacto (`1 = Muito alto` .. `4 = Baixo`)** definida no chamado.
-- O painel da fila apresenta também a **média de satisfação** (1 a 5 estrelas) das avaliações registradas pelos solicitantes na área.
+- O painel da fila apresenta também a **média de satisfação** (1 a 5 estrelas) das áreas que já possuem avaliações registradas pelos solicitantes (permanecendo oculto quando nenhuma área foi avaliada e recolhível em telas pequenas).
 - Use **Atribuir a mim** para assumir o chamado imediatamente ou selecione outro membro da área.
 
 ### 3.2. Atendimento, pausa de SLA e solução
