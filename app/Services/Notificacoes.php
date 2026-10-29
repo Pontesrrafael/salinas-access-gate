@@ -51,6 +51,7 @@ final class Notificacoes
      */
     public static function chamado(string $evento, array $chamado, array $extra = []): void
     {
+        if (!Email::estaAtivo()) { return; }
         $eventoNorm = self::normalizarEvento($evento, $extra);
         if ($eventoNorm === null) {
             return;
@@ -317,7 +318,7 @@ final class Notificacoes
             default => [
                 mb_substr("{$prefixo} — " . t('Fechado') . ": {$titulo}", 0, 200),
                 t('Chamado encerrado'),
-                t('O atendimento deste chamado foi concluído e o registro encontra-se fechado.'),
+                t('Este chamado foi fechado. Acesse o sistema para consultar o histórico ou avaliar o atendimento.'),
             ],
         };
     }
@@ -370,18 +371,18 @@ final class Notificacoes
      */
     private static function buscarUsuario(string $usuarioId, string $papel, array $chamado, array $extra): ?array
     {
+        // Atendente residual nunca recebe notificação após sair da equipe, mesmo com e-mail no snapshot.
+        if ($papel === 'atendente') {
+            foreach (self::buscarEquipeArea((string) ($chamado['area_id'] ?? ''), $chamado, $extra) as $membro) {
+                if (($membro['id'] ?? '') === $usuarioId) { return $membro; }
+            }
+            return null;
+        }
         if ($papel === 'solicitante' && !empty($chamado['solicitante_email'])) {
             return [
                 'id'    => $usuarioId,
                 'nome'  => (string) ($chamado['solicitante_nome'] ?? ''),
                 'email' => (string) $chamado['solicitante_email'],
-            ];
-        }
-        if ($papel === 'atendente' && !empty($chamado['atendente_email'])) {
-            return [
-                'id'    => $usuarioId,
-                'nome'  => (string) ($chamado['atendente_nome'] ?? ''),
-                'email' => (string) $chamado['atendente_email'],
             ];
         }
         if (isset($extra['usuarios'][$usuarioId]) && is_array($extra['usuarios'][$usuarioId])) {
@@ -452,6 +453,15 @@ final class Notificacoes
         } catch (Throwable) {
             return [];
         }
+    }
+
+    /** Revalida também mensagens que foram enfileiradas antes de uma revogação/transferência. */
+    public static function destinatarioAtual(string $referencia, string $email): bool
+    {
+        if (!str_starts_with($referencia, 'chamado:')) { return true; }
+        $id = substr($referencia, 8);
+        if (!Uuid::valid($id)) { return false; }
+        return (bool) Database::value('SELECT 1 FROM chamados c JOIN usuarios u ON u.email = ? AND u.ativo = 1 WHERE c.id = ? AND c.anonimizado_em IS NULL AND (c.solicitante_id = u.id OR EXISTS (SELECT 1 FROM servico_area_membros m WHERE m.area_id = c.area_id AND m.usuario_id = u.id))', [$email, $id]);
     }
 
     private static function limparLinha(string $valor): string

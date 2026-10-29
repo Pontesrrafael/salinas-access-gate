@@ -64,7 +64,7 @@ final class UsuariosController extends Controller
             $this->falha($e, '/usuarios/novo');
         }
         $id = Uuid::v4();
-        $areas = $this->areasSelecionadas();
+        $areas = $d['papel'] === 'colaborador' ? [] : $this->areasSelecionadas();
         $pessoaId = $this->pessoaSelecionada(null);
         Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $ad): void {
             Database::insert('usuarios', [
@@ -107,7 +107,7 @@ final class UsuariosController extends Controller
         $voltouLocal = $ad === null && $atual['auth_origem'] === 'ldap';
         $reset = $ad === null && (Http::bool('redefinir_senha') || $voltouLocal);
         $senha = $reset ? $this->senhaTemporaria() : null;
-        $areas = $this->areasSelecionadas();
+        $areas = $d['papel'] === 'colaborador' ? [] : $this->areasSelecionadas();
         $pessoaId = $this->pessoaSelecionada($id);
 
         Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $atual, $reset, $ad): void {
@@ -263,7 +263,7 @@ final class UsuariosController extends Controller
         return [
             'nome' => $nome, 'email' => $email, 'papel' => $papel,
             'matricula' => Http::nstr('matricula', 50),
-            'seguranca_patrimonial' => Http::bool('seguranca_patrimonial') ? 1 : 0,
+            'seguranca_patrimonial' => $papel !== 'colaborador' && Http::bool('seguranca_patrimonial') ? 1 : 0,
         ];
     }
 

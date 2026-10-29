@@ -222,6 +222,7 @@ final class Email
         ?string $html = null,
         ?string $referencia = null
     ): void {
+        if (!self::estaAtivo()) { return; }
         $paraValido = self::validarEndereco($para);
         $assuntoValido = self::validarAssunto($assunto);
         $refValida = null;
@@ -273,6 +274,7 @@ final class Email
               WHERE enviado_em IS NULL
                 AND tentativas < ?
                 AND enviar_apos <= NOW()
+                AND (reserva_token IS NULL OR reservado_em < (NOW() - INTERVAL 30 MINUTE))
               ORDER BY enviar_apos ASC, created_at ASC
               LIMIT ' . $limite,
             [self::MAX_TENTATIVAS]
@@ -281,7 +283,17 @@ final class Email
         $enviados = 0;
         $falhas = 0;
         foreach ($pendentes as $item) {
+            // Compare-and-set: só um worker ganha a reserva; cada item é reservado imediatamente antes do envio.
+            $token = Uuid::v4();
+            $reservou = Database::run('UPDATE email_fila SET reserva_token = ?, reservado_em = NOW(), tentativas = tentativas + 1 WHERE id = ? AND enviado_em IS NULL AND tentativas < ? AND enviar_apos <= NOW() AND (reserva_token IS NULL OR reservado_em < (NOW() - INTERVAL 30 MINUTE))', [$token, $item['id'], self::MAX_TENTATIVAS])->rowCount();
+            if ($reservou !== 1) { continue; }
+            $item = Database::one('SELECT * FROM email_fila WHERE id = ? AND reserva_token = ?', [$item['id'], $token]);
+            if (!$item) { continue; }
             try {
+                if (!Notificacoes::destinatarioAtual((string) ($item['referencia'] ?? ''), (string) $item['para'])) {
+                    Database::run('DELETE FROM email_fila WHERE id = ? AND reserva_token = ?', [$item['id'], $token]);
+                    continue;
+                }
                 self::enviar(
                     (string) $item['para'],
                     (string) $item['assunto'],
@@ -289,21 +301,21 @@ final class Email
                     isset($item['corpo_html']) ? (string) $item['corpo_html'] : null
                 );
                 Database::run(
-                    'UPDATE email_fila SET enviado_em = NOW(), ultimo_erro = NULL WHERE id = ?',
-                    [$item['id']]
+                    'UPDATE email_fila SET enviado_em = NOW(), ultimo_erro = NULL, reserva_token = NULL, reservado_em = NULL WHERE id = ? AND reserva_token = ?',
+                    [$item['id'], $token]
                 );
                 $enviados++;
             } catch (Throwable $e) {
-                $tentativas = ((int) ($item['tentativas'] ?? 0)) + 1;
+                $tentativas = (int) $item['tentativas'];
                 $atraso = self::atrasoTentativaSegundos($tentativas);
                 $erro = self::limparErro($e->getMessage());
                 Database::run(
                     'UPDATE email_fila
                         SET tentativas = ?,
                             ultimo_erro = ?,
-                            enviar_apos = (NOW() + INTERVAL ? SECOND)
-                      WHERE id = ?',
-                    [$tentativas, $erro, $atraso, $item['id']]
+                            enviar_apos = (NOW() + INTERVAL ? SECOND), reserva_token = NULL, reservado_em = NULL
+                      WHERE id = ? AND reserva_token = ?',
+                    [$tentativas, $erro, $atraso, $item['id'], $token]
                 );
                 $falhas++;
             }

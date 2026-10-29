@@ -15,6 +15,7 @@ final class Auth
         'supervisor' => 'Supervisor',
         'ssma'       => 'SSMA',
         'porteiro'   => 'Porteiro',
+        'colaborador' => 'Colaborador (serviços)',
     ];
 
     /** permissão => papéis autorizados */
@@ -46,7 +47,7 @@ final class Auth
         'auditoria.ver'            => ['admin', 'supervisor'],
         'usuarios.gerir'           => ['admin'],
         'configuracoes.gerir'      => ['admin'],
-        'chamados.abrir'           => ['admin', 'supervisor', 'ssma', 'porteiro'],
+        'chamados.abrir'           => ['admin', 'supervisor', 'ssma', 'porteiro', 'colaborador'],
         'chamados.atender'         => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'chamados.configurar'      => ['admin'],
     ];
@@ -163,7 +164,7 @@ final class Auth
 
     public static function isSegurancaPatrimonial(): bool
     {
-        return (int) (self::user()['seguranca_patrimonial'] ?? 0) === 1;
+        return self::papel() !== 'colaborador' && (int) (self::user()['seguranca_patrimonial'] ?? 0) === 1;
     }
 
     /** Garante sessão válida; força troca de senha quando necessário. */
@@ -189,6 +190,9 @@ final class Auth
             }
             Session::flash('aviso', 'Para Admin/TI a verificação em duas etapas é obrigatória. Cadastre-a para continuar.');
             Http::redirect('/conta/mfa');
+        }
+        if ($u['papel'] === 'colaborador' && in_array(Http::path(), ['/', '/painel'], true)) {
+            Http::redirect('/chamados/meus');
         }
         return $u;
     }

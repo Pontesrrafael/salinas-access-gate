@@ -51,7 +51,7 @@ final class LdapUsuarios
         if (!$cfg['auto_provision']) {
             return ['usuario' => null, 'erro' => 'Usuário de rede ainda não cadastrado no Access Gate. Solicite o acesso ao Admin/TI.'];
         }
-        $papel = Ldap::papelPorGrupos($entrada['grupos']);
+        $papel = self::papelPorGrupos($entrada['grupos']);
         if ($papel === null) {
             return ['usuario' => null, 'erro' => 'Seu usuário de rede não pertence a nenhum grupo autorizado do Access Gate.'];
         }
@@ -82,7 +82,7 @@ final class LdapUsuarios
             'matricula'             => $e['matricula'],
             'ativo'                 => 1,
             'must_change_password'  => 0,
-            'seguranca_patrimonial' => $segPatrimonial ? 1 : 0,
+            'seguranca_patrimonial' => $papel !== 'colaborador' && $segPatrimonial ? 1 : 0,
             'pessoa_id'             => $pessoaId ?? self::pessoaPorMatricula($e['matricula'], null),
         ]);
         return $id;
@@ -115,7 +115,7 @@ final class LdapUsuarios
         }
         $mudancas = [];
         if ($cfg['sync_roles']) {
-            $papel = Ldap::papelPorGrupos($e['grupos']);
+            $papel = self::papelPorGrupos($e['grupos']);
             if ($papel === null) {
                 self::desativar($u, 'Removido dos grupos do Access Gate no AD');
                 return null;
@@ -125,7 +125,7 @@ final class LdapUsuarios
                 && !(int) Database::value("SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1 AND id <> ?", [$u['id']])) {
                 $papel = 'admin';
             }
-            $seg = Ldap::segurancaPatrimonial($e['grupos']) ? 1 : 0;
+            $seg = $papel !== 'colaborador' && Ldap::segurancaPatrimonial($e['grupos']) ? 1 : 0;
             if ($papel !== $u['papel']) {
                 $mudancas['papel'] = [$u['papel'], $papel];
             }
@@ -180,6 +180,15 @@ final class LdapUsuarios
             }
         }
         return $r;
+    }
+
+    /** Grupo exclusivo de serviços, sem mudar a prioridade dos grupos legados. */
+    public static function papelPorGrupos(array $grupos): ?string
+    {
+        $legado = Ldap::papelPorGrupos($grupos);
+        if ($legado !== null) { return $legado; }
+        $dn = strtolower(trim((string) \App\Core\Env::get('LDAP_GROUP_COLABORADOR', '')));
+        return $dn !== '' && in_array($dn, array_map('strtolower', $grupos), true) ? 'colaborador' : null;
     }
 
     /** Colaborador ativo com a mesma matrícula e ainda sem usuário vinculado. */

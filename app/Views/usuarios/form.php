@@ -39,12 +39,13 @@ $areasMarcadas = $old['areas'] ?? array_column(array_filter($areas, fn ($a) => !
   <?php endif; ?>
   <section class="cartao">
     <h2><?= e(t('Dados de acesso')) ?></h2>
+    <p class="dica"><?= e(t('O perfil Colaborador acessa somente serviços. O atendimento depende do vínculo com uma equipe.')) ?></p>
     <div class="grade-3">
       <label class="campo"><span><?= e(t('Nome')) ?> <span class="obrigatorio">*</span></span><input name="nome" required maxlength="150" value="<?= e($val('nome')) ?>"></label>
       <label class="campo"><span><?= e(t('E-mail corporativo')) ?> <span class="obrigatorio">*</span></span><input type="email" name="email" required maxlength="190" value="<?= e($val('email')) ?>" autocomplete="off"></label>
       <label class="campo"><span><?= e(t('Matrícula')) ?></span><input name="matricula" maxlength="50" value="<?= e($val('matricula')) ?>"></label>
       <label class="campo"><span><?= e(t('Perfil')) ?> <span class="obrigatorio">*</span></span>
-        <select name="papel" required><?php foreach (App\Core\Auth::PAPEIS as $k => $r): ?><option value="<?= e($k) ?>"<?= selected($val('papel', 'porteiro'), $k) ?>><?= e(t($r)) ?></option><?php endforeach; ?></select></label>
+        <select name="papel" required><?php foreach (App\Core\Auth::PAPEIS as $k => $r): ?><option value="<?= e($k) ?>"<?= selected($val('papel', 'colaborador'), $k) ?>><?= e(t($r)) ?></option><?php endforeach; ?></select></label>
       <label class="checkbox"><input type="checkbox" name="seguranca_patrimonial" value="1"<?= checked($val('seguranca_patrimonial', '0')) ?>> <span><?= e(t('Segurança Patrimonial')) ?><br><small><?= e(t('Pode autorizar solicitações de qualquer área.')) ?></small></span></label>
       <?php if (!$novo): ?><label class="checkbox"><input type="checkbox" name="ativo" value="1"<?= checked($u['ativo']) ?>> <span><?= e(t('Conta ativa')) ?><br><small><?= e(t('Desativar encerra o acesso imediatamente.')) ?></small></span></label><?php endif; ?>
     </div>

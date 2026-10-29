@@ -6,6 +6,25 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use App\Core\{App, Auth, View};
 use App\Services\{Chamados, FormularioDinamico, Upload};
 
+// Subprocesso: percorre o roteador e os controladores reais com sessão fictícia de colaborador.
+if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === '--rbac-rota') {
+    $router = new \App\Core\Router();
+    require dirname(__DIR__) . '/app/routes.php';
+    $rotas = (new ReflectionProperty($router, 'routes'))->getValue($router);
+    [$metodo, $padrao] = $rotas[(int) $argv[2]];
+    $path = preg_replace('/\{[a-z_]+\}/', '11111111-1111-4111-8111-111111111111', $padrao);
+    $_SERVER['REQUEST_URI'] = $path;
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+    $_SERVER['REQUEST_METHOD'] = $metodo;
+    $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+    $_POST['_csrf'] = \App\Core\Csrf::token();
+    (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'fixture-colaborador', 'papel' => 'colaborador', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'seguranca_patrimonial' => 1]);
+    register_shutdown_function(static function (): void { echo "\nRBAC_STATUS=" . http_response_code(); });
+    $router->dispatch($metodo, $path);
+    exit;
+}
+
 /** Dados fictícios para testar o HTML real sem MariaDB nem contas reais. */
 function chamadoFixture(): array
 {
@@ -21,6 +40,35 @@ function chamadoFixture(): array
         'segundos_pendente' => 0, 'respondido_em' => null, 'solucionado_em' => null, 'fechado_em' => null,
         'area_nome' => 'Facilities', 'categoria_nome' => 'Manutenção',
     ];
+}
+
+/** Dublê de persistência: executa o controller e permite falhar após a gravação física. */
+final class ChamadoTestePdo extends PDO
+{
+    public array $consultas = [];
+    public bool $transacao = false;
+    public bool $revertido = false;
+    public function __construct(public Closure $responder) {}
+    public function prepare(string $query, array $options = []): PDOStatement|false { return new ChamadoTesteStmt($this, $query); }
+    public function beginTransaction(): bool { $this->transacao = true; return true; }
+    public function inTransaction(): bool { return $this->transacao; }
+    public function commit(): bool { $this->transacao = false; return true; }
+    public function rollBack(): bool { $this->revertido = true; $this->transacao = false; return true; }
+}
+final class ChamadoTesteStmt extends PDOStatement
+{
+    private array $rows = [];
+    public function __construct(private ChamadoTestePdo $db, private string $sql) {}
+    public function execute(?array $params = null): bool
+    {
+        $this->db->consultas[] = [$this->sql, $params ?? []];
+        $this->rows = ($this->db->responder)($this->sql, $params ?? []);
+        return true;
+    }
+    public function fetchAll(int $mode = PDO::FETCH_DEFAULT, mixed ...$args): array { return $this->rows; }
+    public function fetch(int $mode = PDO::FETCH_DEFAULT, int $cursorOrientation = PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed { return array_shift($this->rows) ?? false; }
+    public function fetchColumn(int $column = 0): mixed { return $this->rows ? array_values($this->rows[0])[$column] : false; }
+    public function rowCount(): int { return 1; }
 }
 
 function chamadoViewFixture(string $view, bool $atende = true, string $status = 'pendente'): array
@@ -247,5 +295,148 @@ $html = View::partial('configuracoes/index', configuracoesViewFixture());
 expect(substr_count($html, 'name="horario_dias[]"') === 7, 'Configuração exibe os sete dias ISO.');
 expect(str_contains($html, 'name="retencao_chamados_meses" min="6"') && str_contains($html, 'name="email_ativo"'), 'Configurações de retenção e notificações disponíveis.');
 expect(!preg_match('/<(script|style)\b|\s(?:style|onchange|onclick)=/i', $html), 'Novas configurações compatíveis com CSP.');
+
+
+// Escala única e transferência: datas da abertura e resposta anterior continuam mensuráveis.
+expect(Chamados::URGENCIAS[1] === 'Muito alta' && Chamados::URGENCIAS[5] === 'Muito baixa', 'Escala de urgência coincide com a prioridade.');
+expect(Chamados::rotulosUrgencia()[1] === '1 — Muito alta', 'Configuração recebe rótulo da escala única.');
+$aceite = Chamados::mudancasAtribuicao(array_replace(chamadoFixture(), ['status' => 'novo']), 'novo-atendente', $agora);
+expect($aceite['respondido_em'] === $agora->format('Y-m-d H:i:s') && $aceite['status'] === 'atribuido', 'Atribuição inicial registra aceite e primeira resposta.');
+$jaRespondido = array_replace(chamadoFixture(), ['status' => 'atribuido', 'respondido_em' => '2026-10-28 08:10:00', 'atendente_id' => 'antigo']);
+expect(!isset(Chamados::mudancasAtribuicao($jaRespondido, 'novo-atendente', $agora)['respondido_em']), 'Reatribuição não substitui resposta anterior.');
+expect(Chamados::mudancasAtribuicao($jaRespondido, 'antigo', $agora) === [], 'Atribuição repetida é idempotente.');
+expect(isset(Chamados::mudancasAtribuicao(array_replace($jaRespondido, ['respondido_em' => null]), 'antigo', $agora)['respondido_em']), 'Aceite corrige primeira resposta ausente mesmo para o responsável atual.');
+$categoriaDestino = ['id' => 'destino', 'area_id' => 'nova-area', 'sla_resposta_min' => 15, 'sla_solucao_min' => 60, 'usar_horario_comercial' => 0];
+$base = array_replace(chamadoFixture(), ['status' => 'atribuido', 'respondido_em' => null]);
+$nova = Chamados::transferir($base, $categoriaDestino, $agora);
+expect($nova['status'] === 'novo' && $nova['atendente_id'] === null && $nova['area_id'] === 'nova-area', 'Transferência devolve à triagem do destino.');
+expect($nova['prazo_resposta'] === $agora->modify('+15 minutes')->format('Y-m-d H:i:s') && $nova['prazo_solucao'] === $agora->modify('+60 minutes')->format('Y-m-d H:i:s'), 'Transferência aplica prazos novos a partir da operação.');
+expect($nova['segundos_pendente'] === 0 && $nova['pendente_desde'] === null && !isset($nova['created_at']), 'Pausa anterior não contamina o novo SLA; abertura preservada.');
+expect(Chamados::situacaoSolucao(array_replace($base, $nova), $agora->modify('+49 minutes')) === 'vencendo', 'Janela de alerta usa a base da transferência.');
+$respondido = array_replace($base, ['respondido_em' => '2026-10-28 08:30:00']);
+$transferido = array_replace($respondido, Chamados::transferir($respondido, $categoriaDestino, $agora));
+expect($transferido['respondido_em'] === $respondido['respondido_em'] && $transferido['prazo_resposta'] === $respondido['prazo_resposta'], 'Transferir preserva primeira resposta atendida.');
+expect(Chamados::situacaoResposta($transferido, $agora) === Chamados::situacaoResposta($respondido, $agora), 'Transferir preserva a medição da primeira resposta anterior.');
+rejeita(fn () => Chamados::transferir(array_replace($base, ['status' => 'fechado']), $categoriaDestino, $agora), 'Fechado não pode ser transferido.');
+expect(Chamados::textoSla($categoriaDestino) === 'SLA em horas corridas (24x7).', 'Regime 24x7 comunicado conforme categoria.');
+expect(!Chamados::podeFecharAutomaticamente(array_replace($solucionado, ['ultimo_comentario_solicitante' => '2026-10-29 10:00:00']), new DateTimeImmutable('2030-01-01')), 'Interação após solução bloqueia encerramento automático.');
+expect(Chamados::podeFecharAutomaticamente(array_replace($solucionado, ['ultimo_comentario_solicitante' => '2026-10-27 10:00:00']), new DateTimeImmutable('2030-01-01')), 'Interação anterior à solução não bloqueia encerramento.');
+
+$fixture = chamadoViewFixture('detalhe', false, 'solucionado');
+$fixture['old'] = ['status_texto' => 'Preciso de nova análise'];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'value="fechado"') && str_contains($html, 'name="status_texto"') && !str_contains($html, 'name="acompanhamento_texto"'), 'Solicitante aprova ou reabre sem acompanhamento duplicado.');
+expect(substr_count($html, 'Preciso de nova análise') === 1, 'Recuperação do motivo não aparece em outros formulários.');
+$fixture = chamadoViewFixture('detalhe', false, 'fechado');
+$fixture['old'] = ['avaliacao_nota' => '4', 'avaliacao_comentario' => 'Boa resposta'];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'value="4" checked') && str_contains($html, '>Boa resposta</textarea>'), 'Avaliação mantém nota e comentário quando há erro.');
+$fixture = chamadoViewFixture('detalhe');
+$fixture['membros'] = [];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'name="a_mim"'), 'Admin pode assumir mesmo fora da equipe.');
+$fixture['u']['id'] = 'outro-atendente';
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'name="status_texto"') && str_contains($html, 'multipart/form-data'), 'Atualização de status aceita anexos.');
+$fixture['anexos'][0]['campo_id'] = 'campo-anexo';
+$fixture['respostas'] = [['campo_id' => 'campo-anexo', 'rotulo' => 'Comprovante', 'valor' => 'comprovante.pdf']];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, '/chamados/anexos/fixture-anexo') && substr_count($html, '/chamados/anexos/fixture-anexo') === 1, 'Arquivo dinâmico tem link autenticado no campo, sem duplicação.');
+$html = View::partial('chamados/index', chamadoViewFixture('index'));
+foreach (['name="q"', 'value="me"', 'value="none"', 'value="prioridade"', 'value="prazo"', 'Primeira resposta', 'Pessoa de teste'] as $texto) { expect(str_contains($html, $texto), 'Fila contém busca, triagem, ordenação, solicitante e resposta.'); }
+
+// RBAC: mesmo um sinal legado de segurança patrimonial não amplia o novo perfil.
+$salvo = Auth::user();
+(new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'colaborador', 'papel' => 'colaborador', 'seguranca_patrimonial' => 1]);
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, false);
+expect(Auth::can('chamados.abrir') && !Auth::can('chamados.atender'), 'Colaborador abre; atendimento exige associação.');
+$matriz = (new ReflectionClass(Auth::class))->getConstant('PERMISSOES');
+foreach (array_keys($matriz) as $permissao) {
+    if ($permissao !== 'chamados.abrir') { expect(!Auth::can($permissao), 'Colaborador não recebe permissão legada: ' . $permissao); }
+}
+expect(!Auth::isSegurancaPatrimonial(), 'Colaborador ignora sinal residual de segurança patrimonial.');
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
+expect(Auth::can('chamados.atender'), 'Membro colaborador pode acessar atendimento, sujeito ao escopo por área.');
+(new ReflectionProperty(Auth::class, 'user'))->setValue(null, $salvo);
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, null);
+putenv('LDAP_GROUP_COLABORADOR=CN=Servicos,DC=teste');
+expect(\App\Services\LdapUsuarios::papelPorGrupos(['cn=servicos,dc=teste']) === 'colaborador', 'LDAP aceita grupo explícito exclusivo de serviços.');
+expect(\App\Services\LdapUsuarios::papelPorGrupos([]) === null, 'LDAP não concede acesso sem grupo autorizado.');
+putenv('LDAP_GROUP_COLABORADOR');
+
+$router = new \App\Core\Router();
+require dirname(__DIR__) . '/app/routes.php';
+$rotas = (new ReflectionProperty($router, 'routes'))->getValue($router);
+$rotasLegadas = 0;
+foreach ($rotas as $i => [$metodo, $padrao, $handler]) {
+    if (!is_array($handler) || in_array($handler[0], [\App\Controllers\AuthController::class, \App\Controllers\MfaController::class, \App\Controllers\PublicoController::class, \App\Controllers\TutoriaisController::class, \App\Controllers\ChamadosController::class], true)) { continue; }
+    $processo = proc_open([PHP_BINARY, __FILE__, '--rbac-rota', (string) $i], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
+    if (!is_resource($processo)) { throw new RuntimeException('Não foi possível iniciar teste RBAC.'); }
+    $saida = stream_get_contents($pipes[1]); $erro = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]);
+    $exit = proc_close($processo);
+    $esperado = $padrao === '/painel' ? 303 : 403;
+    expect($exit === 0 && str_contains($saida, 'RBAC_STATUS=' . $esperado), "Rota legada {$metodo} {$padrao} protege colaborador: {$erro} {$saida}");
+    $rotasLegadas++;
+}
+expect($rotasLegadas > 50, 'Cobertura passa pelas rotas legadas e configuração administrativa.');
+
+$propPdo = new ReflectionProperty(\App\Core\Database::class, 'pdo');
+$propSettings = new ReflectionProperty(\App\Services\Settings::class, 'cache');
+$pdoAnterior = $propPdo->getValue(); $settingsAnteriores = $propSettings->getValue();
+$usuarioAnterior = Auth::user(); $getAnterior = $_GET; $postAnterior = $_POST; $filesAnteriores = $_FILES;
+$servidorAnterior = $_SERVER;
+$tmp = tempnam(App::root('storage'), 'rollback-');
+try {
+    $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['REQUEST_URI'] = '/chamados';
+    $propSettings->setValue(null, ['chamados_ativo' => '1', 'email_ativo' => '0']);
+    $ator = ['id' => '11111111-1111-4111-8111-111111111111', 'nome' => 'Colaborador teste', 'papel' => 'colaborador', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'email' => 'teste@example.test'];
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $ator);
+    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
+    $pdo = new ChamadoTestePdo(static fn ($sql, $params) => str_starts_with($sql, 'SELECT COUNT(*)') ? [[0]] : []);
+    $propPdo->setValue(null, $pdo);
+    foreach (['me', 'none'] as $atendente) {
+        $_GET = ['q' => "x%' OR 1=1 --_", 'atendente_id' => $atendente, 'ordem' => 'prioridade']; $_POST = [];
+        ob_start(); (new \App\Controllers\ChamadosController())->fila(); ob_end_clean();
+        $consulta = current(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT c.*')));
+        expect(str_contains($consulta[0], 'm.area_id = c.area_id AND m.usuario_id = ?') && in_array($ator['id'], $consulta[1], true), 'Consulta de fila mantém escopo do membro.');
+        expect(!str_contains($consulta[0], "OR 1=1 --") && in_array("%x!%' OR 1=1 --!_%", $consulta[1], true), 'Busca parametrizada trata curingas como texto.');
+        expect(str_contains($consulta[0], $atendente === 'none' ? 'c.atendente_id IS NULL' : 'c.atendente_id = ?') && str_contains($consulta[0], 'ORDER BY c.prioridade'), 'Atalho aplica filtro e ordenação no servidor.');
+        $pdo->consultas = [];
+    }
+    $_GET = [];
+    ob_start(); (new \App\Controllers\ChamadosController())->abrir(); ob_end_clean();
+    $consulta = current(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT a.id, a.nome, a.descricao')));
+    expect(str_contains($consulta[0], 'u.ativo = 1') && str_contains($consulta[0], 'c.ativo = 1') && str_contains($consulta[0], 'a.ativo = 1'), 'Publicação exige área, categoria e equipe ativas.');
+
+    file_put_contents($tmp, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n");
+    $base = chamadoFixture(); $campoId = '11111111-1111-4111-8111-111111111112';
+    $categoria = ['id' => $base['categoria_id'], 'area_id' => $base['area_id'], 'sla_resposta_min' => 15, 'sla_solucao_min' => 60, 'usar_horario_comercial' => 0];
+    $metaAnexo = null;
+    $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($categoria, $campoId, &$metaAnexo): array {
+        if (str_starts_with($sql, 'SELECT c.* FROM servico_categorias')) { return [$categoria]; }
+        if (str_contains($sql, 'FROM servico_campos')) { return [['id' => $campoId, 'rotulo' => 'Comprovante', 'tipo' => 'anexo', 'opcoes' => null, 'obrigatorio' => 1, 'ativo' => 1]]; }
+        if (str_starts_with($sql, 'INSERT INTO `chamado_anexos`')) {
+            preg_match('/\((.*?)\) VALUES/', $sql, $m);
+            $metaAnexo = array_combine(array_map(static fn ($k) => trim($k, ' `'), explode(',', $m[1])), $params);
+            throw new RuntimeException('Falha ao gravar vínculo do anexo');
+        }
+        if (str_starts_with($sql, 'INSERT INTO `chamados`') || str_starts_with($sql, 'INSERT INTO `chamado_respostas`')) { return []; }
+        throw new RuntimeException('Consulta inesperada no rollback: ' . $sql);
+    });
+    $propPdo->setValue(null, $pdo);
+    $_POST = ['area_id' => $base['area_id'], 'categoria_id' => $base['categoria_id'], 'titulo' => 'Chamado de teste', 'urgencia' => '2', 'impacto' => '3', 'para_voce' => '1'];
+    $_FILES = ['campos' => ['name' => [$campoId => 'comprovante.pdf'], 'tmp_name' => [$campoId => $tmp], 'size' => [$campoId => filesize($tmp)], 'error' => [$campoId => UPLOAD_ERR_OK]]];
+    try { (new \App\Controllers\ChamadosController())->criar(); throw new LogicException('Deveria falhar antes do redirect'); }
+    catch (RuntimeException $e) { expect($e->getMessage() === 'Falha ao gravar vínculo do anexo', 'Controller atingiu persistência do arquivo dinâmico.'); }
+    expect($pdo->revertido && $metaAnexo['campo_id'] === $campoId && $metaAnexo['mime_type'] === 'application/pdf', 'Anexo dinâmico é gravado com campo e MIME na transação do chamado.');
+    expect(Upload::caminho($metaAnexo['storage_path']) === null, 'Rollback do controller remove arquivo físico já movido.');
+} finally {
+    @unlink($tmp);
+    $propPdo->setValue(null, $pdoAnterior); $propSettings->setValue(null, $settingsAnteriores);
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $usuarioAnterior);
+    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, null);
+    $_GET = $getAnterior; $_POST = $postAnterior; $_FILES = $filesAnteriores; $_SERVER = $servidorAnterior;
+}
 
 echo "Chamados: {$checks} verificações sem banco OK.\n";
