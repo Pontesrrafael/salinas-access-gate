@@ -117,3 +117,18 @@ Usuários vinculados a pelo menos uma área de suporte (ou com perfil **Admin/TI
 ### 3.3. Aprovação, fechamento e pesquisa de satisfação
 - Após solucionado, o solicitante pode **Aprovar e fechar** (passando o chamado para `fechado`) ou **Reabrir** (retornando para `atribuido` caso a demanda não tenha sido sanada).
 - Quando o chamado passa para **Fechado**, o solicitante pode registrar uma única **avaliação de satisfação de 1 a 5 estrelas** com comentário opcional, exibida para a equipe no detalhe do chamado e consolidada no indicador da fila.
+
+## Telas do portal de chamados
+
+Capturas com dados fictícios (28/10/2026), no padrão visual do Access Gate:
+
+| Tela | Imagem |
+|---|---|
+| Fila de atendimento (atalhos, satisfação por área, busca, filtros e prazos) | ![Fila](imagens/chamados/01-fila-de-atendimento.png) |
+| Abrir chamado (perfil Colaborador, formulário da categoria, urgência, SLA) | ![Abrir](imagens/chamados/02-abrir-chamado.png) |
+| Meus chamados | ![Meus](imagens/chamados/03-meus-chamados.png) |
+| Detalhe do chamado — atendente (atribuir, status, transferir, linha do tempo) | ![Detalhe atendente](imagens/chamados/04-detalhe-atendente.png) |
+| Detalhe do chamado — solicitante (aprovar ou reabrir) | ![Detalhe solicitante](imagens/chamados/05-detalhe-solicitante.png) |
+| Áreas e formulários (SLA padrão da área, equipe, categorias, formulário) | ![Configuração](imagens/chamados/06-areas-e-formularios.png) |
+| Fila no tema escuro | ![Tema escuro](imagens/chamados/07-fila-tema-escuro.png) |
+| Celular: abrir chamado e fila | ![Celular abrir](imagens/chamados/08-celular-abrir-chamado.jpg) ![Celular fila](imagens/chamados/09-celular-fila.jpg) |
