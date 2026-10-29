@@ -1,0 +1,252 @@
+{
+  "geradoEm": "2026-10-29T16:02:50.177Z",
+  "navegador": "156.0.8078.73",
+  "capturas": [
+    {
+      "arquivo": "01-login.png",
+      "bytes": 232894,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/login"
+    },
+    {
+      "arquivo": "02-login-mfa.png",
+      "bytes": 229439,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/login/mfa"
+    },
+    {
+      "arquivo": "03-painel.png",
+      "bytes": 91632,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/painel"
+    },
+    {
+      "arquivo": "04-seletor-perfil.png",
+      "bytes": 98722,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/painel"
+    },
+    {
+      "arquivo": "05-seletor-idioma.png",
+      "bytes": 97106,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/painel"
+    },
+    {
+      "arquivo": "06-portaria.png",
+      "bytes": 133076,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/portaria?perfil=porteiro"
+    },
+    {
+      "arquivo": "07-portaria-analise.png",
+      "bytes": 91486,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/portaria?perfil=porteiro"
+    },
+    {
+      "arquivo": "08-solicitacoes.png",
+      "bytes": 107401,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/solicitacoes"
+    },
+    {
+      "arquivo": "09-solicitacao-externa-formulario.png",
+      "bytes": 239440,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/solicitar-acesso"
+    },
+    {
+      "arquivo": "10-ssma-verificacao.png",
+      "bytes": 91967,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/ssma/demo?perfil=ssma"
+    },
+    {
+      "arquivo": "11-quem-esta-no-site.png",
+      "bytes": 80234,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/presenca"
+    },
+    {
+      "arquivo": "12-pessoas-lista.png",
+      "bytes": 85051,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/pessoas"
+    },
+    {
+      "arquivo": "13-pessoa-cadastro.png",
+      "bytes": 79980,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/pessoas/nova"
+    },
+    {
+      "arquivo": "14-veiculos.png",
+      "bytes": 70706,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/veiculos"
+    },
+    {
+      "arquivo": "15-locais.png",
+      "bytes": 69774,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/locais"
+    },
+    {
+      "arquivo": "16-indicadores.png",
+      "bytes": 165471,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/indicadores"
+    },
+    {
+      "arquivo": "17-relatorios.png",
+      "bytes": 87357,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/relatorios"
+    },
+    {
+      "arquivo": "18-auditoria.png",
+      "bytes": 75934,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/auditoria"
+    },
+    {
+      "arquivo": "19-usuarios-lista.png",
+      "bytes": 84225,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/usuarios"
+    },
+    {
+      "arquivo": "20-usuario-perfis.png",
+      "bytes": 112331,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/usuarios/demo"
+    },
+    {
+      "arquivo": "21-configuracoes.png",
+      "bytes": 188150,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/configuracoes"
+    },
+    {
+      "arquivo": "22-abrir-chamado.png",
+      "bytes": 101975,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/abrir?perfil=colaborador"
+    },
+    {
+      "arquivo": "23-meus-chamados.png",
+      "bytes": 77760,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/meus?perfil=colaborador"
+    },
+    {
+      "arquivo": "24-fila-atendimento.png",
+      "bytes": 131088,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/fila?perfil=gestor_area"
+    },
+    {
+      "arquivo": "25-detalhe-atendente.png",
+      "bytes": 162029,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/demo?perfil=gestor_area"
+    },
+    {
+      "arquivo": "26-detalhe-solicitante-aprovar.png",
+      "bytes": 102485,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/demo?perfil=colaborador"
+    },
+    {
+      "arquivo": "27-prorrogar-prazo.png",
+      "bytes": 76789,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/chamados/demo?perfil=gestor_area"
+    },
+    {
+      "arquivo": "28-areas-e-formularios.png",
+      "bytes": 310306,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/servicos/config"
+    },
+    {
+      "arquivo": "29-notificacoes-email.png",
+      "bytes": 96411,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/conta/notificacoes"
+    },
+    {
+      "arquivo": "30-duas-etapas.png",
+      "bytes": 86404,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/conta/mfa"
+    },
+    {
+      "arquivo": "31-aviso-privacidade.png",
+      "bytes": 336676,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/privacidade"
+    },
+    {
+      "arquivo": "32-tutoriais.png",
+      "bytes": 184647,
+      "largura": 1440,
+      "conteudo": 1440,
+      "rota": "/tutoriais"
+    },
+    {
+      "arquivo": "cel-01-abrir-chamado.png",
+      "bytes": 76021,
+      "largura": 390,
+      "conteudo": 390,
+      "rota": "/chamados/abrir?perfil=colaborador"
+    },
+    {
+      "arquivo": "cel-02-fila.png",
+      "bytes": 131255,
+      "largura": 390,
+      "conteudo": 390,
+      "rota": "/chamados/fila?perfil=gestor_area"
+    },
+    {
+      "arquivo": "cel-03-portaria.png",
+      "bytes": 70087,
+      "largura": 390,
+      "conteudo": 390,
+      "rota": "/portaria?perfil=porteiro"
+    }
+  ],
+  "erros": []
+}

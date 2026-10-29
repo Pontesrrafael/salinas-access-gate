@@ -1,0 +1,20 @@
+{
+  "nome": "v06-registrar-entrada-portaria",
+  "passos": [
+    {"acao":"legenda","texto":"Confira a portaria e selecione Entrada antes de buscar a pessoa."},
+    {"acao":"ir","rota":"/portaria?perfil=porteiro"},
+    {"acao":"pausar","ms":2500},
+    {"acao":"digitar","alvo":"#busca-pessoa","texto":"Lia"},
+    {"acao":"clicar","alvo":"#res-pessoa button","ver":"Solicitação de acesso de hoje"},
+    {"acao":"legenda","texto":"Confira a identificação, os documentos e a solicitação aprovada para hoje."},
+    {"acao":"pausar","ms":4000},
+    {"acao":"digitar","alvo":"#busca-veiculo","texto":"DEM0A01"},
+    {"acao":"clicar","alvo":"#res-veiculo li:first-child button"},
+    {"acao":"digitar","alvo":"#destino","texto":"Oficina de manutenção"},
+    {"acao":"digitar","alvo":"#observacoes","texto":"Visita de demonstração."},
+    {"acao":"legenda","texto":"Revise os dados e confirme. Na vitrine, o registro é apenas uma simulação."},
+    {"acao":"clicar","alvo":"#btn-registrar","espera":"entrada=1"},
+    {"acao":"legenda","texto":"A confirmação aparece ao lado do formulário. Nenhuma entrada real foi registrada."},
+    {"acao":"pausar","ms":6000}
+  ]
+}
