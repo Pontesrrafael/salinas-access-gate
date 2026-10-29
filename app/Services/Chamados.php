@@ -57,20 +57,39 @@ final class Chamados
         return $rotulos;
     }
 
-    public static function textoSla(array $categoria): string
+    /**
+     * Herança independente por prazo e regime; origem indica o nível mais específico com prazo.
+     * @return array{resposta_min:?int, solucao_min:?int, comercial:bool, origem:'categoria'|'area'|'nenhum'}
+     */
+    public static function slaEfetivo(array $categoria, array $area): array
     {
-        return self::calendarioConfigurado($categoria) === null
+        $resposta = $categoria['sla_resposta_min'] ?? $area['sla_resposta_min'] ?? null;
+        $solucao = $categoria['sla_solucao_min'] ?? $area['sla_solucao_min'] ?? null;
+        $regime = $categoria['usar_horario_comercial'] ?? $area['usar_horario_comercial'] ?? null;
+        return [
+            'resposta_min' => $resposta === null ? null : (int) $resposta,
+            'solucao_min' => $solucao === null ? null : (int) $solucao,
+            'comercial' => $regime === null ? Settings::bool('horario_comercial_ativo') : (bool) $regime,
+            'origem' => isset($categoria['sla_resposta_min']) || isset($categoria['sla_solucao_min']) ? 'categoria'
+                : (($resposta !== null || $solucao !== null) ? 'area' : 'nenhum'),
+        ];
+    }
+
+    public static function textoSla(array $categoria, array $area = []): string
+    {
+        return !self::slaEfetivo($categoria, $area)['comercial']
             ? t('SLA em horas corridas (24x7).')
             : t('SLA em horário comercial, descontando dias sem expediente e feriados.');
     }
 
     /** Transferência inicia o SLA da nova categoria agora; preserva a primeira resposta e a abertura. */
-    public static function transferir(array $chamado, array $categoria, DateTimeImmutable $agora): array
+    public static function transferir(array $chamado, array $categoria, DateTimeImmutable $agora, array $area = []): array
     {
         if (in_array($chamado['status'], ['solucionado', 'fechado'], true)) {
             throw new InvalidArgumentException(t('Reabra o chamado antes de transferir.'));
         }
-        $calendario = self::calendarioConfigurado($categoria);
+        $sla = self::slaEfetivo($categoria, $area);
+        $calendario = self::calendarioConfigurado($categoria, $area);
         return [
             'area_id' => $categoria['area_id'], 'categoria_id' => $categoria['id'],
             'atendente_id' => null, 'status' => 'novo', 'segundos_pendente' => 0, 'pendente_desde' => null,
@@ -81,9 +100,9 @@ final class Chamados
             ], JSON_THROW_ON_ERROR)),
             'calendario_sla' => $calendario === null ? null : json_encode($calendario, JSON_THROW_ON_ERROR),
             'prazo_resposta' => empty($chamado['respondido_em'])
-                ? self::prazo($agora, isset($categoria['sla_resposta_min']) ? (int) $categoria['sla_resposta_min'] : null, $calendario)?->format('Y-m-d H:i:s')
+                ? self::prazo($agora, $sla['resposta_min'], $calendario)?->format('Y-m-d H:i:s')
                 : $chamado['prazo_resposta'],
-            'prazo_solucao' => self::prazo($agora, isset($categoria['sla_solucao_min']) ? (int) $categoria['sla_solucao_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
+            'prazo_solucao' => self::prazo($agora, $sla['solucao_min'], $calendario)?->format('Y-m-d H:i:s'),
         ];
     }
 
@@ -156,9 +175,9 @@ final class Chamados
         return compact('dias', 'inicio', 'fim', 'feriados');
     }
 
-    public static function calendarioConfigurado(array $categoria): ?array
+    public static function calendarioConfigurado(array $categoria, array $area = []): ?array
     {
-        if (empty($categoria['usar_horario_comercial']) || !Settings::bool('horario_comercial_ativo')) { return null; }
+        if (!self::slaEfetivo($categoria, $area)['comercial']) { return null; }
         return self::calendario([
             'dias' => Settings::get('horario_dias', '1,2,3,4,5'),
             'inicio' => Settings::get('horario_inicio', '07:00'), 'fim' => Settings::get('horario_fim', '17:00'),

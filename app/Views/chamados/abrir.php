@@ -48,15 +48,13 @@ slot('acoes', '<a class="btn btn-secundario" href="' . e(url('/chamados/meus')) 
   <?= FormularioDinamico::renderizar($campos, $old) ?>
   <label class="campo"><span><?= e(t('Anexos')) ?></span><input name="anexos[]" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp"><small><?= e(t('PDF, JPG, PNG ou WEBP, até 4 MB por arquivo.')) ?></small></label>
   <?php
-    $slaComercial = array_key_exists('calendario', get_defined_vars())
-        ? ($calendario !== null)
-        : !empty($categoria['usar_horario_comercial']);
-    $slaRespFmt = !empty($categoria['sla_resposta_min']) ? ServicosConfigController::formatarSla((int) $categoria['sla_resposta_min']) : null;
-    $slaSolFmt = !empty($categoria['sla_solucao_min']) ? ServicosConfigController::formatarSla((int) $categoria['sla_solucao_min']) : null;
+    $sla = $sla ?? Chamados::slaEfetivo($categoria, []);
+    $slaRespFmt = $sla['resposta_min'] !== null ? ServicosConfigController::formatarSla($sla['resposta_min']) : null;
+    $slaSolFmt = $sla['solucao_min'] !== null ? ServicosConfigController::formatarSla($sla['solucao_min']) : null;
   ?>
   <p class="dica">
     <?= icon('relogio') ?>
-    <?= e($slaComercial ? t('SLA em horário comercial, descontando dias sem expediente e feriados.') : t('SLA em horas corridas (24x7).')) ?>
+    <?= e($textoSla ?? Chamados::textoSla($categoria)) ?>
     <?php if ($slaRespFmt !== null || $slaSolFmt !== null): ?>
       <?= e(t('Prazo de resposta')) ?>: <strong><?= e($slaRespFmt ?? t('Sem SLA definido')) ?></strong> ·
       <?= e(t('Prazo de solução')) ?>: <strong><?= e($slaSolFmt ?? t('Sem SLA definido')) ?></strong>.

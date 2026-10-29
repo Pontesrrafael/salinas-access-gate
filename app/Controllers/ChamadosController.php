@@ -52,9 +52,11 @@ final class ChamadosController extends Controller
         $categorias = $areaId ? Chamados::categoriasEmArvore(Database::all('SELECT * FROM servico_categorias WHERE area_id = ? AND ativo = 1 ORDER BY ordem, nome', [$areaId])) : [];
         $categoria = $this->categoria($areaId, $categoriaId);
         if (!$categoria) { $categoriaId = ''; }
-        $textoSla = $categoria ? Chamados::textoSla($categoria) : '';
+        $area = $categoria ? Database::one('SELECT * FROM servico_areas WHERE id = ?', [$areaId]) : [];
+        $sla = $categoria ? Chamados::slaEfetivo($categoria, $area ?? []) : null;
+        $textoSla = $categoria ? Chamados::textoSla($categoria, $area ?? []) : '';
         $campos = $categoria ? FormularioDinamico::campos($areaId, $categoriaId) : [];
-        $this->view('chamados/abrir', compact('areas', 'areaId', 'categorias', 'categoriaId', 'categoria', 'campos', 'old', 'textoSla') + ['titulo' => t('Abrir chamado')]);
+        $this->view('chamados/abrir', compact('areas', 'areaId', 'categorias', 'categoriaId', 'categoria', 'campos', 'old', 'textoSla', 'sla') + ['titulo' => t('Abrir chamado')]);
     }
 
     public function criar(): void
@@ -91,7 +93,9 @@ final class ChamadosController extends Controller
                 $ativa = Database::one('SELECT c.* FROM servico_categorias c JOIN servico_areas a ON a.id = c.area_id WHERE c.id = ? AND c.area_id = ? AND c.ativo = 1 AND a.ativo = 1 AND EXISTS (SELECT 1 FROM servico_area_membros m JOIN usuarios u ON u.id = m.usuario_id AND u.ativo = 1 WHERE m.area_id = a.id) FOR UPDATE', [$categoriaId, $areaId]);
                 if (!$ativa) { throw new InvalidArgumentException(t('Selecione uma área e uma categoria ativas.')); }
                 $categoria = $ativa;
-                $calendario = Chamados::calendarioConfigurado($categoria);
+                $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$areaId]);
+                $sla = Chamados::slaEfetivo($categoria, $area);
+                $calendario = Chamados::calendarioConfigurado($categoria, $area);
                 $agora = new DateTimeImmutable();
                 Database::insert('chamados', [
                     'id' => $id, 'area_id' => $areaId, 'categoria_id' => $categoriaId,
@@ -100,8 +104,8 @@ final class ChamadosController extends Controller
                     'recorrente' => Http::bool('recorrente') ? 1 : 0, 'urgencia' => $urgencia, 'impacto' => $impacto,
                     'prioridade' => Chamados::prioridade($urgencia, $impacto),
                     'calendario_sla' => $calendario === null ? null : json_encode($calendario, JSON_THROW_ON_ERROR),
-                    'prazo_resposta' => Chamados::prazo($agora, isset($categoria['sla_resposta_min']) ? (int) $categoria['sla_resposta_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
-                    'prazo_solucao' => Chamados::prazo($agora, isset($categoria['sla_solucao_min']) ? (int) $categoria['sla_solucao_min'] : null, $calendario)?->format('Y-m-d H:i:s'),
+                    'prazo_resposta' => Chamados::prazo($agora, $sla['resposta_min'], $calendario)?->format('Y-m-d H:i:s'),
+                    'prazo_solucao' => Chamados::prazo($agora, $sla['solucao_min'], $calendario)?->format('Y-m-d H:i:s'),
                     'created_at' => $agora->format('Y-m-d H:i:s'),
                 ]);
                 foreach ($campos as $campo) {
@@ -366,7 +370,8 @@ final class ChamadosController extends Controller
                 $erros = [...$validacao['erros'], ...Upload::validar($arquivos, true)];
                 if ($erros) { throw new InvalidArgumentException(implode(' ', $erros)); }
                 $origem = Database::one('SELECT a.nome AS area_nome, cat.nome FROM servico_categorias cat JOIN servico_areas a ON a.id = cat.area_id WHERE cat.id = ?', [$c['categoria_id']]);
-                $mudancas = Chamados::transferir($c, $categoria, new DateTimeImmutable());
+                $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$categoria['area_id']]);
+                $mudancas = Chamados::transferir($c, $categoria, new DateTimeImmutable(), $area);
                 Database::update('chamados', $mudancas, 'id = ?', [$id]);
                 foreach ($campos as $campo) {
                     Database::insert('chamado_respostas', ['chamado_id' => $id, 'campo_id' => $campo['id'], 'rotulo' => $campo['rotulo'], 'valor' => $validacao['valores'][$campo['id']] ?? null]);
