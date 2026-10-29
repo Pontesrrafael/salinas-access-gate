@@ -214,6 +214,10 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .form-acoes { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 8px; }
 .filtros { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .filtros .campo { flex: 1 1 160px; }
+/* Dica sob um campo de filtro não muda a altura da linha: rótulos, campos e botões ficam nivelados. */
+.filtros .campo { position: relative; }
+.filtros .campo > small, .filtros .campo > .dica { position: absolute; top: calc(100% + 3px); left: 0; right: 0; margin: 0; line-height: 1.3; }
+.filtros:has(.campo > small, .campo > .dica) { row-gap: 34px; padding-bottom: 30px; }
 .erro-form { color: var(--perigo); font-size: .86rem; margin: 6px 0 0; }
 
 /* ---------- Botões ---------- */
