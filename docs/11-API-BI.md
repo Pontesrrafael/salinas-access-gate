@@ -1,5 +1,15 @@
 # API de consulta para BI
 
+## Como gerar um token (Admin/TI)
+
+1. Menu **Gestão → Tokens de API** (`/configuracoes/api-tokens`), somente o perfil Admin/TI.
+2. Informe um nome que diga onde o token será usado (ex.: "Power BI — painel da portaria").
+3. Escolha a validade (30, 90, 180 ou 365 dias; "sem validade" não é recomendado) e marque só os conjuntos de dados que o painel precisa.
+4. Clique em **Gerar token** e copie o valor `sag_…` na hora: ele aparece uma única vez. O sistema guarda apenas o hash SHA-256.
+5. Para trocar ou encerrar o acesso, use **Revogar**: as integrações param imediatamente. A tabela mostra o último uso de cada token.
+
+Criação, revogação e cada consulta ficam na Auditoria (sem o token e sem os dados retornados).
+
 ## Contrato técnico da versão v1
 
 A API consulta os dados locais do Salinas Access Gate por HTTPS. As rotas de negócio aceitam

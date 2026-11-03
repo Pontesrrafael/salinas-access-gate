@@ -24,12 +24,13 @@ use App\Core\Session;
 Http::securityHeaders();
 
 try {
+    $apiBi = str_starts_with(Http::path(), '/api/v1/');
     // POST maior que post_max_size chega vazio: avisa em vez de acusar falha de CSRF
-    if (Http::method() === 'POST' && empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    if (!$apiBi && Http::method() === 'POST' && empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
         Session::start();
         Http::abort(400, 'O envio excedeu o tamanho máximo permitido pelo servidor (post_max_size). Reduza a quantidade ou o tamanho das fotos.');
     }
-    if (Http::path() !== '/saude') {
+    if (!$apiBi && Http::path() !== '/saude') {
         Session::start();
     }
     $router = new Router();
