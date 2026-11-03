@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 /** @var App\Core\Router $router */
 
+use App\Controllers\ApiTokensController;
 use App\Controllers\AuditoriaController;
 use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
@@ -147,6 +148,9 @@ $router->post('/usuarios/{id}/sincronizar-ad', [UsuariosController::class, 'sinc
 
 $router->get('/configuracoes', [ConfiguracoesController::class, 'index']);
 $router->post('/configuracoes', [ConfiguracoesController::class, 'salvar']);
+$router->get('/configuracoes/api-tokens', [ApiTokensController::class, 'index']);
+$router->post('/configuracoes/api-tokens', [ApiTokensController::class, 'criar']);
+$router->post('/configuracoes/api-tokens/{id}/revogar', [ApiTokensController::class, 'revogar']);
 $router->post('/configuracoes/areas', [ConfiguracoesController::class, 'salvarArea']);
 $router->post('/configuracoes/ldap/testar', [ConfiguracoesController::class, 'testarLdap']);
 $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'salvarArea']);

@@ -49,6 +49,7 @@ final class Auth
         'auditoria.ver'            => ['admin', 'supervisor'],
         'usuarios.gerir'           => ['admin'],
         'configuracoes.gerir'      => ['admin'],
+        'api.tokens'               => ['admin'],
         'chamados.abrir'           => ['admin', 'supervisor', 'ssma', 'porteiro', 'colaborador', 'gestor_area'],
         'chamados.atender'         => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'chamados.configurar'      => ['admin'],

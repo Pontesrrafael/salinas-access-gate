@@ -33,6 +33,7 @@ $menu = [
         ['/auditoria', 'Auditoria', 'auditoria', 'auditoria.ver'],
         ['/usuarios', 'Usuários', 'usuarios', 'usuarios.gerir'],
         ['/configuracoes', 'Configurações', 'config', 'configuracoes.gerir'],
+        ['/configuracoes/api-tokens', 'Tokens de API', 'config', 'api.tokens'],
     ],
 ];
 if (App\Core\Auth::is('colaborador')) { unset($menu['Ajuda']); }
