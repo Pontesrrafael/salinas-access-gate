@@ -29,6 +29,38 @@ use App\Controllers\TutoriaisController;
 // ---- Saúde (monitoramento Zabbix/Uptime) ----
 $router->get('/saude', [PublicoController::class, 'saude']);
 
+// ---- API de consulta para BI (credencial independente da sessão) ----
+if (str_starts_with(\App\Core\Http::path(), '/api/v1/')) {
+    header('Cache-Control: no-store');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Language: pt-BR');
+    $erroApi = static function (int $status, string $mensagem): never {
+        http_response_code($status);
+        echo json_encode(['erro' => $mensagem], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        exit;
+    };
+    if (\App\Core\Http::method() !== 'GET') {
+        header('Allow: GET');
+        $erroApi(405, 'Método não permitido.');
+    }
+    if (!in_array(substr(\App\Core\Http::path(), strlen('/api/v1/')), [
+        'status', 'acessos', 'presenca', 'solicitacoes', 'chamados', 'chamados/avaliacoes',
+        'cadastros/locais', 'cadastros/areas', 'cadastros/categorias', 'cadastros/pessoas-resumo',
+    ], true)) {
+        $erroApi(404, 'Recurso não encontrado.');
+    }
+}
+$router->get('/api/v1/status', static fn () => (new \App\Controllers\ApiController())->consultar('status'));
+$router->get('/api/v1/acessos', static fn () => (new \App\Controllers\ApiController())->consultar('acessos'));
+$router->get('/api/v1/presenca', static fn () => (new \App\Controllers\ApiController())->consultar('presenca'));
+$router->get('/api/v1/solicitacoes', static fn () => (new \App\Controllers\ApiController())->consultar('solicitacoes'));
+$router->get('/api/v1/chamados', static fn () => (new \App\Controllers\ApiController())->consultar('chamados'));
+$router->get('/api/v1/chamados/avaliacoes', static fn () => (new \App\Controllers\ApiController())->consultar('chamados/avaliacoes'));
+$router->get('/api/v1/cadastros/locais', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/locais'));
+$router->get('/api/v1/cadastros/areas', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/areas'));
+$router->get('/api/v1/cadastros/categorias', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/categorias'));
+$router->get('/api/v1/cadastros/pessoas-resumo', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/pessoas-resumo'));
+
 // ---- Integração Infleet (opcional) ----
 $router->get('/infleet', [InfleetController::class, 'index']);
 $router->post('/infleet/sincronizar', [InfleetController::class, 'sincronizar']);
