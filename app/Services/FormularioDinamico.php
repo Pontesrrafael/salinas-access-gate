@@ -53,6 +53,12 @@ final class FormularioDinamico
         return $rows;
     }
 
+    /** Na transferência, respostas históricas continuam intactas; coleta só perguntas ainda não respondidas. */
+    public static function pendentes(array $campos, array $respondidos): array
+    {
+        return array_values(array_filter($campos, static fn ($campo) => !in_array($campo['id'], $respondidos, true)));
+    }
+
     /**
      * Renderiza o HTML dos campos dinâmicos com toda saída escapada via e().
      * Rótulos, ajudas e opções cadastrados pelo Admin são dados e não passam por t().
@@ -80,7 +86,7 @@ final class FormularioDinamico
             $opcoes = self::decodificarOpcoes($c['opcoes'] ?? null);
             $valorBruto = self::extrairValor($valores, $id);
 
-            $reqSpan = $obrigatorio ? ' <span class="obrigatorio">*</span>' : '';
+            $reqSpan = $obrigatorio ? ' <span class="obrigatorio" aria-hidden="true">*</span>' : '';
             $reqAttr = $obrigatorio ? ' required' : '';
             $ajudaHtml = $ajuda !== '' ? '<small>' . e($ajuda) . '</small>' : '';
             $name = 'campos[' . e($id) . ']';
@@ -125,8 +131,8 @@ final class FormularioDinamico
                         $chk = in_array($op, $selecionadas, true) ? ' checked' : '';
                         $checksHtml .= '<label class="checkbox"><input type="checkbox" name="' . $name . '[]" value="' . e($op) . '"' . $chk . '> <span>' . e($op) . '</span></label>';
                     }
-                    $blocos[] = '<div class="campo campo-largo"><span>' . e($rotulo) . $reqSpan . '</span>'
-                        . $checksHtml . $ajudaHtml . '</div>';
+                    $blocos[] = '<fieldset class="campo campo-largo"><legend>' . e($rotulo) . $reqSpan . '</legend>'
+                        . $checksHtml . $ajudaHtml . '</fieldset>';
                     break;
 
                 case 'sim_nao':
@@ -168,12 +174,13 @@ final class FormularioDinamico
      * @param array<int, array<string, mixed>> $campos
      * @param array<string, mixed> $entrada
      * @param array<string, mixed> $arquivos
-     * @return array{valores: array<string, string>, erros: string[]}
+     * @return array{valores: array<string, string>, erros: string[], arquivos: array<string, array>}
      */
     public static function validar(array $campos, array $entrada, array $arquivos = []): array
     {
         $valores = [];
         $erros = [];
+        $uploads = [];
 
         foreach ($campos as $c) {
             if (isset($c['ativo']) && (int) $c['ativo'] === 0) {
@@ -198,7 +205,7 @@ final class FormularioDinamico
                     $valores[$id] = '';
                     continue;
                 }
-                $errosUpload = Upload::validar($listaArquivos);
+                $errosUpload = Upload::validar($listaArquivos, true);
                 if ($errosUpload !== []) {
                     foreach ($errosUpload as $msg) {
                         $erros[] = $rotulo . ': ' . $msg;
@@ -211,6 +218,7 @@ final class FormularioDinamico
                     $listaArquivos
                 );
                 $valores[$id] = implode(', ', $nomes);
+                $uploads[$id] = $listaArquivos;
                 continue;
             }
 
@@ -319,7 +327,7 @@ final class FormularioDinamico
             }
         }
 
-        return ['valores' => $valores, 'erros' => $erros];
+        return ['valores' => $valores, 'erros' => $erros, 'arquivos' => $uploads];
     }
 
     /**

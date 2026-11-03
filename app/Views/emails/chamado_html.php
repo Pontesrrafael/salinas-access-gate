@@ -21,7 +21,7 @@ declare(strict_types=1);
 $corTopo = (isset($corArea) && preg_match('/^#[0-9A-Fa-f]{6}$/', $corArea) === 1) ? $corArea : '#024B37';
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="<?= e(\App\Core\I18n::current()) ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

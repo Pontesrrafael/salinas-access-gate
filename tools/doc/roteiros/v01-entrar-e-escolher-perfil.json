@@ -1,0 +1,21 @@
+{
+  "nome": "v01-entrar-e-escolher-perfil",
+  "passos": [
+    {"acao":"legenda","texto":"Demonstração local: entre com seu usuário de rede ou sua conta local."},
+    {"acao":"ir","rota":"/login"},
+    {"acao":"digitar","alvo":"[name=email]","texto":"alex@example.invalid"},
+    {"acao":"digitar","alvo":"[name=senha]","texto":"SenhaSomenteDeExemplo123"},
+    {"acao":"pausar","ms":2000},
+    {"acao":"clicar","alvo":"button[type=submit]","espera":"/login/mfa"},
+    {"acao":"legenda","texto":"Quando solicitado, informe o código do seu aplicativo autenticador."},
+    {"acao":"digitar","alvo":"[name=codigo]","texto":"123456"},
+    {"acao":"pausar","ms":2500},
+    {"acao":"clicar","alvo":"button[type=submit]","espera":"/painel"},
+    {"acao":"legenda","texto":"No topo, escolha o perfil com que você vai trabalhar."},
+    {"acao":"clicar","alvo":"summary:has-text('Perfil:')"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":"form[action='/conta/perfil']:has(input[value='porteiro']) button","espera":"/portaria"},
+    {"acao":"legenda","texto":"O menu acompanha o perfil ativo. Aqui, o Porteiro registra entradas e saídas."},
+    {"acao":"pausar","ms":5000}
+  ]
+}

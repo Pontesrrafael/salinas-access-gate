@@ -13,6 +13,7 @@ declare(strict_types=1);
  *   php bin/console.php aplicar-retencao [--simular]  Anonimiza/apaga dados vencidos (LGPD; agendar no cron)
  *   php bin/console.php fechar-chamados           Fecha soluções antigas (agendar diariamente)
  *   php bin/console.php enviar-emails             Processa até 50 e-mails da fila (agendar a cada 5 min)
+ *   php bin/console.php email-testar --para=<e-mail>  Envia diagnóstico pelo transporte configurado
  *   php bin/console.php mfa-redefinir --email=usuario@salinasgold.com.br  Desliga o 2º fator (perda do celular)
  *   php bin/console.php redefinir-senha --email=usuario@salinasgold.com.br
  *   php bin/console.php ldap-testar                Testa conexão com o Active Directory
@@ -120,7 +121,7 @@ switch ($cmd) {
         foreach (['pdo_mysql', 'sodium', 'mbstring', 'fileinfo', 'json'] as $ext) {
             extension_loaded($ext) ? ok("extensão {$ext}") : falhou("extensão {$ext} ausente (habilite no php.ini)");
         }
-        extension_loaded('curl') ? ok('extensão curl (Turnstile)') : out('  [--] extensão curl ausente (necessária só para Turnstile)');
+        extension_loaded('curl') ? ok('extensão curl (Turnstile/Microsoft)') : out('  [--] extensão curl ausente (necessária para Turnstile/Graph/SMTP OAuth)');
         is_file(App::root('.env')) ? ok('.env encontrado') : falhou('.env ausente — copie .env.example para .env');
         $appUrl = trim((string) (App::config('app')['url'] ?? ''));
         $appUrl !== '' ? ok('APP_URL configurado (' . $appUrl . ')') : falhou('APP_URL vazio — configure APP_URL no .env');
@@ -224,10 +225,14 @@ switch ($cmd) {
             err($e);
         }
         $id = Uuid::v4();
-        Database::insert('usuarios', [
-            'id' => $id, 'nome' => $nome, 'email' => $email, 'senha_hash' => Auth::hash($senha),
-            'papel' => 'admin', 'ativo' => 1, 'must_change_password' => $temporaria ? 1 : 0,
-        ]);
+        // Usuário e concessão do perfil Admin na mesma transação (migração 013: perfis em usuario_perfis).
+        Database::transaction(static function () use ($id, $nome, $email, $senha, $temporaria): void {
+            Database::insert('usuarios', [
+                'id' => $id, 'nome' => $nome, 'email' => $email, 'senha_hash' => Auth::hash($senha),
+                'papel' => 'admin', 'ativo' => 1, 'must_change_password' => $temporaria ? 1 : 0,
+            ]);
+            Database::insert('usuario_perfis', ['usuario_id' => $id, 'perfil' => 'admin']);
+        });
         Audit::log('usuarios', $id, 'CREATE_ADMIN_CLI', ['email' => $email], $id);
         ok("Admin criado: {$email}");
         if ($temporaria) {
@@ -263,6 +268,20 @@ switch ($cmd) {
     case 'fechar-chamados':
         $total = \App\Services\Chamados::fecharAutomaticamente();
         out('Chamados fechados automaticamente: ' . $total);
+        break;
+
+    case 'email-testar':
+        // Ação explícita do operador: não consulta email_ativo nem depende do banco/fila.
+        try {
+            $para = \App\Services\Email::validarEndereco((string) ($opts['para'] ?? ''));
+            $cfg = \App\Services\Email::cfg();
+            out('Diagnóstico de e-mail: ' . $cfg['transporte'] . ($cfg['transporte'] === 'smtp' ? ' / ' . $cfg['smtp_auth'] : ''));
+            \App\Services\Email::enviar($para, 'Teste de e-mail — Salinas Access Gate',
+                'Este e-mail confirma a solicitação de teste do Salinas Access Gate. Nenhum chamado foi alterado.');
+            ok('Mensagem aceita pelo serviço de envio. Confirme o recebimento e consulte o rastreamento no Exchange.');
+        } catch (Throwable $e) {
+            err(\App\Services\Email::limparErro($e->getMessage()));
+        }
         break;
 
     case 'enviar-emails':

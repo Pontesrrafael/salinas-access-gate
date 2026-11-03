@@ -71,9 +71,9 @@ final class Retencao
         $projecao = $contagem ? 'COUNT(*)' : 'id';
         $sql = "SELECT {$projecao} FROM chamados
                  WHERE status = 'fechado'
-                   AND anonimizado_em IS NULL
-                   AND fechado_em IS NOT NULL
-                   AND fechado_em < (NOW() - INTERVAL ? MONTH)";
+                   AND retencao_versao = 0
+                   AND (anonimizado_em IS NOT NULL OR (fechado_em IS NOT NULL
+                   AND fechado_em < (NOW() - INTERVAL ? MONTH)))";
         return ['sql' => $sql, 'params' => [$mesesNorm]];
     }
 
@@ -110,15 +110,15 @@ final class Retencao
                 'params' => [self::TEXTO_REMOVIDO, ...$ids],
             ],
             'acompanhamentos_update' => [
-                'sql'    => "UPDATE chamado_acompanhamentos SET texto = ? WHERE chamado_id IN ({$in})",
+                'sql'    => "UPDATE chamado_acompanhamentos SET texto = ?, usuario_id = NULL WHERE chamado_id IN ({$in})",
                 'params' => [self::TEXTO_REMOVIDO, ...$ids],
             ],
             'satisfacao_update' => [
-                'sql'    => "UPDATE chamado_satisfacao SET comentario = NULL WHERE chamado_id IN ({$in})",
+                'sql'    => "UPDATE chamado_satisfacao SET comentario = NULL, respondido_por = NULL WHERE chamado_id IN ({$in})",
                 'params' => $ids,
             ],
             'chamados_update' => [
-                'sql'    => "UPDATE chamados SET descricao = NULL, beneficiario_nome = NULL, anonimizado_em = NOW() WHERE id IN ({$in})",
+                'sql'    => "UPDATE chamados SET titulo = 'Chamado anonimizado', solicitante_id = NULL, atendente_id = NULL, descricao = NULL, beneficiario_nome = NULL, anonimizado_em = COALESCE(anonimizado_em, NOW()), retencao_versao = 1 WHERE id IN ({$in})",
                 'params' => $ids,
             ],
         ];
@@ -148,9 +148,8 @@ final class Retencao
         if (($chamado['status'] ?? '') !== 'fechado') {
             return false;
         }
-        if (!empty($chamado['anonimizado_em'])) {
-            return false;
-        }
+        if ((int) ($chamado['retencao_versao'] ?? 0) >= 1) { return false; }
+        if (!empty($chamado['anonimizado_em'])) { return true; }
         if (empty($chamado['fechado_em'])) {
             return false;
         }
@@ -169,9 +168,14 @@ final class Retencao
     public static function anonimizarRegistroChamado(array $chamado, DateTimeImmutable $agora): array
     {
         $out = $chamado;
+        $out['titulo'] = 'Chamado anonimizado';
+        $out['solicitante_id'] = null;
+        $out['atendente_id'] = null;
+        $out['retencao_versao'] = 1;
+        if (isset($out['satisfacao'])) { $out['satisfacao']['comentario'] = null; $out['satisfacao']['respondido_por'] = null; }
         $out['descricao'] = null;
         $out['beneficiario_nome'] = null;
-        $out['anonimizado_em'] = $agora->format('Y-m-d H:i:s');
+        $out['anonimizado_em'] = $chamado['anonimizado_em'] ?? $agora->format('Y-m-d H:i:s');
         $out['anexos'] = [];
 
         if (isset($out['respostas']) && is_array($out['respostas'])) {
@@ -187,6 +191,7 @@ final class Retencao
             foreach ($out['acompanhamentos'] as &$ac) {
                 if (is_array($ac)) {
                     $ac['texto'] = self::TEXTO_REMOVIDO;
+                    $ac['usuario_id'] = null;
                 }
             }
             unset($ac);
@@ -326,6 +331,7 @@ final class Retencao
                 Database::run($plano['anexos_delete']['sql'], $plano['anexos_delete']['params']);
                 Database::run($plano['respostas_update']['sql'], $plano['respostas_update']['params']);
                 Database::run($plano['acompanhamentos_update']['sql'], $plano['acompanhamentos_update']['params']);
+                Database::run($plano['satisfacao_update']['sql'], $plano['satisfacao_update']['params']);
                 Database::run($plano['chamados_update']['sql'], $plano['chamados_update']['params']);
             });
             foreach ($anexos as $a) {

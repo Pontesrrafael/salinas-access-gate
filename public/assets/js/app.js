@@ -692,3 +692,34 @@
   qr.make();
   alvo.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 4, scalable: true, title: t('Código QR do Salinas Access Gate') });
 })();
+
+
+/* --- Chamados: autoseleção de área/categoria e campo condicional de beneficiário --- */
+(function () {
+  document.addEventListener('change', (ev) => {
+    const el = ev.target;
+    if (el && el.matches && el.matches('select[data-limpar-alvo]') && el.form) {
+      const alvo = el.form.elements[el.dataset.limparAlvo];
+      if (alvo) { alvo.value = ''; }
+    }
+  }, true);
+
+  const selParaVoce = document.querySelector('select[name="para_voce"]');
+  const campoBenef = document.getElementById('campo-beneficiario');
+  if (selParaVoce && campoBenef) {
+    const inputBenef = campoBenef.querySelector('input[name="beneficiario_nome"]');
+    const sincronizarBeneficiario = () => {
+      const outraPessoa = selParaVoce.value === '0';
+      campoBenef.hidden = !outraPessoa;
+      if (inputBenef) {
+        inputBenef.required = outraPessoa;
+        if (!outraPessoa) { inputBenef.value = ''; }
+      }
+    };
+    selParaVoce.addEventListener('change', () => {
+      sincronizarBeneficiario();
+      if (selParaVoce.value === '0' && inputBenef) { inputBenef.focus(); }
+    });
+    sincronizarBeneficiario();
+  }
+})();

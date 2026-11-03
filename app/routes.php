@@ -3,10 +3,13 @@ declare(strict_types=1);
 
 /** @var App\Core\Router $router */
 
+use App\Controllers\ApiTokensController;
 use App\Controllers\AuditoriaController;
 use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
 use App\Controllers\ChamadosController;
+use App\Controllers\ContaNotificacoesController;
+use App\Controllers\PerfilController;
 use App\Controllers\ServicosConfigController;
 use App\Controllers\DashboardController;
 use App\Controllers\IndicadoresController;
@@ -26,6 +29,38 @@ use App\Controllers\TutoriaisController;
 
 // ---- Saúde (monitoramento Zabbix/Uptime) ----
 $router->get('/saude', [PublicoController::class, 'saude']);
+
+// ---- API de consulta para BI (credencial independente da sessão) ----
+if (str_starts_with(\App\Core\Http::path(), '/api/v1/')) {
+    header('Cache-Control: no-store');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Language: pt-BR');
+    $erroApi = static function (int $status, string $mensagem): never {
+        http_response_code($status);
+        echo json_encode(['erro' => $mensagem], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        exit;
+    };
+    if (\App\Core\Http::method() !== 'GET') {
+        header('Allow: GET');
+        $erroApi(405, 'Método não permitido.');
+    }
+    if (!in_array(substr(\App\Core\Http::path(), strlen('/api/v1/')), [
+        'status', 'acessos', 'presenca', 'solicitacoes', 'chamados', 'chamados/avaliacoes',
+        'cadastros/locais', 'cadastros/areas', 'cadastros/categorias', 'cadastros/pessoas-resumo',
+    ], true)) {
+        $erroApi(404, 'Recurso não encontrado.');
+    }
+}
+$router->get('/api/v1/status', static fn () => (new \App\Controllers\ApiController())->consultar('status'));
+$router->get('/api/v1/acessos', static fn () => (new \App\Controllers\ApiController())->consultar('acessos'));
+$router->get('/api/v1/presenca', static fn () => (new \App\Controllers\ApiController())->consultar('presenca'));
+$router->get('/api/v1/solicitacoes', static fn () => (new \App\Controllers\ApiController())->consultar('solicitacoes'));
+$router->get('/api/v1/chamados', static fn () => (new \App\Controllers\ApiController())->consultar('chamados'));
+$router->get('/api/v1/chamados/avaliacoes', static fn () => (new \App\Controllers\ApiController())->consultar('chamados/avaliacoes'));
+$router->get('/api/v1/cadastros/locais', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/locais'));
+$router->get('/api/v1/cadastros/areas', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/areas'));
+$router->get('/api/v1/cadastros/categorias', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/categorias'));
+$router->get('/api/v1/cadastros/pessoas-resumo', static fn () => (new \App\Controllers\ApiController())->consultar('cadastros/pessoas-resumo'));
 
 // ---- Integração Infleet (opcional) ----
 $router->get('/infleet', [InfleetController::class, 'index']);
@@ -88,6 +123,10 @@ $router->get('/chamados/{id}', [ChamadosController::class, 'detalhe']);
 $router->post('/chamados/{id}/acompanhar', [ChamadosController::class, 'acompanhar']);
 $router->post('/chamados/{id}/atribuir', [ChamadosController::class, 'atribuir']);
 $router->post('/chamados/{id}/status', [ChamadosController::class, 'status']);
+$router->post('/chamados/{id}/prorrogar', [ChamadosController::class, 'prorrogar']);
+$router->post('/conta/perfil', [PerfilController::class, 'trocar']);
+$router->get('/conta/notificacoes', [ContaNotificacoesController::class, 'index']);
+$router->post('/conta/notificacoes', [ContaNotificacoesController::class, 'salvar']);
 $router->get('/servicos/config', [ServicosConfigController::class, 'index']);
 $router->post('/servicos/config/areas', [ServicosConfigController::class, 'salvarArea']);
 $router->post('/servicos/config/areas/{id}', [ServicosConfigController::class, 'salvarArea']);
@@ -141,6 +180,9 @@ $router->post('/usuarios/{id}/sincronizar-ad', [UsuariosController::class, 'sinc
 
 $router->get('/configuracoes', [ConfiguracoesController::class, 'index']);
 $router->post('/configuracoes', [ConfiguracoesController::class, 'salvar']);
+$router->get('/configuracoes/api-tokens', [ApiTokensController::class, 'index']);
+$router->post('/configuracoes/api-tokens', [ApiTokensController::class, 'criar']);
+$router->post('/configuracoes/api-tokens/{id}/revogar', [ApiTokensController::class, 'revogar']);
 $router->post('/configuracoes/areas', [ConfiguracoesController::class, 'salvarArea']);
 $router->post('/configuracoes/ldap/testar', [ConfiguracoesController::class, 'testarLdap']);
 $router->post('/configuracoes/areas/{id}', [ConfiguracoesController::class, 'salvarArea']);

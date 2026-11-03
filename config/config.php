@@ -88,6 +88,17 @@ return [
         'site_key'   => Env::get('TURNSTILE_SITE_KEY', ''),
         'secret_key' => Env::get('TURNSTILE_SECRET_KEY', ''),
     ],
+    'email' => [
+        'transporte' => strtolower(trim((string) Env::get('EMAIL_TRANSPORTE', 'smtp'))), // smtp | graph
+        'smtp_auth'  => strtolower(trim((string) Env::get('EMAIL_SMTP_AUTH', 'login'))), // login | oauth
+    ],
+    'microsoft' => [
+        'tenant_id'            => trim((string) Env::get('MS_TENANT_ID', '')),
+        'client_id'            => trim((string) Env::get('MS_CLIENT_ID', '')),
+        'client_secret'        => (string) Env::get('MS_CLIENT_SECRET', ''),
+        'client_cert_path'     => trim((string) Env::get('MS_CLIENT_CERT_PATH', '')),
+        'client_cert_key_path' => trim((string) Env::get('MS_CLIENT_CERT_KEY_PATH', '')),
+    ],
     'smtp' => [
         'host'       => (string) Env::get('SMTP_HOST', ''),
         'porta'      => Env::int('SMTP_PORT', 587),

@@ -1,0 +1,22 @@
+{
+  "nome": "v07-trocar-idioma-e-tema",
+  "passos": [
+    {"acao":"legenda","texto":"O seletor no topo permite escolher o idioma da interface."},
+    {"acao":"ir","rota":"/painel?perfil=admin&lang=pt-BR"},
+    {"acao":"clicar","alvo":"summary[aria-label^='Alterar idioma']"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":"a[hreflang=en]","espera":"lang=en"},
+    {"acao":"legenda","texto":"Os rótulos mudam de idioma. Nomes e informações cadastradas são preservados."},
+    {"acao":"pausar","ms":4000},
+    {"acao":"clicar","alvo":".topo .seletor-idioma:has(a[hreflang]) summary"},
+    {"acao":"clicar","alvo":"a[hreflang=pt-BR]","espera":"lang=pt-BR"},
+    {"acao":"legenda","texto":"No rodapé do menu, alterne entre os temas claro, automático e escuro."},
+    {"acao":"clicar","alvo":"[data-tema]"},
+    {"acao":"pausar","ms":2000},
+    {"acao":"clicar","alvo":"[data-tema]"},
+    {"acao":"pausar","ms":4000},
+    {"acao":"clicar","alvo":"[data-tema]"},
+    {"acao":"legenda","texto":"Escolha o tema que oferece a melhor leitura no seu ambiente."},
+    {"acao":"pausar","ms":4000}
+  ]
+}

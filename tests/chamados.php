@@ -6,6 +6,25 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use App\Core\{App, Auth, View};
 use App\Services\{Chamados, FormularioDinamico, Upload};
 
+// Subprocesso: percorre o roteador e os controladores reais com sessão fictícia de colaborador.
+if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === '--rbac-rota') {
+    $router = new \App\Core\Router();
+    require dirname(__DIR__) . '/app/routes.php';
+    $rotas = (new ReflectionProperty($router, 'routes'))->getValue($router);
+    [$metodo, $padrao] = $rotas[(int) $argv[2]];
+    $path = preg_replace('/\{[a-z_]+\}/', '11111111-1111-4111-8111-111111111111', $padrao);
+    $_SERVER['REQUEST_URI'] = $path;
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+    $_SERVER['REQUEST_METHOD'] = $metodo;
+    $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+    $_POST['_csrf'] = \App\Core\Csrf::token();
+    (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'fixture-colaborador', 'papel' => 'colaborador', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'seguranca_patrimonial' => 1]);
+    register_shutdown_function(static function (): void { echo "\nRBAC_STATUS=" . http_response_code(); });
+    $router->dispatch($metodo, $path);
+    exit;
+}
+
 /** Dados fictícios para testar o HTML real sem MariaDB nem contas reais. */
 function chamadoFixture(): array
 {
@@ -19,8 +38,37 @@ function chamadoFixture(): array
         'created_at' => '2026-10-28 08:00:00', 'prazo_resposta' => '2026-10-28 09:00:00',
         'prazo_solucao' => '2026-10-28 18:00:00', 'pendente_desde' => '2026-10-28 10:00:00',
         'segundos_pendente' => 0, 'respondido_em' => null, 'solucionado_em' => null, 'fechado_em' => null,
-        'area_nome' => 'Facilities', 'categoria_nome' => 'Manutenção',
+        'area_nome' => 'Facilities', 'area_cor' => '#1D4ED8', 'categoria_nome' => 'Manutenção',
     ];
+}
+
+/** Dublê de persistência: executa o controller e permite falhar após a gravação física. */
+final class ChamadoTestePdo extends PDO
+{
+    public array $consultas = [];
+    public bool $transacao = false;
+    public bool $revertido = false;
+    public function __construct(public Closure $responder) {}
+    public function prepare(string $query, array $options = []): PDOStatement|false { return new ChamadoTesteStmt($this, $query); }
+    public function beginTransaction(): bool { $this->transacao = true; return true; }
+    public function inTransaction(): bool { return $this->transacao; }
+    public function commit(): bool { $this->transacao = false; return true; }
+    public function rollBack(): bool { $this->revertido = true; $this->transacao = false; return true; }
+}
+final class ChamadoTesteStmt extends PDOStatement
+{
+    private array $rows = [];
+    public function __construct(private ChamadoTestePdo $db, private string $sql) {}
+    public function execute(?array $params = null): bool
+    {
+        $this->db->consultas[] = [$this->sql, $params ?? []];
+        $this->rows = ($this->db->responder)($this->sql, $params ?? []);
+        return true;
+    }
+    public function fetchAll(int $mode = PDO::FETCH_DEFAULT, mixed ...$args): array { return $this->rows; }
+    public function fetch(int $mode = PDO::FETCH_DEFAULT, int $cursorOrientation = PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed { return array_shift($this->rows) ?? false; }
+    public function fetchColumn(int $column = 0): mixed { return $this->rows ? array_values($this->rows[0])[$column] : false; }
+    public function rowCount(): int { return 1; }
 }
 
 function chamadoViewFixture(string $view, bool $atende = true, string $status = 'pendente'): array
@@ -32,7 +80,7 @@ function chamadoViewFixture(string $view, bool $atende = true, string $status = 
     (new ReflectionProperty(Auth::class, 'loaded'))->setValue(null, true);
     (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $u);
     $areas = [['id' => $c['area_id'], 'nome' => 'Facilities']];
-    $categorias = [['id' => $c['categoria_id'], 'nome' => 'Manutenção', 'parent_id' => null, 'caminho' => 'Infraestrutura › Manutenção', 'descricao' => 'Atendimento predial', 'urgencia_padrao' => 3]];
+    $categorias = [['id' => $c['categoria_id'], 'nome' => 'Manutenção', 'parent_id' => null, 'caminho' => 'Infraestrutura › Manutenção', 'descricao' => 'Atendimento predial', 'urgencia_padrao' => 3, 'usar_horario_comercial' => 0]];
     $membros = [['id' => 'fixture-admin', 'nome' => 'Pessoa de teste']];
     return match ($view) {
         'abrir' => ['titulo' => t('Abrir chamado'), 'areas' => $areas, 'areaId' => $c['area_id'], 'categorias' => $categorias, 'categoriaId' => $c['categoria_id'], 'categoria' => $categorias[0], 'campos' => [], 'old' => []],
@@ -55,9 +103,18 @@ if (PHP_SAPI === 'cli-server') {
         View::render('configuracoes/index', configuracoesViewFixture());
         return;
     }
+    if (($_GET['view'] ?? '') === 'servicos-config') {
+        View::render('servicos-config/index', servicosConfigViewFixture());
+        return;
+    }
     $view = in_array($_GET['view'] ?? '', ['abrir', 'index', 'detalhe'], true) ? $_GET['view'] : 'detalhe';
     $status = ($_GET['status'] ?? '') === 'fechado' ? 'fechado' : 'pendente';
-    View::render('chamados/' . $view, chamadoViewFixture($view, true, $status));
+    $fixture = chamadoViewFixture($view, true, $status);
+    if ($view === 'index') {
+        if (($_GET['avaliacoes'] ?? '') === 'nenhuma') { $fixture['satisfacaoAreas'] = [['nome' => 'SSMA', 'media' => null, 'avaliacoes' => '0']]; }
+        if (($_GET['fila'] ?? '') === '0') { $fixture['fila'] = false; $fixture['titulo'] = t('Meus chamados'); }
+    }
+    View::render('chamados/' . $view, $fixture);
     return;
 }
 
@@ -71,6 +128,18 @@ function configuracoesViewFixture(): array
         'ldap' => ['enabled' => false, 'host' => '', 'base_dn' => '', 'bind_dn' => '', 'starttls' => true, 'tls_verify' => true, 'auto_provision' => false, 'sync_roles' => false],
         'ldapExt' => false, 'ldapTeste' => null, 'ldapUsuarios' => 0,
     ];
+}
+
+/** Cadastro e edição de SLAs com herança para inspeção do HTML e do navegador. */
+function servicosConfigViewFixture(): array
+{
+    chamadoViewFixture('index');
+    $area = ['id' => 'area-fixture', 'nome' => 'Facilities', 'slug' => 'facilities', 'descricao' => '', 'cor' => '#024B37', 'ativo' => 1,
+        'sla_resposta_min' => 30, 'sla_solucao_min' => 120, 'usar_horario_comercial' => 0];
+    $categoria = ['id' => 'categoria-fixture', 'nome' => 'Manutenção', 'parent_id' => null, 'ativo' => 1,
+        'sla_resposta_min' => null, 'sla_solucao_min' => null, 'usar_horario_comercial' => null];
+    return ['titulo' => t('Áreas e formulários'), 'areas' => [$area], 'areaAtual' => $area, 'usuarios' => [], 'membros' => [],
+        'categorias' => [$categoria], 'campos' => [], 'editarArea' => $area['id'], 'editarCategoria' => '', 'editarCampo' => ''];
 }
 
 $checks = 0;
@@ -247,5 +316,312 @@ $html = View::partial('configuracoes/index', configuracoesViewFixture());
 expect(substr_count($html, 'name="horario_dias[]"') === 7, 'Configuração exibe os sete dias ISO.');
 expect(str_contains($html, 'name="retencao_chamados_meses" min="6"') && str_contains($html, 'name="email_ativo"'), 'Configurações de retenção e notificações disponíveis.');
 expect(!preg_match('/<(script|style)\b|\s(?:style|onchange|onclick)=/i', $html), 'Novas configurações compatíveis com CSP.');
+
+
+// Escala única e transferência: datas da abertura e resposta anterior continuam mensuráveis.
+expect(Chamados::URGENCIAS[1] === 'Muito alta' && Chamados::URGENCIAS[5] === 'Muito baixa', 'Escala de urgência coincide com a prioridade.');
+expect(Chamados::rotulosUrgencia()[1] === '1 — Muito alta', 'Configuração recebe rótulo da escala única.');
+$aceite = Chamados::mudancasAtribuicao(array_replace(chamadoFixture(), ['status' => 'novo']), 'novo-atendente', $agora);
+expect($aceite['respondido_em'] === $agora->format('Y-m-d H:i:s') && $aceite['status'] === 'atribuido', 'Atribuição inicial registra aceite e primeira resposta.');
+$jaRespondido = array_replace(chamadoFixture(), ['status' => 'atribuido', 'respondido_em' => '2026-10-28 08:10:00', 'atendente_id' => 'antigo']);
+expect(!isset(Chamados::mudancasAtribuicao($jaRespondido, 'novo-atendente', $agora)['respondido_em']), 'Reatribuição não substitui resposta anterior.');
+expect(Chamados::mudancasAtribuicao($jaRespondido, 'antigo', $agora) === [], 'Atribuição repetida é idempotente.');
+expect(isset(Chamados::mudancasAtribuicao(array_replace($jaRespondido, ['respondido_em' => null]), 'antigo', $agora)['respondido_em']), 'Aceite corrige primeira resposta ausente mesmo para o responsável atual.');
+$categoriaDestino = ['id' => 'destino', 'area_id' => 'nova-area', 'sla_resposta_min' => 15, 'sla_solucao_min' => 60, 'usar_horario_comercial' => 0];
+$base = array_replace(chamadoFixture(), ['status' => 'atribuido', 'respondido_em' => null]);
+$nova = Chamados::transferir($base, $categoriaDestino, $agora);
+expect($nova['status'] === 'novo' && $nova['atendente_id'] === null && $nova['area_id'] === 'nova-area', 'Transferência devolve à triagem do destino.');
+expect($nova['prazo_resposta'] === $agora->modify('+15 minutes')->format('Y-m-d H:i:s') && $nova['prazo_solucao'] === $agora->modify('+60 minutes')->format('Y-m-d H:i:s'), 'Transferência aplica prazos novos a partir da operação.');
+expect($nova['segundos_pendente'] === 0 && $nova['pendente_desde'] === null && !isset($nova['created_at']), 'Pausa anterior não contamina o novo SLA; abertura preservada.');
+expect(Chamados::situacaoSolucao(array_replace($base, $nova), $agora->modify('+49 minutes')) === 'vencendo', 'Janela de alerta usa a base da transferência.');
+$respondido = array_replace($base, ['respondido_em' => '2026-10-28 08:30:00']);
+$transferido = array_replace($respondido, Chamados::transferir($respondido, $categoriaDestino, $agora));
+expect($transferido['respondido_em'] === $respondido['respondido_em'] && $transferido['prazo_resposta'] === $respondido['prazo_resposta'], 'Transferir preserva primeira resposta atendida.');
+expect(Chamados::situacaoResposta($transferido, $agora) === Chamados::situacaoResposta($respondido, $agora), 'Transferir preserva a medição da primeira resposta anterior.');
+rejeita(fn () => Chamados::transferir(array_replace($base, ['status' => 'fechado']), $categoriaDestino, $agora), 'Fechado não pode ser transferido.');
+expect(Chamados::textoSla($categoriaDestino) === 'SLA em horas corridas (24x7).', 'Regime 24x7 comunicado conforme categoria.');
+expect(!Chamados::podeFecharAutomaticamente(array_replace($solucionado, ['ultimo_comentario_solicitante' => '2026-10-29 10:00:00']), new DateTimeImmutable('2030-01-01')), 'Interação após solução bloqueia encerramento automático.');
+expect(Chamados::podeFecharAutomaticamente(array_replace($solucionado, ['ultimo_comentario_solicitante' => '2026-10-27 10:00:00']), new DateTimeImmutable('2030-01-01')), 'Interação anterior à solução não bloqueia encerramento.');
+
+$fixture = chamadoViewFixture('detalhe', false, 'solucionado');
+$fixture['old'] = ['status_texto' => 'Preciso de nova análise'];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'value="fechado"') && str_contains($html, 'name="status_texto"') && !str_contains($html, 'name="acompanhamento_texto"'), 'Solicitante aprova ou reabre sem acompanhamento duplicado.');
+expect(substr_count($html, 'Preciso de nova análise') === 1, 'Recuperação do motivo não aparece em outros formulários.');
+$fixture = chamadoViewFixture('detalhe', false, 'fechado');
+$fixture['old'] = ['avaliacao_nota' => '4', 'avaliacao_comentario' => 'Boa resposta'];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'value="4" checked') && str_contains($html, '>Boa resposta</textarea>'), 'Avaliação mantém nota e comentário quando há erro.');
+$fixture = chamadoViewFixture('detalhe');
+$fixture['membros'] = [];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'name="a_mim"'), 'Admin pode assumir mesmo fora da equipe.');
+$fixture['u']['id'] = 'outro-atendente';
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, 'name="status_texto"') && str_contains($html, 'multipart/form-data'), 'Atualização de status aceita anexos.');
+$fixture['anexos'][0]['campo_id'] = 'campo-anexo';
+$fixture['respostas'] = [['campo_id' => 'campo-anexo', 'rotulo' => 'Comprovante', 'valor' => 'comprovante.pdf']];
+$html = View::partial('chamados/detalhe', $fixture);
+expect(str_contains($html, '/chamados/anexos/fixture-anexo') && substr_count($html, '/chamados/anexos/fixture-anexo') === 1, 'Arquivo dinâmico tem link autenticado no campo, sem duplicação.');
+$html = View::partial('chamados/index', chamadoViewFixture('index'));
+foreach (['name="q"', 'value="me"', 'value="none"', 'value="prioridade"', 'value="prazo"', 'Primeira resposta', 'Pessoa de teste'] as $texto) { expect(str_contains($html, $texto), 'Fila contém busca, triagem, ordenação, solicitante e resposta.'); }
+
+// Revisão de produção: estatísticas vazias não ocupam espaço; o marcador nunca recebe HTML do cadastro.
+foreach ([[], [['nome' => 'Sem avaliações', 'media' => null, 'avaliacoes' => '0']]] as $semAvaliacoes) {
+    $fixture = chamadoViewFixture('index');
+    $fixture['satisfacaoAreas'] = $semAvaliacoes;
+    $html = View::partial('chamados/index', $fixture);
+    expect(!str_contains($html, 'chamado-satisfacao') && !str_contains($html, 'Satisfação por área'), 'Cartão inteiro ausente sem áreas avaliadas.');
+}
+$fixture = chamadoViewFixture('index');
+$fixture['satisfacaoAreas'] = [
+    ['nome' => 'Área avaliada <teste>', 'media' => '4.25', 'avaliacoes' => '4'],
+    ['nome' => 'Área sem notas', 'media' => null, 'avaliacoes' => '0'],
+    ['nome' => 'Outra avaliada', 'media' => '5.0', 'avaliacoes' => '1'],
+];
+$html = View::partial('chamados/index', $fixture);
+expect(preg_match('/<details\b([^>]*\bchamado-satisfacao\b[^>]*)>(.*?)<\/details>/s', $html, $cartao) === 1, 'Satisfação usa details nativo, sem JavaScript.');
+expect(!preg_match('/\sopen(?:\s|=|$)/', $cartao[1]) && str_contains($cartao[2], '<summary><h2>'), 'Cartão começa recolhido e mantém título acessível.');
+expect(substr_count($cartao[2], 'class="kpi"') === 2 && str_contains($cartao[2], 'Área avaliada &lt;teste&gt;') && str_contains($cartao[2], 'Outra avaliada'), 'Só áreas avaliadas aparecem, com nomes escapados.');
+expect(!str_contains($cartao[2], 'Área sem notas') && !str_contains($cartao[2], '— / 5') && str_contains($cartao[2], '4,3 / 5') && str_contains($cartao[2], '4 avaliações'), 'Médias e contagens preservadas sem cartões vazios.');
+foreach ([true, false] as $fila) {
+    foreach (['#1D4ED8', '#a1b2c3', null, '', 'red', '#abc', '#12345678', "#123456\n", '#123456" onload="alert(1)', '<script>alert(1)</script>'] as $cor) {
+        $fixture = chamadoViewFixture('index');
+        $fixture['fila'] = $fila;
+        $fixture['lista'][0]['area_cor'] = $cor;
+        $fixture['lista'][0]['area_nome'] = 'Área <img src=x onerror=alert(1)>';
+        $html = View::partial('chamados/index', $fixture);
+        expect(preg_match('/<svg\b[^>]*class="chamado-area-cor"[^>]*>(.*?)<\/svg>/s', $html, $marcador) === 1, 'Fila e meus chamados exibem o marcador.');
+        $esperada = in_array($cor, ['#1D4ED8', '#a1b2c3'], true) ? $cor : '#024B37';
+        expect(str_contains($marcador[1], 'fill="' . $esperada . '"') && str_contains($marcador[0], 'aria-hidden="true"') && str_contains($marcador[0], 'focusable="false"'), 'Só hexadecimal completo é aceito; marcador decorativo usa padrão seguro nos demais casos.');
+        expect(str_contains($html, 'Área &lt;img src=x onerror=alert(1)&gt;') && !preg_match('/<(script|style)\b|\s(?:style|onload|onclick)=/i', $html), 'Cor e nome não injetam atributos, HTML ou estilos inline.');
+        if (!$fila) { expect(!str_contains($html, 'chamado-satisfacao'), 'Meus chamados mantém satisfação fora da listagem.'); }
+    }
+}
+$fixture = chamadoViewFixture('index');
+unset($fixture['lista'][0]['area_cor']);
+expect(str_contains(View::partial('chamados/index', $fixture), 'fill="#024B37"'), 'Registro legado sem cor usa o padrão.');
+
+// RBAC: mesmo um sinal legado de segurança patrimonial não amplia o novo perfil.
+$salvo = Auth::user();
+(new ReflectionProperty(Auth::class, 'user'))->setValue(null, ['id' => 'colaborador', 'papel' => 'colaborador', 'seguranca_patrimonial' => 1]);
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, false);
+expect(Auth::can('chamados.abrir') && !Auth::can('chamados.atender'), 'Colaborador abre; atendimento exige associação.');
+$matriz = (new ReflectionClass(Auth::class))->getConstant('PERMISSOES');
+foreach (array_keys($matriz) as $permissao) {
+    if ($permissao !== 'chamados.abrir') { expect(!Auth::can($permissao), 'Colaborador não recebe permissão legada: ' . $permissao); }
+}
+expect(!Auth::isSegurancaPatrimonial(), 'Colaborador ignora sinal residual de segurança patrimonial.');
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
+expect(!Auth::can('chamados.atender'), 'Solicitante não atende mesmo com vínculo residual em uma equipe.');
+(new ReflectionProperty(Auth::class, 'user'))->setValue(null, $salvo);
+(new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, null);
+putenv('LDAP_GROUP_COLABORADOR=CN=Servicos,DC=teste');
+expect(\App\Services\LdapUsuarios::papelPorGrupos(['cn=servicos,dc=teste']) === 'colaborador', 'LDAP aceita grupo explícito exclusivo de serviços.');
+expect(\App\Services\LdapUsuarios::papelPorGrupos([]) === null, 'LDAP não concede acesso sem grupo autorizado.');
+putenv('LDAP_GROUP_COLABORADOR');
+
+$router = new \App\Core\Router();
+require dirname(__DIR__) . '/app/routes.php';
+$rotas = (new ReflectionProperty($router, 'routes'))->getValue($router);
+$rotasLegadas = 0;
+foreach ($rotas as $i => [$metodo, $padrao, $handler]) {
+    if (!is_array($handler) || in_array($handler[0], [\App\Controllers\AuthController::class, \App\Controllers\MfaController::class, \App\Controllers\ContaNotificacoesController::class, \App\Controllers\PublicoController::class, \App\Controllers\TutoriaisController::class, \App\Controllers\ChamadosController::class], true)) { continue; }
+    $processo = proc_open([PHP_BINARY, __FILE__, '--rbac-rota', (string) $i], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
+    if (!is_resource($processo)) { throw new RuntimeException('Não foi possível iniciar teste RBAC.'); }
+    $saida = stream_get_contents($pipes[1]); $erro = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]);
+    $exit = proc_close($processo);
+    $esperado = $padrao === '/painel' ? 303 : 403;
+    expect($exit === 0 && str_contains($saida, 'RBAC_STATUS=' . $esperado), "Rota legada {$metodo} {$padrao} protege colaborador: {$erro} {$saida}");
+    $rotasLegadas++;
+}
+expect($rotasLegadas > 50, 'Cobertura passa pelas rotas legadas e configuração administrativa.');
+
+$propPdo = new ReflectionProperty(\App\Core\Database::class, 'pdo');
+$propSettings = new ReflectionProperty(\App\Services\Settings::class, 'cache');
+$pdoAnterior = $propPdo->getValue(); $settingsAnteriores = $propSettings->getValue();
+$usuarioAnterior = Auth::user(); $getAnterior = $_GET; $postAnterior = $_POST; $filesAnteriores = $_FILES;
+$servidorAnterior = $_SERVER;
+$tmp = tempnam(App::root('storage'), 'rollback-');
+try {
+    $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['REQUEST_URI'] = '/chamados';
+    $propSettings->setValue(null, ['chamados_ativo' => '1', 'email_ativo' => '0']);
+    $ator = ['id' => '11111111-1111-4111-8111-111111111111', 'nome' => 'Atendente teste', 'papel' => 'supervisor', 'ativo' => 1, 'must_change_password' => 0, 'auth_origem' => 'local', 'email' => 'teste@example.test'];
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $ator);
+    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, true);
+    $pdo = new ChamadoTestePdo(static fn ($sql, $params) => str_starts_with($sql, 'SELECT COUNT(*)') ? [[0]] : []);
+    $propPdo->setValue(null, $pdo);
+    foreach (['me', 'none'] as $atendente) {
+        $_GET = ['q' => "x%' OR 1=1 --_", 'atendente_id' => $atendente, 'ordem' => 'prioridade']; $_POST = [];
+        ob_start(); (new \App\Controllers\ChamadosController())->fila(); ob_end_clean();
+        $consulta = current(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT c.*')));
+        expect(str_contains($consulta[0], 'm.area_id = c.area_id AND m.usuario_id = ?') && in_array($ator['id'], $consulta[1], true), 'Consulta de fila mantém escopo do membro.');
+        expect(!str_contains($consulta[0], "OR 1=1 --") && in_array("%x!%' OR 1=1 --!_%", $consulta[1], true), 'Busca parametrizada trata curingas como texto.');
+        expect(str_contains($consulta[0], $atendente === 'none' ? 'c.atendente_id IS NULL' : 'c.atendente_id = ?') && str_contains($consulta[0], 'ORDER BY c.prioridade'), 'Atalho aplica filtro e ordenação no servidor.');
+        $pdo->consultas = [];
+    }
+
+    // Exercita a consulta paginada e a segunda leitura usada na ordenação por prazo nas duas listagens.
+    $baseLista = array_replace(chamadoFixture(), ['area_cor' => '#B54708']);
+    $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($baseLista): array {
+        if (str_starts_with($sql, 'SELECT c.*')) {
+            expect(str_contains($sql, 'a.cor AS area_cor'), 'Toda consulta de listagem carrega a cor da área, inclusive leitura por IDs.');
+            return [$baseLista];
+        }
+        return str_starts_with($sql, 'SELECT COUNT(*)') ? [[1]] : [];
+    });
+    $propPdo->setValue(null, $pdo);
+    foreach (['fila', 'meus'] as $metodo) {
+        foreach (['', 'prazo'] as $ordem) {
+            $pdo->consultas = [];
+            $_GET = ['ordem' => $ordem]; $_POST = [];
+            ob_start(); (new \App\Controllers\ChamadosController())->$metodo(); $htmlLista = ob_get_clean();
+            expect(str_contains($htmlLista, 'fill="#B54708"'), 'Controller entrega a cor da área à view em ' . $metodo . '/' . $ordem . '.');
+            $consultasLista = array_values(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT c.*')));
+            expect(count($consultasLista) === ($ordem === 'prazo' ? 2 : 1), 'Ordenação por prazo exercita também a consulta por IDs.');
+            foreach ($consultasLista as [$sql, $params]) {
+                expect(str_contains($sql, $metodo === 'fila' ? 'm.area_id = c.area_id AND m.usuario_id = ?' : 'c.solicitante_id = ?') && in_array($ator['id'], $params, true), 'Marcador preserva o escopo de autorização da listagem.');
+            }
+        }
+    }
+    $pdo = new ChamadoTestePdo(static fn ($sql, $params) => []);
+    $propPdo->setValue(null, $pdo);
+    $_GET = [];
+    ob_start(); (new \App\Controllers\ChamadosController())->abrir(); ob_end_clean();
+    $consulta = current(array_filter($pdo->consultas, static fn ($q) => str_starts_with($q[0], 'SELECT a.id, a.nome, a.descricao')));
+    expect(str_contains($consulta[0], 'u.ativo = 1') && str_contains($consulta[0], 'c.ativo = 1') && str_contains($consulta[0], 'a.ativo = 1'), 'Publicação exige área, categoria e equipe ativas.');
+
+    file_put_contents($tmp, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n");
+    $base = chamadoFixture(); $campoId = '11111111-1111-4111-8111-111111111112';
+    $categoria = ['id' => $base['categoria_id'], 'area_id' => $base['area_id'], 'sla_resposta_min' => null, 'sla_solucao_min' => null, 'usar_horario_comercial' => null];
+    $metaAnexo = null;
+    $chamadoGravado = null;
+    $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($categoria, $campoId, &$metaAnexo, &$chamadoGravado): array {
+        if (str_starts_with($sql, 'SELECT c.* FROM servico_categorias')) { return [$categoria]; }
+        if (str_starts_with($sql, 'SELECT * FROM servico_areas')) { return [['id' => $categoria['area_id'], 'sla_resposta_min' => 30, 'sla_solucao_min' => 120, 'usar_horario_comercial' => 0]]; }
+        if (str_contains($sql, 'FROM servico_campos')) { return [['id' => $campoId, 'rotulo' => 'Comprovante', 'tipo' => 'anexo', 'opcoes' => null, 'obrigatorio' => 1, 'ativo' => 1]]; }
+        if (str_starts_with($sql, 'INSERT INTO `chamado_anexos`')) {
+            preg_match('/\((.*?)\) VALUES/', $sql, $m);
+            $metaAnexo = array_combine(array_map(static fn ($k) => trim($k, ' `'), explode(',', $m[1])), $params);
+            throw new RuntimeException('Falha ao gravar vínculo do anexo');
+        }
+        if (str_starts_with($sql, 'INSERT INTO `chamados`')) {
+            preg_match('/\((.*?)\) VALUES/', $sql, $m);
+            $chamadoGravado = array_combine(array_map(static fn ($k) => trim($k, ' `'), explode(',', $m[1])), $params);
+            return [];
+        }
+        if (str_starts_with($sql, 'INSERT INTO `chamado_respostas`')) { return []; }
+        throw new RuntimeException('Consulta inesperada no rollback: ' . $sql);
+    });
+    $propPdo->setValue(null, $pdo);
+    $_POST = ['area_id' => $base['area_id'], 'categoria_id' => $base['categoria_id'], 'titulo' => 'Chamado de teste', 'urgencia' => '2', 'impacto' => '3', 'para_voce' => '1'];
+    $_FILES = ['campos' => ['name' => [$campoId => 'comprovante.pdf'], 'tmp_name' => [$campoId => $tmp], 'size' => [$campoId => filesize($tmp)], 'error' => [$campoId => UPLOAD_ERR_OK]]];
+    try { (new \App\Controllers\ChamadosController())->criar(); throw new LogicException('Deveria falhar antes do redirect'); }
+    catch (RuntimeException $e) { expect($e->getMessage() === 'Falha ao gravar vínculo do anexo', 'Controller atingiu persistência do arquivo dinâmico.'); }
+    expect($pdo->revertido && $metaAnexo['campo_id'] === $campoId && $metaAnexo['mime_type'] === 'application/pdf', 'Anexo dinâmico é gravado com campo e MIME na transação do chamado.');
+    expect(Upload::caminho($metaAnexo['storage_path']) === null, 'Rollback do controller remove arquivo físico já movido.');
+    $abertura = new DateTimeImmutable($chamadoGravado['created_at']);
+    expect($chamadoGravado['prazo_resposta'] === $abertura->modify('+30 minutes')->format('Y-m-d H:i:s')
+        && $chamadoGravado['prazo_solucao'] === $abertura->modify('+120 minutes')->format('Y-m-d H:i:s')
+        && $chamadoGravado['calendario_sla'] === null, 'Controller de criação grava prazos e regime herdados da área.');
+
+    // Percorre também o controller de transferência para verificar a leitura da área de destino.
+    $destinoId = '11111111-1111-4111-8111-111111111113';
+    $mudancasTransferencia = null;
+    $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($base, $destinoId, &$mudancasTransferencia): array {
+        if (str_starts_with($sql, 'SELECT * FROM chamados')) { return [$base]; }
+        if (str_starts_with($sql, 'SELECT 1 FROM servico_area_membros')) { return [[1]]; }
+        if (str_starts_with($sql, 'SELECT cat.*')) { return [['id' => $destinoId, 'area_id' => 'area-destino', 'nome' => 'Destino', 'area_nome' => 'Área de destino']]; }
+        if (str_contains($sql, 'FROM chamado_respostas') || str_contains($sql, 'FROM servico_campos')) { return []; }
+        if (str_starts_with($sql, 'SELECT a.nome')) { return [['area_nome' => 'Área de origem', 'nome' => 'Origem']]; }
+        if (str_starts_with($sql, 'SELECT * FROM servico_areas')) {
+            expect($params === ['area-destino'] && str_ends_with($sql, 'FOR UPDATE'), 'Controller bloqueia e consulta a área correta do destino.');
+            return [['sla_resposta_min' => 45, 'sla_solucao_min' => 180, 'usar_horario_comercial' => 0]];
+        }
+        if (str_starts_with($sql, 'UPDATE `chamados`')) {
+            preg_match_all('/`(\w+)` = \?/', $sql, $m);
+            $mudancasTransferencia = array_combine($m[1], array_slice($params, 0, count($m[1])));
+            throw new RuntimeException('Interromper transferência simulada após calcular SLA');
+        }
+        throw new RuntimeException('Consulta inesperada na transferência: ' . $sql);
+    });
+    $propPdo->setValue(null, $pdo);
+    $_POST = ['acao' => 'transferir', 'destino_categoria_id' => $destinoId, 'transferencia_motivo' => 'Encaminhar à área responsável'];
+    $_FILES = [];
+    try { (new \App\Controllers\ChamadosController())->status($base['id']); throw new LogicException('Deveria interromper antes do redirect'); }
+    catch (RuntimeException $e) { expect($e->getMessage() === 'Interromper transferência simulada após calcular SLA', 'Controller percorreu transferência até persistência.'); }
+    $inicioTransferencia = new DateTimeImmutable($mudancasTransferencia['sla_inicio']);
+    expect($mudancasTransferencia['prazo_resposta'] === $inicioTransferencia->modify('+45 minutes')->format('Y-m-d H:i:s')
+        && $mudancasTransferencia['prazo_solucao'] === $inicioTransferencia->modify('+180 minutes')->format('Y-m-d H:i:s'), 'Controller de transferência aplica prazos da área de destino.');
+} finally {
+    @unlink($tmp);
+    $propPdo->setValue(null, $pdoAnterior); $propSettings->setValue(null, $settingsAnteriores);
+    (new ReflectionProperty(Auth::class, 'user'))->setValue(null, $usuarioAnterior);
+    (new ReflectionProperty(Auth::class, 'membroArea'))->setValue(null, null);
+    $_GET = $getAnterior; $_POST = $postAnterior; $_FILES = $filesAnteriores; $_SERVER = $servidorAnterior;
+}
+
+// SLA por área: prazos e regime herdam separadamente, inclusive com dados vindos do PDO.
+$cacheSla = new ReflectionProperty(\App\Services\Settings::class, 'cache');
+$cacheAnterior = $cacheSla->getValue();
+try {
+    $cacheSla->setValue(null, ['horario_comercial_ativo' => '1']);
+    $area = ['sla_resposta_min' => '30', 'sla_solucao_min' => '120', 'usar_horario_comercial' => null];
+    expect(Chamados::slaEfetivo([], $area) === ['resposta_min' => 30, 'solucao_min' => 120, 'comercial' => true, 'origem' => 'area'], 'Categoria vazia herda prazos da área e regime global.');
+    $proprio = ['sla_resposta_min' => '15', 'sla_solucao_min' => '60', 'usar_horario_comercial' => '0'];
+    expect(Chamados::slaEfetivo($proprio, $area) === ['resposta_min' => 15, 'solucao_min' => 60, 'comercial' => false, 'origem' => 'categoria'], 'Categoria prevalece sobre todos os padrões da área; zero mantém 24x7.');
+    $misto = Chamados::slaEfetivo(['sla_resposta_min' => 15], $area);
+    expect($misto['resposta_min'] === 15 && $misto['solucao_min'] === 120 && $misto['origem'] === 'categoria', 'Herança independente quando só um prazo é próprio.');
+    expect(Chamados::slaEfetivo([], []) === ['resposta_min' => null, 'solucao_min' => null, 'comercial' => true, 'origem' => 'nenhum'], 'Sem prazos em nenhum nível fica sem SLA.');
+    expect(!Chamados::slaEfetivo([], array_replace($area, ['usar_horario_comercial' => 0]))['comercial'], 'Área pode substituir calendário global por 24x7.');
+    $cacheSla->setValue(null, ['horario_comercial_ativo' => '0']);
+    expect(!Chamados::slaEfetivo([], [])['comercial'], 'Sem regime próprio segue padrão global desligado.');
+    expect(Chamados::slaEfetivo([], ['usar_horario_comercial' => 1])['comercial'], 'Área com horário comercial explícito prevalece sobre padrão global.');
+    expect(!Chamados::slaEfetivo(['usar_horario_comercial' => 0], ['usar_horario_comercial' => 1])['comercial'], 'Regime explícito da categoria prevalece sobre o da área.');
+
+    $destino = ['id' => 'categoria-destino', 'area_id' => 'area-destino'];
+    $quando = new DateTimeImmutable('2026-10-30 16:30:00');
+    $areaDestino = array_replace($area, ['usar_horario_comercial' => 1]);
+    $transferido = Chamados::transferir(chamadoFixture(), $destino, $quando, $areaDestino);
+    expect($transferido['prazo_resposta'] === '2026-10-30 17:00:00' && $transferido['prazo_solucao'] === '2026-11-02 08:30:00', 'Transferência usa SLA e expediente da área de destino e pula fim de semana.');
+    expect(json_decode($transferido['calendario_sla'], true)['inicio'] === '07:00', 'Calendário herdado é copiado para o chamado.');
+    $semSla = Chamados::transferir(chamadoFixture(), $destino, $quando, []);
+    expect($semSla['prazo_resposta'] === null && $semSla['prazo_solucao'] === null, 'Transferência para destino sem SLA remove prazos ainda não atendidos.');
+    $respondido = array_replace(chamadoFixture(), ['respondido_em' => '2026-10-28 08:30:00']);
+    $preservado = Chamados::transferir($respondido, $destino, $quando, $areaDestino);
+    expect($preservado['prazo_resposta'] === $respondido['prazo_resposta'] && $preservado['prazo_solucao'] === '2026-11-02 08:30:00', 'Herança na transferência preserva primeira resposta atendida.');
+    expect(Chamados::textoSla($destino, $areaDestino) === 'SLA em horário comercial, descontando dias sem expediente e feriados.', 'Texto de abertura comunica regime herdado.');
+
+    $config = \App\Controllers\ServicosConfigController::class;
+    expect($config::dadosSla([]) === ['sla_resposta_min' => null, 'sla_solucao_min' => null, 'usar_horario_comercial' => null], 'Formulário vazio persiste NULL e permite herança.');
+    expect($config::dadosSla(['sla_resposta_atalho' => '15', 'sla_solucao_min' => '17', 'sla_solucao_atalho' => '30', 'usar_horario_comercial' => '0']) === ['sla_resposta_min' => 15, 'sla_solucao_min' => 17, 'usar_horario_comercial' => 0], 'Atalho e duração personalizada coexistem com precedência do valor manual.');
+    foreach (['0', '-1', '1.5', '1e2', 'abc', '525601', ['15']] as $invalido) {
+        rejeita(fn () => $config::dadosSla(['sla_resposta_min' => $invalido]), 'Entrada inválida não é truncada nem silenciada.');
+    }
+    rejeita(fn () => $config::dadosSla(['usar_horario_comercial' => '2']), 'Regime inválido recusado.');
+    rejeita(fn () => $config::dadosSla(['sla_resposta_min' => '60', 'sla_solucao_min' => '15']), 'Solução menor que resposta recusada.');
+    rejeita(fn () => $config::validarSlaEfetivo(['sla_solucao_min' => 15], $area), 'Solução própria não pode ser menor que resposta herdada.');
+    rejeita(fn () => $config::validarSlaEfetivo(['sla_resposta_min' => 180], $area), 'Resposta própria não pode superar solução herdada.');
+    $config::validarSlaEfetivo(['sla_resposta_min' => 120], $area);
+    expect($config::dadosSla(['sla_resposta_min' => '1', 'sla_solucao_min' => '100800'])['sla_solucao_min'] === 100800, 'Limites de duração aceitos.');
+
+    $fixture = chamadoViewFixture('abrir');
+    $fixture['sla'] = Chamados::slaEfetivo($destino, $areaDestino);
+    $fixture['textoSla'] = Chamados::textoSla($destino, $areaDestino);
+    $html = View::partial('chamados/abrir', $fixture);
+    expect(str_contains($html, '<strong>30 min</strong>') && str_contains($html, '<strong>2 h</strong>') && str_contains($html, 'SLA em horário comercial'), 'Abertura mostra prazos e regime efetivos da área.');
+    $fixture = servicosConfigViewFixture();
+    $html = View::partial('servicos-config/index', $fixture);
+    expect(str_contains($html, 'SLA padrão de resposta') && str_contains($html, 'SLA padrão de solução'), 'Cadastro e edição da área oferecem seus padrões de SLA.');
+    expect(str_contains($html, 'Herdado da área: 30 min') && str_contains($html, 'Herdado da área: 2 h') && str_contains($html, 'SLA da área'), 'Categoria mostra duração herdada e origem na lista.');
+    expect(!preg_match('/<(script|style)\b|\s(?:style|onchange|onclick)=/i', $html), 'Controles de herança preservam a CSP.');
+    $fixture['editarCategoria'] = $fixture['categorias'][0]['id'];
+    $html = View::partial('servicos-config/index', $fixture);
+    expect(substr_count($html, '<select name="usar_horario_comercial">') === 4, 'Área e categoria oferecem três regimes no cadastro e na edição.');
+    expect(str_contains($html, '<option value="" selected>Herdar da área</option>'), 'Edição de categoria preserva NULL como herança explícita.');
+} finally {
+    $cacheSla->setValue(null, $cacheAnterior);
+}
 
 echo "Chamados: {$checks} verificações sem banco OK.\n";

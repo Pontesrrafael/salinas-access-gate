@@ -1,0 +1,217 @@
+{
+  "geradoEm": "2026-10-29T15:55:04.255Z",
+  "tipo": "HTTP, sem renderização visual",
+  "telas": [
+    {
+      "nome": "01-login",
+      "rota": "/login",
+      "status": 200,
+      "assets": 11
+    },
+    {
+      "nome": "02-login-mfa",
+      "rota": "/login/mfa",
+      "status": 200,
+      "assets": 11
+    },
+    {
+      "nome": "03-painel",
+      "rota": "/painel",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "04-seletor-perfil",
+      "rota": "/painel",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "05-seletor-idioma",
+      "rota": "/painel",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "06-portaria",
+      "rota": "/portaria?perfil=porteiro",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "07-portaria-analise",
+      "rota": "/portaria?perfil=porteiro",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "08-solicitacoes",
+      "rota": "/solicitacoes",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "09-solicitacao-externa-formulario",
+      "rota": "/solicitar-acesso",
+      "status": 200,
+      "assets": 11
+    },
+    {
+      "nome": "10-ssma-verificacao",
+      "rota": "/ssma/demo?perfil=ssma",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "11-quem-esta-no-site",
+      "rota": "/presenca",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "12-pessoas-lista",
+      "rota": "/pessoas",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "13-pessoa-cadastro",
+      "rota": "/pessoas/nova",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "14-veiculos",
+      "rota": "/veiculos",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "15-locais",
+      "rota": "/locais",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "16-indicadores",
+      "rota": "/indicadores",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "17-relatorios",
+      "rota": "/relatorios",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "18-auditoria",
+      "rota": "/auditoria",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "19-usuarios-lista",
+      "rota": "/usuarios",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "20-usuario-perfis",
+      "rota": "/usuarios/demo",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "21-configuracoes",
+      "rota": "/configuracoes",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "22-abrir-chamado",
+      "rota": "/chamados/abrir?perfil=colaborador",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "23-meus-chamados",
+      "rota": "/chamados/meus?perfil=colaborador",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "24-fila-atendimento",
+      "rota": "/chamados/fila?perfil=gestor_area",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "25-detalhe-atendente",
+      "rota": "/chamados/demo?perfil=gestor_area",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "26-detalhe-solicitante-aprovar",
+      "rota": "/chamados/demo?perfil=colaborador",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "27-prorrogar-prazo",
+      "rota": "/chamados/demo?perfil=gestor_area",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "28-areas-e-formularios",
+      "rota": "/servicos/config",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "29-notificacoes-email",
+      "rota": "/conta/notificacoes",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "30-duas-etapas",
+      "rota": "/conta/mfa",
+      "status": 200,
+      "assets": 14
+    },
+    {
+      "nome": "31-aviso-privacidade",
+      "rota": "/privacidade",
+      "status": 200,
+      "assets": 11
+    },
+    {
+      "nome": "32-tutoriais",
+      "rota": "/tutoriais",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "cel-01-abrir-chamado",
+      "rota": "/chamados/abrir?perfil=colaborador",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "cel-02-fila",
+      "rota": "/chamados/fila?perfil=gestor_area",
+      "status": 200,
+      "assets": 13
+    },
+    {
+      "nome": "cel-03-portaria",
+      "rota": "/portaria?perfil=porteiro",
+      "status": 200,
+      "assets": 13
+    }
+  ],
+  "post": 405
+}

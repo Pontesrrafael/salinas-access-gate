@@ -22,6 +22,7 @@ final class UsuariosController extends Controller
         $rows = Database::all(
             'SELECT u.id, u.nome, u.email, u.papel, u.ativo, u.must_change_password, u.seguranca_patrimonial, u.auth_origem, u.ldap_usuario,
                     u.ultimo_login_em, p.id AS pessoa_id, p.nome AS pessoa_nome,
+                    (SELECT GROUP_CONCAT(up.perfil ORDER BY up.perfil) FROM usuario_perfis up WHERE up.usuario_id = u.id) AS perfis_csv,
                     (SELECT GROUP_CONCAT(a.nome ORDER BY a.nome SEPARATOR ", ") FROM areas a WHERE a.responsavel_user_id = u.id) AS areas
                FROM usuarios u LEFT JOIN pessoas p ON p.id = u.pessoa_id
               ORDER BY u.ativo DESC, u.nome'
@@ -53,6 +54,7 @@ final class UsuariosController extends Controller
         Auth::authorize('usuarios.gerir');
         $ad = $this->vinculoAd('/usuarios/novo', null);
         $d = $this->dados('/usuarios/novo', null);
+        $perfis = $this->perfisSelecionados('/usuarios/novo', $d['papel']);
         $senha = (string) ($_POST['senha'] ?? '');
         $temporaria = $senha === '';
         if ($ad !== null) {
@@ -64,16 +66,17 @@ final class UsuariosController extends Controller
             $this->falha($e, '/usuarios/novo');
         }
         $id = Uuid::v4();
-        $areas = $this->areasSelecionadas();
+        $areas = array_intersect($perfis, ['admin', 'supervisor', 'ssma', 'porteiro']) ? $this->areasSelecionadas() : [];
         $pessoaId = $this->pessoaSelecionada(null);
-        Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $ad): void {
+        Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $ad, $perfis): void {
             Database::insert('usuarios', [
                 'id' => $id, ...$d, 'senha_hash' => Auth::hash($senha), 'must_change_password' => $ad ? 0 : 1, 'ativo' => 1,
                 'pessoa_id' => $pessoaId, ...$this->camposAd($ad),
             ]);
             $this->aplicarAreas($id, $areas);
+            $this->aplicarPerfis($id, $perfis);
             Audit::log('usuarios', $id, 'CREATE_USER', [
-                'email' => $d['email'], 'nome' => $d['nome'], 'papel' => $d['papel'], 'areas' => $areas,
+                'email' => $d['email'], 'nome' => $d['nome'], 'papel' => $d['papel'], 'perfis' => $perfis, 'areas' => $areas,
                 'origem' => $ad ? 'ldap' : 'local', 'ldap_usuario' => $ad['login'] ?? null,
             ]);
         });
@@ -91,14 +94,15 @@ final class UsuariosController extends Controller
         $volta = '/usuarios/' . $id;
         $ad = $this->vinculoAd($volta, $id);
         $d = $this->dados($volta, $id);
+        $perfis = $this->perfisSelecionados($volta, $d['papel']);
         $d['ativo'] = Http::bool('ativo') ? 1 : 0;
 
         // Proteções contra auto-bloqueio e perda do último administrador
-        if ($id === $eu['id'] && ($d['ativo'] === 0 || $d['papel'] !== 'admin')) {
+        if ($id === $eu['id'] && ($d['ativo'] === 0 || !in_array('admin', $perfis, true))) {
             $this->falha('Você não pode desativar nem remover o perfil Admin da sua própria conta.', $volta);
         }
-        if ($atual['papel'] === 'admin' && ($d['papel'] !== 'admin' || $d['ativo'] === 0)) {
-            $outros = (int) Database::value("SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1 AND id <> ?", [$id]);
+        if (in_array('admin', $atual['perfis'], true) && (!in_array('admin', $perfis, true) || $d['ativo'] === 0)) {
+            $outros = (int) Database::value("SELECT COUNT(*) FROM usuarios u JOIN usuario_perfis p ON p.usuario_id = u.id AND p.perfil = 'admin' WHERE u.ativo = 1 AND u.id <> ?", [$id]);
             if ($outros === 0) {
                 $this->falha('É necessário manter pelo menos um administrador ativo.', $volta);
             }
@@ -107,10 +111,10 @@ final class UsuariosController extends Controller
         $voltouLocal = $ad === null && $atual['auth_origem'] === 'ldap';
         $reset = $ad === null && (Http::bool('redefinir_senha') || $voltouLocal);
         $senha = $reset ? $this->senhaTemporaria() : null;
-        $areas = $this->areasSelecionadas();
+        $areas = array_intersect($perfis, ['admin', 'supervisor', 'ssma', 'porteiro']) ? $this->areasSelecionadas() : [];
         $pessoaId = $this->pessoaSelecionada($id);
 
-        Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $atual, $reset, $ad): void {
+        Database::transaction(function () use ($id, $d, $senha, $areas, $pessoaId, $atual, $reset, $ad, $perfis): void {
             $upd = [...$d, 'pessoa_id' => $pessoaId, ...$this->camposAd($ad)];
             if ($ad !== null) {
                 $upd['must_change_password'] = 0;
@@ -121,8 +125,10 @@ final class UsuariosController extends Controller
             }
             Database::update('usuarios', $upd, 'id = ?', [$id]);
             $this->aplicarAreas($id, $areas);
+            $this->aplicarPerfis($id, $perfis);
             Audit::log('usuarios', $id, 'UPDATE_USER', [
                 'nome' => $d['nome'], 'papel' => $d['papel'], 'papel_anterior' => $atual['papel'],
+                'perfis' => $perfis, 'perfis_anteriores' => $atual['perfis'],
                 'ativo' => $d['ativo'], 'seguranca_patrimonial' => $d['seguranca_patrimonial'],
                 'reset_senha' => $reset, 'areas' => $areas,
                 'origem' => $ad ? 'ldap' : 'local', 'origem_anterior' => $atual['auth_origem'],
@@ -267,6 +273,31 @@ final class UsuariosController extends Controller
         ];
     }
 
+    private function perfisSelecionados(string $volta, string $padrao): array
+    {
+        $perfis = $_POST['perfis'] ?? [];
+        if (!is_array($perfis) || !$perfis) {
+            $this->falha(t('Selecione pelo menos um perfil.'), $volta);
+        }
+        foreach ($perfis as $perfil) {
+            if (!is_string($perfil) || !isset(Auth::PAPEIS[$perfil])) {
+                $this->falha('Perfil inválido.', $volta);
+            }
+        }
+        if (!in_array($padrao, $perfis, true)) {
+            $this->falha(t('O perfil padrão deve estar entre os perfis selecionados.'), $volta);
+        }
+        return array_values(array_unique($perfis));
+    }
+
+    private function aplicarPerfis(string $id, array $perfis): void
+    {
+        Database::run('DELETE FROM usuario_perfis WHERE usuario_id = ?', [$id]);
+        foreach ($perfis as $perfil) {
+            Database::insert('usuario_perfis', ['usuario_id' => $id, 'perfil' => $perfil]);
+        }
+    }
+
     private function areasSelecionadas(): array
     {
         $ids = array_filter((array) ($_POST['areas'] ?? []), fn ($v) => is_string($v) && Uuid::valid($v));
@@ -309,6 +340,7 @@ final class UsuariosController extends Controller
         $this->uuidOu404($id);
         $u = Database::one('SELECT * FROM usuarios WHERE id = ?', [$id]) ?? Http::abort(404, 'Usuário não encontrado.');
         unset($u['senha_hash']);
+        $u['perfis'] = array_column(Database::all('SELECT perfil FROM usuario_perfis WHERE usuario_id = ?', [$id]), 'perfil');
         return $u;
     }
 }

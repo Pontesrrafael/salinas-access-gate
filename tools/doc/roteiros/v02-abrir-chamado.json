@@ -1,0 +1,18 @@
+{
+  "nome": "v02-abrir-chamado",
+  "passos": [
+    {"acao":"legenda","texto":"Em Abrir chamado, escolha a área e a categoria do serviço."},
+    {"acao":"ir","rota":"/chamados/abrir?perfil=colaborador"},
+    {"acao":"selecionar","alvo":"select[name=area_id]","valor":"00000000-0000-4000-8000-000000000001","espera":"/chamados/abrir"},
+    {"acao":"selecionar","alvo":"select[name=categoria_id]","valor":"00000000-0000-4000-8000-000000000012","espera":"/chamados/abrir"},
+    {"acao":"digitar","alvo":"[name=titulo]","texto":"Ar-condicionado da sala de reunião pingando"},
+    {"acao":"digitar","alvo":"[name=descricao]","texto":"O aparelho da sala 2 começou a pingar sobre a mesa durante a reunião das 7h."},
+    {"acao":"legenda","texto":"Descreva o problema, informe a urgência e preencha os campos do serviço."},
+    {"acao":"selecionar","alvo":"[name=urgencia]","valor":"3"},
+    {"acao":"digitar","alvo":"input[name='campos[00000000-0000-4000-8000-000000000020]']","texto":"Prédio administrativo, sala de reunião 2"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":"form[action='/chamados'] button[type=submit]","espera":"/chamados/demo"},
+    {"acao":"legenda","texto":"O chamado foi aberto na simulação. Acompanhe o número e os prazos em Meus chamados."},
+    {"acao":"pausar","ms":5000}
+  ]
+}
