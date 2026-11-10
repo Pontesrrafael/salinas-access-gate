@@ -205,6 +205,28 @@ Para retornar, restaure `EMAIL_TRANSPORTE=smtp` e a configuração anterior vali
 reinicie workers persistentes e valide o diagnóstico antes de retomar o cron.
 Essa troca não apaga fila nem altera preferências dos usuários.
 
+## Notificações de solicitações de acesso e SSMA
+
+O serviço `App\Services\NotificacoesAcesso` reutiliza a fila (`email_fila`), o
+transporte configurado (`smtp` ou `graph`), a identidade visual Salinas Gold e o
+idioma ativo (`I18n::current()`) para notificar eventos do fluxo de portaria e SSMA:
+
+| Evento | Destinatários internos | Link enviado |
+| --- | --- | --- |
+| `criada` (interna, link externo ou pública) | Responsável da área (`areas.responsavel_user_id`) e usuários ativos com Segurança Patrimonial (`seguranca_patrimonial = 1`), deduplicados | `/solicitacoes` |
+| `enviada_ssma` (`atividade_risco = 1`) | Usuários ativos com perfil `ssma` (principal em `usuarios.papel` ou adicional em `usuario_perfis`) | `/ssma/{id}` |
+| `ssma_apto` / `ssma_nao_apto` | Criador interno da solicitação (`criado_por`) e autorizadores da área, deduplicados | `/solicitacoes` |
+| `aprovada` / `recusada` | Criador interno da solicitação (`criado_por`) | `/solicitacoes` |
+
+- **Sem auto-notificação e sem envio externo:** o próprio autor da ação nunca é
+  notificado, e nenhum e-mail é enviado ao visitante externo (`contato_email`) nesta etapa.
+- **Minimização LGPD:** o corpo do e-mail contém apenas nome do visitante, empresa,
+  data prevista, área, status e link para o sistema; CPF, documento, telefone,
+  motivo da visita e observações do SSMA não transitam por e-mail.
+- **Controle operacional:** respeita `Email::estaAtivo()` (`email_ativo=1`) e a
+  chave de configuração `email_acesso_ativo` em `Settings` (padrão ligado = `1`;
+  defina `0` para silenciar apenas os e-mails de solicitações de acesso e SSMA).
+
 ## Pendências
 
 - Homologar credencial, escopo positivo/negativo e entrega real no tenant Salinas Gold.

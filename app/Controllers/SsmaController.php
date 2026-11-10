@@ -9,6 +9,7 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Http;
 use App\Core\Uuid;
+use App\Services\NotificacoesAcesso;
 
 /**
  * Verificação SSMA de terceiros em atividade de risco.
@@ -122,6 +123,16 @@ final class SsmaController extends Controller
                 'solicitacao_id' => $id, 'status' => $decisao, 'validade_ate' => $s['data_prevista'], 'checklist' => $checklist,
             ]);
         });
+        NotificacoesAcesso::solicitacao(
+            $decisao === 'apto' ? 'ssma_apto' : 'ssma_nao_apto',
+            [
+                ...$s,
+                'status'            => $decisao === 'apto' ? 'pendente' : 'recusada',
+                'status_observacao' => $decisao === 'apto' ? 'Apto pelo SSMA' : 'Reprovado pelo SSMA',
+                'verificado_por'    => $u['id'],
+            ],
+            ['usuario_id' => $u['id']]
+        );
         $this->ok($decisao === 'apto' ? 'Marcado como APTO. A solicitação segue para autorização da área.' : 'Marcado como NÃO APTO. Solicitação recusada.', '/ssma');
     }
 
@@ -129,7 +140,7 @@ final class SsmaController extends Controller
     {
         $this->uuidOu404($id);
         return Database::one(
-            'SELECT s.*, a.nome AS area_nome FROM solicitacoes_acesso s LEFT JOIN areas a ON a.id = s.area_id WHERE s.id = ?',
+            'SELECT s.*, a.nome AS area_nome, a.responsavel_user_id FROM solicitacoes_acesso s LEFT JOIN areas a ON a.id = s.area_id WHERE s.id = ?',
             [$id]
         ) ?? Http::abort(404, 'Solicitação não encontrada.');
     }

@@ -10,6 +10,7 @@ use App\Core\Http;
 use App\Core\RateLimiter;
 use App\Core\Session;
 use App\Core\Uuid;
+use App\Services\NotificacoesAcesso;
 use App\Services\Settings;
 use Throwable;
 
@@ -76,6 +77,11 @@ final class PublicoController extends Controller
             'status' => $d['atividade_risco'] ? 'aguardando_ssma' : 'pendente', 'origem' => 'publica', 'consentimento_lgpd' => 1,
         ]);
         Audit::log('solicitacoes_acesso', $id, 'INSERT_PUBLICO', ['visitante_nome' => $d['visitante_nome'], 'area_id' => $areaId], null);
+        $dadosNotif = ['id' => $id, ...$d, 'area_id' => $areaId, 'data_prevista' => $data, 'status' => $d['atividade_risco'] ? 'aguardando_ssma' : 'pendente', 'origem' => 'publica'];
+        NotificacoesAcesso::solicitacao('criada', $dadosNotif, ['usuario_id' => null]);
+        if ($d['atividade_risco']) {
+            NotificacoesAcesso::solicitacao('enviada_ssma', $dadosNotif, ['usuario_id' => null]);
+        }
         $this->concluido();
     }
 
@@ -108,6 +114,11 @@ final class PublicoController extends Controller
             Http::abort(409, 'Esta solicitação já foi preenchida.');
         }
         Audit::log('solicitacoes_acesso', $s['id'], 'PREENCHIMENTO_EXTERNO', ['visitante_nome' => $d['visitante_nome']], null);
+        $dadosNotif = [...$s, ...$d, 'aguardando_preenchimento' => 0, 'status' => $d['atividade_risco'] ? 'aguardando_ssma' : 'pendente', 'origem' => 'link'];
+        NotificacoesAcesso::solicitacao('criada', $dadosNotif, ['usuario_id' => null]);
+        if ($d['atividade_risco']) {
+            NotificacoesAcesso::solicitacao('enviada_ssma', $dadosNotif, ['usuario_id' => null]);
+        }
         $this->concluido();
     }
 
