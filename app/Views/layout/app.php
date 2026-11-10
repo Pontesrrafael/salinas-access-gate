@@ -20,6 +20,7 @@ $menu = [
         ['/chamados/abrir', 'Abrir chamado', 'mais', 'chamados.abrir'],
         ['/chamados/meus', 'Meus chamados', 'solicit', 'chamados.abrir'],
         ['/chamados/fila', 'Fila de atendimento', 'pessoas', 'chamados.atender'],
+        ['/chamados/indicadores', 'Indicadores de chamados', 'grafico', 'chamados.indicadores'],
         ['/servicos/config', 'Áreas e formulários', 'config', 'chamados.configurar_area'],
     ],
     'Cadastros' => [

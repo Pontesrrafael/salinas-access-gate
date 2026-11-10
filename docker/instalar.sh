@@ -148,13 +148,27 @@ cat > /etc/cron.d/salinas-access-gate <<CRON
 # Salinas Access Gate — Horário de Mato Grosso – UTC-4 (container); horário do cron = fuso do servidor
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-5 0 * * *  root cd $DESTINO && docker compose exec -T app php bin/console.php expirar-solicitacoes >> /var/log/salinas-access-gate.log 2>&1
-20 0 * * * root cd $DESTINO && docker compose exec -T app php bin/console.php aplicar-retencao >> /var/log/salinas-access-gate.log 2>&1
-30 0 * * * root cd $DESTINO && docker compose exec -T app php bin/console.php fechar-chamados >> /var/log/salinas-access-gate.log 2>&1
-*/5 * * * * root cd $DESTINO && docker compose exec -T app php bin/console.php enviar-emails >> /var/log/salinas-access-gate.log 2>&1
-30 1 * * * root $DESTINO/docker/backup.sh >> /var/log/salinas-access-gate.log 2>&1
+5 0 * * *  root $DESTINO/docker/rotina.sh $DESTINO expirar-solicitacoes docker compose exec -T app php bin/console.php expirar-solicitacoes >> /var/log/salinas-access-gate.log 2>&1
+20 0 * * * root $DESTINO/docker/rotina.sh $DESTINO aplicar-retencao docker compose exec -T app php bin/console.php aplicar-retencao >> /var/log/salinas-access-gate.log 2>&1
+30 0 * * * root $DESTINO/docker/rotina.sh $DESTINO fechar-chamados docker compose exec -T app php bin/console.php fechar-chamados >> /var/log/salinas-access-gate.log 2>&1
+*/5 * * * * root $DESTINO/docker/rotina.sh $DESTINO enviar-emails docker compose exec -T app php bin/console.php enviar-emails >> /var/log/salinas-access-gate.log 2>&1
+30 1 * * * root $DESTINO/docker/rotina.sh $DESTINO backup $DESTINO/docker/backup.sh >> /var/log/salinas-access-gate.log 2>&1
 CRON
 chmod 644 /etc/cron.d/salinas-access-gate
+chmod +x "$DESTINO/docker/rotina.sh" "$DESTINO/docker/backup.sh"
+# Rotação do log das rotinas (somente o arquivo do Access Gate)
+cat > /etc/logrotate.d/salinas-access-gate <<'ROTACAO'
+/var/log/salinas-access-gate.log {
+  weekly
+  rotate 8
+  compress
+  delaycompress
+  missingok
+  notifempty
+  copytruncate
+}
+ROTACAO
+chmod 644 /etc/logrotate.d/salinas-access-gate
 echo "Agendado: expiração de solicitações 00:05, retenção LGPD 00:20 e backup 01:30 (retenção 14 dias em /var/backups/salinas-access-gate)."
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then

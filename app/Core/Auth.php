@@ -54,6 +54,7 @@ final class Auth
         'chamados.atender'         => ['admin', 'supervisor', 'ssma', 'porteiro'],
         'chamados.configurar'      => ['admin'],
         'chamados.configurar_area' => ['admin', 'gestor_area'],
+        'chamados.indicadores'     => ['admin', 'supervisor', 'gestor_area'],
     ];
 
     private static ?array $user = null;

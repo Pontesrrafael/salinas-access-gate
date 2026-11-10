@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use App\Controllers\ApiTokensController;
 use App\Controllers\AuditoriaController;
+use App\Controllers\ChamadosRelatorioController;
 use App\Controllers\AuthController;
 use App\Controllers\ConfiguracoesController;
 use App\Controllers\ChamadosController;
@@ -116,6 +117,8 @@ $router->post('/ssma/{id}', [SsmaController::class, 'registrar']);
 // ---- Serviços por área (todo POST é protegido pelo CSRF do roteador) ----
 $router->get('/chamados/abrir', [ChamadosController::class, 'abrir']);
 $router->post('/chamados', [ChamadosController::class, 'criar']);
+$router->get('/chamados/indicadores', [ChamadosRelatorioController::class, 'index']);
+$router->get('/chamados/indicadores/csv', [ChamadosRelatorioController::class, 'csv']);
 $router->get('/chamados/meus', [ChamadosController::class, 'meus']);
 $router->get('/chamados/fila', [ChamadosController::class, 'fila']);
 $router->get('/chamados/anexos/{id}', [ChamadosController::class, 'anexo']);

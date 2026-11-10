@@ -1,4 +1,7 @@
 <?php $totalPresentes = array_sum(array_map(fn ($l) => (int) $l['presentes'], $presencaPorLocal)); ?>
+<?php if (App\Core\Auth::is('admin')): foreach (App\Services\Rotinas::pendencias() as $rp): ?>
+  <div class="alerta alerta-aviso" role="alert"><?= icon('alerta', 'icon icon-sm') ?> <span><?= e(sprintf($rp['motivo'] === 'falha' ? t('A rotina "%s" falhou em %s. Verifique o log do servidor.') : t('A rotina "%s" não conclui com sucesso desde %s.'), t($rp['rotulo']), fmt_data_hora($rp['em']))) ?></span></div>
+<?php endforeach; endif; ?>
 <section class="kpis">
   <div class="kpi"><span class="kpi-rotulo"><?= e(t('Entradas hoje')) ?></span><strong class="kpi-valor"><?= (int) ($totais['entradas'] ?? 0) ?></strong></div>
   <div class="kpi"><span class="kpi-rotulo"><?= e(t('Saídas hoje')) ?></span><strong class="kpi-valor"><?= (int) ($totais['saidas'] ?? 0) ?></strong></div>

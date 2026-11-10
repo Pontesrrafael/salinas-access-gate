@@ -138,7 +138,7 @@ switch ($cmd) {
             $n ? ok('tabelas criadas') : falhou('tabelas ausentes — rode: php bin/console.php migrar');
             $t = (int) Database::value("SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()");
             $t >= 10 ? ok("{$t} triggers append-only ativas") : falhou("apenas {$t} triggers (esperado 10)");
-            $a = (int) Database::value("SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1");
+            $a = (int) Database::value("SELECT COUNT(DISTINCT u.id) FROM usuarios u LEFT JOIN usuario_perfis up ON up.usuario_id = u.id WHERE u.ativo = 1 AND (u.papel = 'admin' OR up.perfil = 'admin')");
             $a ? ok("{$a} administrador(es) ativo(s)") : falhou('nenhum admin — rode: php bin/console.php criar-admin');
         } catch (Throwable $e) {
             falhou('banco: ' . $e->getMessage());
@@ -263,6 +263,18 @@ switch ($cmd) {
         }
         Database::run('DELETE FROM rate_limits WHERE criado_em < (NOW() - INTERVAL 1 DAY)');
         ok("Solicitações expiradas: {$n1} por data, {$n2} links.");
+        break;
+
+    case 'api-token-teste':
+        // Somente para o CI: cria um token de 1 dia com todos os escopos e imprime o valor.
+        if (\App\Core\App::config('app')['env'] === 'production' && !in_array('--forcar', $args, true)) { falhou('api-token-teste é só para ambientes de teste.'); exit(1); }
+        $adm = Database::value("SELECT u.id FROM usuarios u LEFT JOIN usuario_perfis up ON up.usuario_id = u.id WHERE u.ativo = 1 AND (u.papel = 'admin' OR up.perfil = 'admin') LIMIT 1");
+        echo \App\Services\ApiTokens::criar('CI', array_keys(\App\Services\ApiTokens::ESCOPOS), 1, (string) $adm)['token'];
+        break;
+
+    case 'rotina-registrar':
+        \App\Services\Rotinas::registrar((string) ($args[0] ?? ''), (string) ($args[1] ?? ''));
+        out('Rotina registrada: ' . $args[0] . ' ' . $args[1]);
         break;
 
     case 'fechar-chamados':

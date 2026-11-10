@@ -44,6 +44,8 @@ jobs:
         run: php tests/regras.php
       - name: Chamados por área (prioridade, SLA, status, formulário dinâmico)
         run: php tests/chamados.php && php tests/formulario_dinamico.php && php tests/email.php && php tests/retencao_chamados.php && php tests/preferencias_notificacao.php && php tests/prorrogacao.php && php tests/perfis.php
+      - name: API de BI (tokens, escopos, limites e campos proibidos)
+        run: php tests/api.php
       - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
         run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
@@ -71,6 +73,16 @@ jobs:
           cd /opt/salinas-access-gate
           sudo docker compose exec -T app php bin/console.php aplicar-retencao --simular
           curl -fsS http://127.0.0.1:8222/privacidade | grep -q 'Aviso de Privacidade'
+      - name: API de BI no MariaDB real (migração 014, token, consulta e revogação)
+        run: |
+          cd /opt/salinas-access-gate
+          TOKEN=$(sudo docker compose exec -T app php bin/console.php api-token-teste --forcar)
+          for r in status acessos presenca solicitacoes chamados chamados/avaliacoes cadastros/locais cadastros/areas; do
+            code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8222/api/v1/$r")
+            echo "$r -> $code"; [ "$code" = "200" ] || { cat /tmp/r.json; exit 1; }
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8222/api/v1/status)" = "401" ]
+          sudo docker compose exec -T app php bin/console.php rotina-registrar backup ok
       - name: Logs (em caso de falha)
         if: failure()
         run: sudo docker compose -f /opt/salinas-access-gate/docker-compose.yml logs --tail=200
