@@ -241,6 +241,13 @@ final class ServicosConfigController extends Controller
             );
             $categorias = self::arvoreCategorias($categoriasRaw);
 
+            $slaPrioridades = Database::all('SELECT area_id, categoria_id, prioridade, sla_resposta_min, sla_solucao_min FROM servico_sla_prioridades WHERE area_id = ?', [$areaId]);
+            $areaAtual['sla_prioridades'] = self::agruparSlaPrioridades($slaPrioridades, null);
+            foreach ($categorias as &$categoria) {
+                $categoria['sla_prioridades'] = self::agruparSlaPrioridades($slaPrioridades, (string) $categoria['id']);
+            }
+            unset($categoria);
+
             $camposRaw = Database::all(
                 'SELECT f.*, c.nome AS categoria_nome
                    FROM servico_campos f
@@ -359,12 +366,14 @@ final class ServicosConfigController extends Controller
             $id = Uuid::v4();
             $d['ativo'] = 1;
             Database::insert('servico_areas', ['id' => $id, ...$d]);
+            self::salvarSlaPrioridades($id, null, $_POST);
             Audit::log('servico_areas', $id, 'INSERT', $d);
             $this->ok(t('Área de atendimento cadastrada.'), '/servicos/config', ['area' => $id]);
         }
 
         $d['ativo'] = $isAdmin ? (Http::bool('ativo') ? 1 : 0) : (int) ($existente['ativo'] ?? 1);
         Database::update('servico_areas', $d, 'id = ?', [$id]);
+        self::salvarSlaPrioridades($id, null, $_POST);
         Audit::log('servico_areas', $id, 'UPDATE', $d);
         $this->ok(t('Área de atendimento atualizada.'), '/servicos/config', ['area' => $id]);
     }
@@ -580,12 +589,14 @@ final class ServicosConfigController extends Controller
             $id = Uuid::v4();
             $d['ativo'] = 1;
             Database::insert('servico_categorias', ['id' => $id, ...$d]);
+            self::salvarSlaPrioridades($areaId, $id, $_POST);
             Audit::log('servico_categorias', $id, 'INSERT', $d);
             $this->ok(t('Categoria cadastrada.'), '/servicos/config', ['area' => $areaId]);
         }
 
         $d['ativo'] = Http::bool('ativo') ? 1 : 0;
         Database::update('servico_categorias', $d, 'id = ?', [$id]);
+        self::salvarSlaPrioridades($areaId, $id, $_POST);
         Audit::log('servico_categorias', $id, 'UPDATE', $d);
         $this->ok(t('Categoria atualizada.'), '/servicos/config', ['area' => $areaId]);
     }
@@ -639,6 +650,24 @@ final class ServicosConfigController extends Controller
 
         $obrigatorio = Http::bool('obrigatorio') ? 1 : 0;
         $ajuda = Http::nstr('ajuda', 1000);
+        $dependeCampoId = Http::str('depende_campo_id');
+        $dependeValor = Http::nstr('depende_valor', 200);
+        $dependeUrgenciaMax = Http::str('depende_urgencia_max');
+        if ($dependeCampoId === '') {
+            $dependeCampoId = null;
+            $dependeValor = null;
+        } else {
+            if (!Uuid::valid($dependeCampoId) || $dependeCampoId === $id) { $this->falha(t('A dependência de campo é inválida.'), $voltar); }
+            $referencia = Database::one('SELECT id, area_id, tipo, opcoes, depende_campo_id FROM servico_campos WHERE id = ?', [$dependeCampoId]);
+            if (!$referencia || $referencia['area_id'] !== $areaId || $dependeValor === null) { $this->falha(t('A dependência deve usar um campo da mesma área e um valor válido.'), $voltar); }
+            $opcoesDependencia = FormularioDinamico::decodificarOpcoes($referencia['opcoes'] ?? null);
+            if ($referencia['tipo'] === 'sim_nao' && !in_array($dependeValor, ['sim', 'nao'], true)) { $this->falha(t('Para Sim/Não, informe sim ou nao na dependência.'), $voltar); }
+            if (in_array($referencia['tipo'], ['lista', 'multipla'], true) && !in_array($dependeValor, $opcoesDependencia, true)) { $this->falha(t('O valor da dependência não existe no campo selecionado.'), $voltar); }
+            if ($id !== null && self::criaCicloCampo($areaId, $id, $dependeCampoId)) { $this->falha(t('Uma dependência de campo não pode formar ciclo.'), $voltar); }
+        }
+        $dependeUrgenciaMax = $dependeUrgenciaMax === '' ? null : (int) $dependeUrgenciaMax;
+        if ($dependeUrgenciaMax !== null && ($dependeUrgenciaMax < 1 || $dependeUrgenciaMax > 5)) { $this->falha(t('A urgência da condição deve estar entre 1 e 5.'), $voltar); }
+        $dependeObrigatorio = Http::bool('depende_obrigatorio') ? 1 : 0;
 
         if ($id === null) {
             $maxOrdem = (int) Database::value(
@@ -656,6 +685,7 @@ final class ServicosConfigController extends Controller
                 'tipo'         => $tipo,
                 'opcoes'       => $opcoesJson,
                 'obrigatorio'  => $obrigatorio,
+                'depende_campo_id' => $dependeCampoId, 'depende_valor' => $dependeValor, 'depende_obrigatorio' => $dependeObrigatorio, 'depende_urgencia_max' => $dependeUrgenciaMax,
                 'ordem'        => $ordem,
                 'ativo'        => 1,
             ];
@@ -671,6 +701,7 @@ final class ServicosConfigController extends Controller
             'tipo'         => $tipo,
             'opcoes'       => $opcoesJson,
             'obrigatorio'  => $obrigatorio,
+            'depende_campo_id' => $dependeCampoId, 'depende_valor' => $dependeValor, 'depende_obrigatorio' => $dependeObrigatorio, 'depende_urgencia_max' => $dependeUrgenciaMax,
             'ativo'        => Http::bool('ativo') ? 1 : 0,
         ];
         Database::update('servico_campos', $d, 'id = ?', [$id]);
@@ -824,6 +855,62 @@ final class ServicosConfigController extends Controller
             $passos++;
         }
         return false;
+    }
+
+    private static function criaCicloCampo(string $areaId, string $campoId, string $dependenciaId): bool
+    {
+        $pais = [];
+        foreach (Database::all('SELECT id, depende_campo_id FROM servico_campos WHERE area_id = ?', [$areaId]) as $campo) { $pais[(string) $campo['id']] = $campo['depende_campo_id'] ?? null; }
+        $pais[$campoId] = $dependenciaId;
+        for ($atual = $dependenciaId, $passos = 0; $atual !== null && $passos <= count($pais); $passos++) {
+            if ($atual === $campoId) { return true; }
+            $atual = $pais[$atual] ?? null;
+        }
+        return false;
+    }
+
+    /** @return array<int, array{sla_resposta_min:?int,sla_solucao_min:?int}> */
+    private static function agruparSlaPrioridades(array $linhas, ?string $categoriaId): array
+    {
+        $resultado = [];
+        foreach ($linhas as $linha) {
+            if (($linha['categoria_id'] ?? null) !== $categoriaId) { continue; }
+            $resultado[(int) $linha['prioridade']] = [
+                'sla_resposta_min' => $linha['sla_resposta_min'] === null ? null : (int) $linha['sla_resposta_min'],
+                'sla_solucao_min' => $linha['sla_solucao_min'] === null ? null : (int) $linha['sla_solucao_min'],
+            ];
+        }
+        return $resultado;
+    }
+
+    /** Linhas vazias são removidas para que o SLA padrão continue sendo a regra efetiva. */
+    private static function salvarSlaPrioridades(string $areaId, ?string $categoriaId, array $entrada): void
+    {
+        $bruto = $entrada['sla_prioridade'] ?? [];
+        if (!is_array($bruto)) { throw new InvalidArgumentException(t('Prazos por prioridade inválidos.')); }
+        $linhas = [];
+        foreach (Chamados::PRIORIDADES as $prioridade => $_) {
+            $item = $bruto[$prioridade] ?? [];
+            if (!is_array($item)) { throw new InvalidArgumentException(t('Prazos por prioridade inválidos.')); }
+            $resposta = self::valorSlaPrioridade($item['resposta'] ?? '', $item['resposta_unidade'] ?? 'min');
+            $solucao = self::valorSlaPrioridade($item['solucao'] ?? '', $item['solucao_unidade'] ?? 'min');
+            if ($resposta === null && $solucao === null) { continue; }
+            if ($resposta !== null && $solucao !== null && $solucao < $resposta) {
+                throw new InvalidArgumentException(t('O SLA de solução deve ser maior ou igual ao de resposta.'));
+            }
+            $linhas[] = ['prioridade' => $prioridade, 'sla_resposta_min' => $resposta, 'sla_solucao_min' => $solucao];
+        }
+        Database::run('DELETE FROM servico_sla_prioridades WHERE area_id = ? AND categoria_id ' . ($categoriaId === null ? 'IS NULL' : '= ?'), $categoriaId === null ? [$areaId] : [$areaId, $categoriaId]);
+        foreach ($linhas as $linha) {
+            Database::insert('servico_sla_prioridades', ['id' => Uuid::v4(), 'area_id' => $areaId, 'categoria_id' => $categoriaId, ...$linha]);
+        }
+    }
+
+    private static function valorSlaPrioridade(mixed $valor, mixed $unidade): ?int
+    {
+        if (!is_string($valor) && !is_int($valor)) { throw new InvalidArgumentException(t('Prazos por prioridade inválidos.')); }
+        if (!is_string($unidade)) { throw new InvalidArgumentException(t('Prazos por prioridade inválidos.')); }
+        return trim((string) $valor) === '' ? null : self::converterParaMinutos(trim((string) $valor), $unidade);
     }
 
     public static function gerarSlug(string $texto): string

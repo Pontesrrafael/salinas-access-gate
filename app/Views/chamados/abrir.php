@@ -45,14 +45,15 @@ slot('acoes', '<a class="btn btn-secundario" href="' . e(url('/chamados/meus')) 
     <?php foreach (Chamados::URGENCIAS as $valor => $rotulo): ?><li><strong><?= e(t($rotulo)) ?>:</strong> <?= e(t(Chamados::EXPLICACOES[$valor])) ?></li><?php endforeach; ?>
   </ul></details>
   <label class="checkbox"><input type="checkbox" name="recorrente" value="1"<?= checked(old($old, 'recorrente')) ?>> <?= e(t('Este problema é recorrente')) ?></label>
-  <?= FormularioDinamico::renderizar($campos, $old) ?>
+  <?= FormularioDinamico::renderizar($campos, $old, ['urgencia' => old($old, 'urgencia', $categoria['urgencia_padrao'])]) ?>
   <label class="campo"><span><?= e(t('Anexos')) ?></span><input name="anexos[]" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp"><small><?= e(t('PDF, JPG, PNG ou WEBP, até 4 MB por arquivo.')) ?></small></label>
   <?php
     $sla = $sla ?? Chamados::slaEfetivo($categoria, []);
     $slaRespFmt = $sla['resposta_min'] !== null ? ServicosConfigController::formatarSla($sla['resposta_min']) : null;
     $slaSolFmt = $sla['solucao_min'] !== null ? ServicosConfigController::formatarSla($sla['solucao_min']) : null;
   ?>
-  <p class="dica">
+  <?php $slaPorPrioridade = []; foreach (Chamados::PRIORIDADES as $prioridade => $_) { $slaPorPrioridade[$prioridade] = Chamados::textoSla($categoria, $area ?? [], $prioridade); } ?>
+  <p class="dica" id="texto-sla" data-sla-prioridades="<?= e(json_encode($slaPorPrioridade, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT)) ?>">
     <?= icon('relogio') ?>
     <?= e($textoSla ?? Chamados::textoSla($categoria)) ?>
     <?php if ($slaRespFmt !== null || $slaSolFmt !== null): ?>

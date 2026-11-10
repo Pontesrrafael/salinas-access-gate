@@ -88,6 +88,19 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
   <p class="dica"><?= e(t('O valor personalizado (número + unidade, de 1 minuto até 365 dias) prevalece sobre o atalho. Com horário comercial ativo, "dias" contam dias úteis de expediente (descontando períodos fora do expediente, fins de semana e feriados). Deixe ambos vazios para herdar ou ficar sem SLA.')) ?></p>
 <?php
 };
+$camposSlaPrioridade = static function (array $dados): void {
+    $linhas = $dados['sla_prioridades'] ?? [];
+?>
+  <details class="secao-recolhivel">
+    <summary><?= e(t('Prazos por prioridade')) ?></summary>
+    <p class="dica"><?= e(t('Opcional: deixe uma prioridade vazia para usar o SLA padrão desta categoria ou área.')) ?></p>
+    <div class="tabela-rolagem"><table class="tabela"><thead><tr><th><?= e(t('Prioridade')) ?></th><th><?= e(t('Resposta')) ?></th><th><?= e(t('Solução')) ?></th></tr></thead><tbody>
+    <?php foreach (Chamados::PRIORIDADES as $prioridade => $rotulo): $linha = $linhas[$prioridade] ?? []; $r = ServicosConfigController::decomporSla($linha['sla_resposta_min'] ?? null); $s = ServicosConfigController::decomporSla($linha['sla_solucao_min'] ?? null); ?>
+      <tr><td><?= (int) $prioridade ?> — <?= e(t($rotulo)) ?></td><td><input type="number" name="sla_prioridade[<?= (int) $prioridade ?>][resposta]" min="1" max="525600" value="<?= e($r['valor']) ?>"><select name="sla_prioridade[<?= (int) $prioridade ?>][resposta_unidade]"><?php foreach (ServicosConfigController::UNIDADES_SLA as $u => $nome): ?><option value="<?= e($u) ?>"<?= selected($r['unidade'], $u) ?>><?= e(t($nome)) ?></option><?php endforeach; ?></select></td><td><input type="number" name="sla_prioridade[<?= (int) $prioridade ?>][solucao]" min="1" max="525600" value="<?= e($s['valor']) ?>"><select name="sla_prioridade[<?= (int) $prioridade ?>][solucao_unidade]"><?php foreach (ServicosConfigController::UNIDADES_SLA as $u => $nome): ?><option value="<?= e($u) ?>"<?= selected($s['unidade'], $u) ?>><?= e(t($nome)) ?></option><?php endforeach; ?></select></td></tr>
+    <?php endforeach; ?></tbody></table></div>
+  </details>
+<?php
+};
 ?>
 <div class="servicos-config">
 <?php if ($isAdmin): ?>
@@ -127,7 +140,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
           <input type="text" name="descricao" maxlength="500" placeholder="<?= e(t('Resumo dos serviços atendidos por esta área')) ?>">
         </label>
       </div>
-      <?php $camposSla([]); ?>
+      <?php $camposSla([]); $camposSlaPrioridade([]); ?>
       <div class="form-acoes">
         <button class="btn btn-ouro" type="submit"><?= icon('mais', 'icon icon-sm') ?> <?= e(t('Adicionar área')) ?></button>
       </div>
@@ -203,7 +216,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
                     </label>
                   </div>
                 <?php endif; ?>
-                <?php $camposSla($a); ?>
+                <?php $camposSla($a); $camposSlaPrioridade($a); ?>
                 <div class="form-acoes">
                   <a class="btn btn-secundario btn-sm" href="<?= e(url('/servicos/config', ['area' => $a['id']])) ?>"><?= e(t('Cancelar')) ?></a>
                   <button class="btn btn-primario btn-sm" type="submit"><?= e(t('Salvar')) ?></button>
@@ -360,7 +373,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
               </select>
             </label>
           </div>
-          <?php $camposSla([], $areaAtual); ?>
+          <?php $camposSla([], $areaAtual); $camposSlaPrioridade([]); ?>
           <div class="grade-3">
             <label class="campo campo-largo">
               <span><?= e(t('Descrição / orientação para o solicitante')) ?></span>
@@ -432,7 +445,7 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
                       </select>
                     </label>
                   </div>
-                  <?php $camposSla($c, $areaAtual); ?>
+                  <?php $camposSla($c, $areaAtual); $camposSlaPrioridade($c); ?>
                   <div class="grade-3">
                     <label class="campo">
                       <span><?= e(t('Descrição')) ?></span>
@@ -522,6 +535,10 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
                 <span><?= e(t('Texto de ajuda (opcional)')) ?></span>
                 <input type="text" name="ajuda" maxlength="500" placeholder="<?= e(t('Instrução exibida abaixo do campo')) ?>">
               </label>
+              <label class="campo"><span><?= e(t('Mostrar somente quando (campo)')) ?></span><select name="depende_campo_id"><option value=""><?= e(t('— Sem condição por campo —')) ?></option><?php foreach ($campos as $ref): ?><option value="<?= e($ref['id']) ?>"><?= e($ref['rotulo']) ?></option><?php endforeach; ?></select></label>
+              <label class="campo"><span><?= e(t('Valor da condição')) ?></span><input type="text" name="depende_valor" maxlength="200"></label>
+              <label class="campo"><span><?= e(t('Mostrar até urgência')) ?></span><select name="depende_urgencia_max"><option value=""><?= e(t('— Sem condição por urgência —')) ?></option><?php foreach (Chamados::URGENCIAS as $nivel => $rotulo): ?><option value="<?= (int) $nivel ?>"><?= (int) $nivel ?> — <?= e(t($rotulo)) ?></option><?php endforeach; ?></select></label>
+              <label class="checkbox"><input type="checkbox" name="depende_obrigatorio" value="1"><span><?= e(t('Obrigatório quando a condição valer')) ?></span></label>
               <label class="checkbox">
                 <input type="checkbox" name="obrigatorio" value="1">
                 <span><?= e(t('Preenchimento obrigatório na abertura do chamado')) ?></span>
@@ -597,6 +614,10 @@ $camposSla = static function (array $dados, ?array $areaHerdada = null) use ($at
                         <input type="checkbox" name="obrigatorio" value="1"<?= checked($f['obrigatorio']) ?>>
                         <span><?= e(t('Preenchimento obrigatório na abertura do chamado')) ?></span>
                       </label>
+                      <label class="campo"><span><?= e(t('Mostrar somente quando (campo)')) ?></span><select name="depende_campo_id"><option value=""><?= e(t('— Sem condição por campo —')) ?></option><?php foreach ($campos as $ref): if ($ref['id'] === $f['id']) { continue; } ?><option value="<?= e($ref['id']) ?>"<?= selected($f['depende_campo_id'] ?? '', $ref['id']) ?>><?= e($ref['rotulo']) ?></option><?php endforeach; ?></select></label>
+                      <label class="campo"><span><?= e(t('Valor da condição')) ?></span><input type="text" name="depende_valor" maxlength="200" value="<?= e($f['depende_valor'] ?? '') ?>"></label>
+                      <label class="campo"><span><?= e(t('Mostrar até urgência')) ?></span><select name="depende_urgencia_max"><option value=""><?= e(t('— Sem condição por urgência —')) ?></option><?php foreach (Chamados::URGENCIAS as $nivel => $rotulo): ?><option value="<?= (int) $nivel ?>"<?= selected($f['depende_urgencia_max'] ?? '', $nivel) ?>><?= (int) $nivel ?> — <?= e(t($rotulo)) ?></option><?php endforeach; ?></select></label>
+                      <label class="checkbox"><input type="checkbox" name="depende_obrigatorio" value="1"<?= checked($f['depende_obrigatorio'] ?? 0) ?>><span><?= e(t('Obrigatório quando a condição valer')) ?></span></label>
                       <label class="checkbox">
                         <input type="checkbox" name="ativo" value="1"<?= checked($f['ativo']) ?>>
                         <span><?= e(t('Campo ativo')) ?></span>

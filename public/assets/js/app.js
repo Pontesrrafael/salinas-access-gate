@@ -722,4 +722,37 @@
     });
     sincronizarBeneficiario();
   }
+
+  const formChamado = document.querySelector('form[action$="/chamados"]');
+  if (formChamado) {
+    const urgencia = formChamado.querySelector('[name="urgencia"]');
+    const impacto = formChamado.querySelector('[name="impacto"]');
+    const matriz = [[3, 2, 1, 1], [4, 3, 2, 1], [5, 4, 3, 2], [6, 5, 4, 3], [6, 6, 5, 4]];
+    const valorCampo = (id) => {
+      const varios = formChamado.querySelectorAll('[name="campos[' + CSS.escape(id) + '][]"]');
+      if (varios.length) { return Array.from(varios).filter((x) => x.checked).map((x) => x.value); }
+      const unico = formChamado.querySelector('[name="campos[' + CSS.escape(id) + ']"]');
+      return unico ? [unico.value] : [];
+    };
+    const atualizarCondicoes = () => {
+      const u = Number(urgencia?.value || 0);
+      document.querySelectorAll('[data-campo-condicional="1"]').forEach((bloco) => {
+        const depende = bloco.dataset.dependeCampo;
+        const valor = bloco.dataset.dependeValor || '';
+        const max = Number(bloco.dataset.dependeUrgenciaMax || 0);
+        const visivel = (!depende || valorCampo(depende).includes(valor)) && (!max || (u >= 1 && u <= max));
+        bloco.hidden = !visivel;
+        bloco.querySelectorAll('input, select, textarea').forEach((input) => {
+          // Preserva a obrigatoriedade definida pelo servidor; caixas de múltipla escolha nunca recebem required individual.
+          if (input.dataset.reqOriginal === undefined) { input.dataset.reqOriginal = input.required ? '1' : '0'; }
+          input.disabled = !visivel;
+          if (input.type !== 'checkbox' && input.type !== 'file') { input.required = visivel && (input.dataset.reqOriginal === '1' || bloco.dataset.dependeObrigatorio === '1'); }
+        });
+      });
+      const texto = document.getElementById('texto-sla');
+      if (texto && urgencia && impacto) { try { const p = matriz[u - 1][Number(impacto.value) - 1]; const dados = JSON.parse(texto.dataset.slaPrioridades || '{}'); if (dados[p]) { texto.textContent = dados[p]; } } catch (e) { /* conteúdo do servidor permanece */ } }
+    };
+    formChamado.addEventListener('change', atualizarCondicoes);
+    atualizarCondicoes();
+  }
 })();

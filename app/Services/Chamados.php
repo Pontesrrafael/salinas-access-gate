@@ -64,10 +64,21 @@ final class Chamados
      * Herança independente por prazo e regime; origem indica o nível mais específico com prazo.
      * @return array{resposta_min:?int, solucao_min:?int, comercial:bool, origem:'categoria'|'area'|'nenhum'}
      */
-    public static function slaEfetivo(array $categoria, array $area): array
+    public static function slaEfetivo(array $categoria, array $area, ?int $prioridade = null): array
     {
         $resposta = $categoria['sla_resposta_min'] ?? $area['sla_resposta_min'] ?? null;
         $solucao = $categoria['sla_solucao_min'] ?? $area['sla_solucao_min'] ?? null;
+        $origemPrioridade = null;
+        if ($prioridade !== null && isset(self::PRIORIDADES[$prioridade])) {
+            $categoriaPrioridade = $categoria['sla_prioridades'][$prioridade] ?? null;
+            $areaPrioridade = $area['sla_prioridades'][$prioridade] ?? null;
+            $prioridadeSla = is_array($categoriaPrioridade) ? $categoriaPrioridade : (is_array($areaPrioridade) ? $areaPrioridade : null);
+            if ($prioridadeSla !== null) {
+                $resposta = $prioridadeSla['sla_resposta_min'] ?? $resposta;
+                $solucao = $prioridadeSla['sla_solucao_min'] ?? $solucao;
+                $origemPrioridade = is_array($categoriaPrioridade) ? 'categoria' : 'area';
+            }
+        }
         $regime = $categoria['usar_horario_comercial'] ?? $area['usar_horario_comercial'] ?? null;
         return [
             'resposta_min' => $resposta === null ? null : (int) $resposta,
@@ -78,11 +89,24 @@ final class Chamados
         ];
     }
 
-    public static function textoSla(array $categoria, array $area = []): string
+    public static function textoSla(array $categoria, array $area = [], ?int $prioridade = null): string
     {
-        return !self::slaEfetivo($categoria, $area)['comercial']
+        $sla = self::slaEfetivo($categoria, $area, $prioridade);
+        if ($prioridade === null) {
+            return !$sla['comercial']
             ? t('SLA em horas corridas (24x7).')
             : t('SLA em horário comercial, descontando dias sem expediente e feriados.');
+        }
+        $prazos = t('Resposta: {resposta}. Solução: {solucao}.', ['resposta' => self::formatarDuracaoSla($sla['resposta_min']), 'solucao' => self::formatarDuracaoSla($sla['solucao_min'])]);
+        return $prazos . ' ' . (!$sla['comercial'] ? t('SLA em horas corridas (24x7).') : t('SLA em horário comercial, descontando dias sem expediente e feriados.'));
+    }
+
+    private static function formatarDuracaoSla(?int $minutos): string
+    {
+        if ($minutos === null) { return t('Sem SLA definido'); }
+        if ($minutos < 60) { return $minutos . ' min'; }
+        if ($minutos % 1440 === 0) { return intdiv($minutos, 1440) . ' d'; }
+        return $minutos % 60 === 0 ? intdiv($minutos, 60) . ' h' : intdiv($minutos, 60) . ' h ' . ($minutos % 60) . ' min';
     }
 
     /** Transferência inicia o SLA da nova categoria agora; preserva a primeira resposta e a abertura. */
@@ -91,7 +115,7 @@ final class Chamados
         if (in_array($chamado['status'], ['solucionado', 'fechado'], true)) {
             throw new InvalidArgumentException(t('Reabra o chamado antes de transferir.'));
         }
-        $sla = self::slaEfetivo($categoria, $area);
+        $sla = self::slaEfetivo($categoria, $area, (int) ($chamado['prioridade'] ?? 4));
         $calendario = self::calendarioConfigurado($categoria, $area);
         return [
             'area_id' => $categoria['area_id'], 'categoria_id' => $categoria['id'],
