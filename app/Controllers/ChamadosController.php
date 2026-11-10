@@ -63,8 +63,15 @@ final class ChamadosController extends Controller
         $categoria = $this->categoria($areaId, $categoriaId);
         if (!$categoria) { $categoriaId = ''; }
         $area = $categoria ? Database::one('SELECT * FROM servico_areas WHERE id = ?', [$areaId]) : [];
-        $sla = $categoria ? Chamados::slaEfetivo($categoria, $area ?? []) : null;
-        $textoSla = $categoria ? Chamados::textoSla($categoria, $area ?? []) : '';
+        if ($categoria) {
+            $categoria['sla_prioridades'] = $this->slaPrioridades($areaId, $categoriaId);
+            $area['sla_prioridades'] = $this->slaPrioridades($areaId, null);
+        }
+        $urgenciaExibida = isset($old['urgencia']) ? (int) $old['urgencia'] : (int) ($categoria['urgencia_padrao'] ?? 3);
+        $impactoExibido = isset($old['impacto']) ? (int) $old['impacto'] : 1;
+        $prioridade = $categoria ? Chamados::prioridade($urgenciaExibida, $impactoExibido) : null;
+        $sla = $categoria ? Chamados::slaEfetivo($categoria, $area ?? [], $prioridade) : null;
+        $textoSla = $categoria ? Chamados::textoSla($categoria, $area ?? [], $prioridade) : '';
         $campos = $categoria ? FormularioDinamico::campos($areaId, $categoriaId) : [];
         $this->view('chamados/abrir', compact('areas', 'areaId', 'categorias', 'categoriaId', 'categoria', 'campos', 'old', 'textoSla', 'sla') + ['titulo' => t('Abrir chamado')]);
     }
@@ -89,7 +96,7 @@ final class ChamadosController extends Controller
             $this->falha(t('Confira título, descrição, urgência, impacto e beneficiário.'), $voltar);
         }
         $campos = FormularioDinamico::campos($areaId, $categoriaId);
-        $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES);
+        $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES, ['urgencia' => $urgencia]);
         $files = Upload::files('anexos');
         $todosArquivos = $files;
         foreach ($validacao['arquivos'] as $uploads) { array_push($todosArquivos, ...$uploads); }
@@ -104,7 +111,9 @@ final class ChamadosController extends Controller
                 if (!$ativa) { throw new InvalidArgumentException(t('Selecione uma área e uma categoria ativas.')); }
                 $categoria = $ativa;
                 $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$areaId]);
-                $sla = Chamados::slaEfetivo($categoria, $area);
+                $categoria['sla_prioridades'] = $this->slaPrioridades($areaId, $categoriaId);
+                $area['sla_prioridades'] = $this->slaPrioridades($areaId, null);
+                $sla = Chamados::slaEfetivo($categoria, $area, Chamados::prioridade($urgencia, $impacto));
                 $calendario = Chamados::calendarioConfigurado($categoria, $area);
                 $agora = new DateTimeImmutable();
                 Database::insert('chamados', [
@@ -403,13 +412,15 @@ final class ChamadosController extends Controller
                 if (!$categoria || $categoriaId === $c['categoria_id']) { throw new InvalidArgumentException(t('Escolha outra categoria ativa com equipe disponível.')); }
                 $respondidos = array_column(Database::all('SELECT campo_id FROM chamado_respostas WHERE chamado_id = ?', [$id]), 'campo_id');
                 $campos = FormularioDinamico::pendentes(FormularioDinamico::campos($categoria['area_id'], $categoriaId), $respondidos);
-                $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES);
+                $validacao = FormularioDinamico::validar($campos, $_POST, $_FILES, ['urgencia' => $c['urgencia'] ?? null]);
                 $arquivos = [];
                 foreach ($validacao['arquivos'] as $uploads) { array_push($arquivos, ...$uploads); }
                 $erros = [...$validacao['erros'], ...Upload::validar($arquivos, true)];
                 if ($erros) { throw new InvalidArgumentException(implode(' ', $erros)); }
                 $origem = Database::one('SELECT a.nome AS area_nome, cat.nome FROM servico_categorias cat JOIN servico_areas a ON a.id = cat.area_id WHERE cat.id = ?', [$c['categoria_id']]);
                 $area = Database::one('SELECT * FROM servico_areas WHERE id = ? FOR UPDATE', [$categoria['area_id']]);
+                $categoria['sla_prioridades'] = $this->slaPrioridades($categoria['area_id'], $categoriaId);
+                $area['sla_prioridades'] = $this->slaPrioridades($categoria['area_id'], null);
                 $mudancas = Chamados::transferir($c, $categoria, new DateTimeImmutable(), $area);
                 Database::update('chamados', $mudancas, 'id = ?', [$id]);
                 foreach ($campos as $campo) {
@@ -430,6 +441,21 @@ final class ChamadosController extends Controller
             throw $e;
         }
         $this->ok(t('Chamado transferido. Os prazos da nova categoria começam na transferência.'), '/chamados/fila');
+    }
+
+    /** @return array<int, array{sla_resposta_min:?int,sla_solucao_min:?int}> */
+    private function slaPrioridades(string $areaId, ?string $categoriaId): array
+    {
+        $sql = 'SELECT prioridade, sla_resposta_min, sla_solucao_min FROM servico_sla_prioridades WHERE area_id = ? AND categoria_id ' . ($categoriaId === null ? 'IS NULL' : '= ?');
+        $params = $categoriaId === null ? [$areaId] : [$areaId, $categoriaId];
+        $resultado = [];
+        foreach (Database::all($sql, $params) as $linha) {
+            $resultado[(int) $linha['prioridade']] = [
+                'sla_resposta_min' => $linha['sla_resposta_min'] === null ? null : (int) $linha['sla_resposta_min'],
+                'sla_solucao_min' => $linha['sla_solucao_min'] === null ? null : (int) $linha['sla_solucao_min'],
+            ];
+        }
+        return $resultado;
     }
 
     private function avaliar(string $id): void

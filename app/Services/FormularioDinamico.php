@@ -66,7 +66,7 @@ final class FormularioDinamico
      * @param array<int, array<string, mixed>> $campos
      * @param array<string, mixed> $valores
      */
-    public static function renderizar(array $campos, array $valores = []): string
+    public static function renderizar(array $campos, array $valores = [], array $contexto = []): string
     {
         $blocos = [];
 
@@ -81,7 +81,8 @@ final class FormularioDinamico
             }
 
             $tipo = (string) ($c['tipo'] ?? 'texto');
-            $obrigatorio = !empty($c['obrigatorio']);
+            $condicional = self::temCondicao($c);
+            $obrigatorio = !empty($c['obrigatorio']) || ($condicional && !empty($c['depende_obrigatorio']) && self::condicaoVale($c, $valores, $contexto['urgencia'] ?? null));
             $ajuda = trim((string) ($c['ajuda'] ?? ''));
             $opcoes = self::decodificarOpcoes($c['opcoes'] ?? null);
             $valorBruto = self::extrairValor($valores, $id);
@@ -91,24 +92,27 @@ final class FormularioDinamico
             $ajudaHtml = $ajuda !== '' ? '<small>' . e($ajuda) . '</small>' : '';
             $name = 'campos[' . e($id) . ']';
 
+            $dadosCondicao = $condicional
+                ? ' data-campo-condicional="1" data-depende-campo="' . e((string) ($c['depende_campo_id'] ?? '')) . '" data-depende-valor="' . e((string) ($c['depende_valor'] ?? '')) . '" data-depende-urgencia-max="' . e((string) ($c['depende_urgencia_max'] ?? '')) . '" data-depende-obrigatorio="' . (!empty($c['depende_obrigatorio']) ? '1' : '0') . '"'
+                : '';
             switch ($tipo) {
                 case 'texto_longo':
                     $valStr = is_scalar($valorBruto) ? (string) $valorBruto : '';
-                    $blocos[] = '<label class="campo campo-largo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo campo-largo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<textarea name="' . $name . '" rows="3" maxlength="5000"' . $reqAttr . '>' . e($valStr) . '</textarea>'
                         . $ajudaHtml . '</label>';
                     break;
 
                 case 'numero':
                     $valStr = is_scalar($valorBruto) ? (string) $valorBruto : '';
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<input type="number" step="any" name="' . $name . '" value="' . e($valStr) . '"' . $reqAttr . '>'
                         . $ajudaHtml . '</label>';
                     break;
 
                 case 'data':
                     $valStr = is_scalar($valorBruto) ? (string) $valorBruto : '';
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<input type="date" name="' . $name . '" value="' . e($valStr) . '"' . $reqAttr . '>'
                         . $ajudaHtml . '</label>';
                     break;
@@ -119,7 +123,7 @@ final class FormularioDinamico
                     foreach ($opcoes as $op) {
                         $optsHtml .= '<option value="' . e($op) . '"' . selected($valStr, $op) . '>' . e($op) . '</option>';
                     }
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<select name="' . $name . '"' . $reqAttr . '>' . $optsHtml . '</select>'
                         . $ajudaHtml . '</label>';
                     break;
@@ -131,7 +135,7 @@ final class FormularioDinamico
                         $chk = in_array($op, $selecionadas, true) ? ' checked' : '';
                         $checksHtml .= '<label class="checkbox"><input type="checkbox" name="' . $name . '[]" value="' . e($op) . '"' . $chk . '> <span>' . e($op) . '</span></label>';
                     }
-                    $blocos[] = '<fieldset class="campo campo-largo"><legend>' . e($rotulo) . $reqSpan . '</legend>'
+                    $blocos[] = '<fieldset class="campo campo-largo"' . $dadosCondicao . '><legend>' . e($rotulo) . $reqSpan . '</legend>'
                         . $checksHtml . $ajudaHtml . '</fieldset>';
                     break;
 
@@ -140,13 +144,13 @@ final class FormularioDinamico
                     $optsHtml = '<option value="">' . e(t('— Selecione —')) . '</option>'
                         . '<option value="sim"' . selected($valNorm, 'sim') . '>' . e(t('Sim')) . '</option>'
                         . '<option value="nao"' . selected($valNorm, 'nao') . '>' . e(t('Não')) . '</option>';
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<select name="' . $name . '"' . $reqAttr . '>' . $optsHtml . '</select>'
                         . $ajudaHtml . '</label>';
                     break;
 
                 case 'anexo':
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<input type="file" name="' . $name . '" accept=".jpg,.jpeg,.png,.webp,.pdf"' . $reqAttr . '>'
                         . $ajudaHtml . '</label>';
                     break;
@@ -154,7 +158,7 @@ final class FormularioDinamico
                 case 'texto':
                 default:
                     $valStr = is_scalar($valorBruto) ? (string) $valorBruto : '';
-                    $blocos[] = '<label class="campo"><span>' . e($rotulo) . $reqSpan . '</span>'
+                    $blocos[] = '<label class="campo"' . $dadosCondicao . '><span>' . e($rotulo) . $reqSpan . '</span>'
                         . '<input type="text" name="' . $name . '" maxlength="500" value="' . e($valStr) . '"' . $reqAttr . '>'
                         . $ajudaHtml . '</label>';
                     break;
@@ -176,7 +180,7 @@ final class FormularioDinamico
      * @param array<string, mixed> $arquivos
      * @return array{valores: array<string, string>, erros: string[], arquivos: array<string, array>}
      */
-    public static function validar(array $campos, array $entrada, array $arquivos = []): array
+    public static function validar(array $campos, array $entrada, array $arquivos = [], array $contexto = []): array
     {
         $valores = [];
         $erros = [];
@@ -191,9 +195,12 @@ final class FormularioDinamico
             if ($id === '') {
                 continue;
             }
+            if (!self::condicaoVale($c, $entrada, $contexto['urgencia'] ?? null)) {
+                continue;
+            }
 
             $tipo = (string) ($c['tipo'] ?? 'texto');
-            $obrigatorio = !empty($c['obrigatorio']);
+            $obrigatorio = !empty($c['obrigatorio']) || (!empty($c['depende_obrigatorio']) && self::temCondicao($c));
             $opcoes = self::decodificarOpcoes($c['opcoes'] ?? null);
 
             if ($tipo === 'anexo') {
@@ -328,6 +335,26 @@ final class FormularioDinamico
         }
 
         return ['valores' => $valores, 'erros' => $erros, 'arquivos' => $uploads];
+    }
+
+    private static function temCondicao(array $campo): bool
+    {
+        return !empty($campo['depende_campo_id']) || ($campo['depende_urgencia_max'] ?? null) !== null;
+    }
+
+    /** Condições ausentes preservam a exibição e validação dos cadastros anteriores. */
+    private static function condicaoVale(array $campo, array $entrada, mixed $urgencia): bool
+    {
+        $depende = trim((string) ($campo['depende_campo_id'] ?? ''));
+        if ($depende !== '') {
+            $esperado = trim((string) ($campo['depende_valor'] ?? ''));
+            $valor = self::extrairValor($entrada, $depende);
+            // O campo de referência pode ser de múltipla escolha (vetor) ou de valor único.
+            $valores = is_array($valor) ? self::normalizarMultipla($valor) : [is_scalar($valor) ? trim((string) $valor) : ''];
+            if (!in_array($esperado, $valores, true)) { return false; }
+        }
+        $max = $campo['depende_urgencia_max'] ?? null;
+        return $max === null || $max === '' || (is_numeric($urgencia) && (int) $urgencia >= 1 && (int) $urgencia <= (int) $max);
     }
 
     /**

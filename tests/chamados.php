@@ -500,6 +500,7 @@ try {
     $pdo = new ChamadoTestePdo(static function ($sql, $params) use ($categoria, $campoId, &$metaAnexo, &$chamadoGravado): array {
         if (str_starts_with($sql, 'SELECT c.* FROM servico_categorias')) { return [$categoria]; }
         if (str_starts_with($sql, 'SELECT * FROM servico_areas')) { return [['id' => $categoria['area_id'], 'sla_resposta_min' => 30, 'sla_solucao_min' => 120, 'usar_horario_comercial' => 0]]; }
+        if (str_contains($sql, 'FROM servico_sla_prioridades')) { return []; }
         if (str_contains($sql, 'FROM servico_campos')) { return [['id' => $campoId, 'rotulo' => 'Comprovante', 'tipo' => 'anexo', 'opcoes' => null, 'obrigatorio' => 1, 'ativo' => 1]]; }
         if (str_starts_with($sql, 'INSERT INTO `chamado_anexos`')) {
             preg_match('/\((.*?)\) VALUES/', $sql, $m);
@@ -533,7 +534,7 @@ try {
         if (str_starts_with($sql, 'SELECT * FROM chamados')) { return [$base]; }
         if (str_starts_with($sql, 'SELECT 1 FROM servico_area_membros')) { return [[1]]; }
         if (str_starts_with($sql, 'SELECT cat.*')) { return [['id' => $destinoId, 'area_id' => 'area-destino', 'nome' => 'Destino', 'area_nome' => 'Área de destino']]; }
-        if (str_contains($sql, 'FROM chamado_respostas') || str_contains($sql, 'FROM servico_campos')) { return []; }
+        if (str_contains($sql, 'FROM chamado_respostas') || str_contains($sql, 'FROM servico_campos') || str_contains($sql, 'FROM servico_sla_prioridades')) { return []; }
         if (str_starts_with($sql, 'SELECT a.nome')) { return [['area_nome' => 'Área de origem', 'nome' => 'Origem']]; }
         if (str_starts_with($sql, 'SELECT * FROM servico_areas')) {
             expect($params === ['area-destino'] && str_ends_with($sql, 'FOR UPDATE'), 'Controller bloqueia e consulta a área correta do destino.');
