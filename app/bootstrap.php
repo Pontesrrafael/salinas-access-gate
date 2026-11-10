@@ -17,4 +17,8 @@ spl_autoload_register(static function (string $class): void {
 require __DIR__ . '/helpers.php';
 
 App\Core\App::boot(dirname(__DIR__));
-App\Core\I18n::init();
+// A API de BI (/api/v1) é sem sessão: não processa idioma nem grava cookies.
+// (Usa a URI bruta: Http::path() guardaria a base antes da hora.)
+if (!str_contains((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/api/v1/')) {
+    App\Core\I18n::init();
+}

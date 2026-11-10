@@ -88,7 +88,7 @@ Passo 'Aplicando migrações (tabelas, triggers e views)'
 if ($LASTEXITCODE -ne 0) { Falha 'Falha nas migrações (veja a mensagem acima).' }
 
 Passo 'Administrador'
-$temAdmin = & $mysql @rootArgs -N -e "SELECT COUNT(*) FROM salinas_access_gate.usuarios WHERE papel='admin'"
+$temAdmin = & $mysql @rootArgs -N -e "SELECT COUNT(DISTINCT u.id) FROM salinas_access_gate.usuarios u LEFT JOIN salinas_access_gate.usuario_perfis up ON up.usuario_id=u.id WHERE u.papel='admin' OR up.perfil='admin'"
 if ([int]$temAdmin -eq 0) {
     Write-Host 'Criando admin ti@salinasgold.com.br. Pressione Enter na senha para gerar uma temporária.' -ForegroundColor Yellow
     & $php bin\console.php criar-admin --email=ti@salinasgold.com.br --nome="TI Salinas"

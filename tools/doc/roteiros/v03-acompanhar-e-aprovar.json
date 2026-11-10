@@ -1,0 +1,18 @@
+{
+  "nome": "v03-acompanhar-e-aprovar",
+  "passos": [
+    {"acao":"legenda","texto":"Em Meus chamados, consulte o andamento dos seus pedidos."},
+    {"acao":"ir","rota":"/chamados/meus?perfil=colaborador"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":"a[href='/chamados/00000000-0000-4000-8000-000000000102']","espera":"/chamados/"},
+    {"acao":"legenda","texto":"Confira a solução apresentada pela equipe. Se resolveu, aprove e feche."},
+    {"acao":"clicar","alvo":"button:has-text('Aprovar e fechar')","espera":"estado=fechado"},
+    {"acao":"legenda","texto":"Após o fechamento, você pode avaliar o atendimento de uma a cinco estrelas."},
+    {"acao":"clicar","alvo":"input[name=avaliacao_nota][value='5']"},
+    {"acao":"digitar","alvo":"[name=avaliacao_comentario]","texto":"Problema resolvido. Obrigada pelo atendimento!"},
+    {"acao":"pausar","ms":3000},
+    {"acao":"clicar","alvo":"button:has-text('Enviar avaliação')","espera":"etapa=status"},
+    {"acao":"legenda","texto":"Avaliação exibida apenas nesta demonstração. Nenhum dado foi gravado."},
+    {"acao":"pausar","ms":5000}
+  ]
+}
