@@ -46,6 +46,8 @@ jobs:
         run: php tests/chamados.php && php tests/formulario_dinamico.php && php tests/email.php && php tests/retencao_chamados.php && php tests/preferencias_notificacao.php && php tests/prorrogacao.php && php tests/perfis.php
       - name: API de BI (tokens, escopos, limites e campos proibidos)
         run: php tests/api.php
+      - name: SLA por prioridade, campos condicionais, indicadores de chamados e e-mails de acesso
+        run: php tests/sla_prioridade.php && php tests/campos_condicionais.php && php tests/indicadores_chamados.php && php tests/notificacoes_acesso.php
       - name: LGPD e MFA (TOTP, segredo cifrado, titular, aviso de privacidade)
         run: php tests/lgpd.php
       - name: Mapas Infleet (Google e OpenStreetMap simulados)
