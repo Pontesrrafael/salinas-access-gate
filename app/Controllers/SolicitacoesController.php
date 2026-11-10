@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\Http;
 use App\Core\Session;
 use App\Core\Uuid;
+use App\Services\NotificacoesAcesso;
 use App\Services\Settings;
 
 /**
@@ -98,16 +99,19 @@ final class SolicitacoesController extends Controller
         }
         $id = Uuid::v4();
         $risco = Http::bool('atividade_risco') ? 1 : 0;
+        $empresa = Http::nstr('empresa', 150);
+        $tipoFinal = $tipo === 'terceiro' ? 'terceiro' : 'visitante';
+        $localValido = Uuid::valid($localId) ? $localId : null;
         Database::insert('solicitacoes_acesso', [
             'id'               => $id,
             'visitante_nome'   => $nome,
             'visitante_doc'    => Http::nstr('visitante_doc', 30),
-            'empresa'          => Http::nstr('empresa', 150),
+            'empresa'          => $empresa,
             'contato_telefone' => Http::nstr('contato_telefone', 30),
             'contato_email'    => $email,
-            'tipo'             => $tipo === 'terceiro' ? 'terceiro' : 'visitante',
+            'tipo'             => $tipoFinal,
             'area_id'          => $areaId,
-            'local_id'         => Uuid::valid($localId) ? $localId : null,
+            'local_id'         => $localValido,
             'data_prevista'    => $data,
             'motivo'           => Http::nstr('motivo', 2000),
             'atividade_risco'  => $risco,
@@ -117,6 +121,24 @@ final class SolicitacoesController extends Controller
             'consentimento_lgpd' => 1,
         ]);
         Audit::log('solicitacoes_acesso', $id, 'INSERT', ['visitante_nome' => $nome, 'area_id' => $areaId, 'data_prevista' => $data, 'atividade_risco' => $risco]);
+        $dadosNotif = [
+            'id'              => $id,
+            'visitante_nome'  => $nome,
+            'empresa'         => $empresa,
+            'contato_email'   => $email,
+            'tipo'            => $tipoFinal,
+            'area_id'         => $areaId,
+            'local_id'        => $localValido,
+            'data_prevista'   => $data,
+            'atividade_risco' => $risco,
+            'status'          => $risco ? 'aguardando_ssma' : 'pendente',
+            'origem'          => 'interna',
+            'criado_por'      => $u['id'],
+        ];
+        NotificacoesAcesso::solicitacao('criada', $dadosNotif, ['usuario_id' => $u['id']]);
+        if ($risco) {
+            NotificacoesAcesso::solicitacao('enviada_ssma', $dadosNotif, ['usuario_id' => $u['id']]);
+        }
         $this->ok($risco ? 'Solicitação criada e enviada para verificação do SSMA.' : 'Solicitação criada. Aguardando autorização.', '/solicitacoes');
     }
 
@@ -179,6 +201,11 @@ final class SolicitacoesController extends Controller
             'autorizado_por' => $u['id'], 'autorizado_em' => date('Y-m-d H:i:s'),
         ], "id = ? AND status = 'pendente'", [$id]);
         Audit::log('solicitacoes_acesso', $id, 'aprovada', ['area_id' => $s['area_id'], 'visitante_nome' => $s['visitante_nome']]);
+        NotificacoesAcesso::solicitacao('aprovada', [
+            ...$s,
+            'status'         => 'aprovada',
+            'autorizado_por' => $u['id'],
+        ], ['usuario_id' => $u['id']]);
         $this->ok('Solicitação aprovada.', '/solicitacoes', ['aba' => Http::str('aba', 'pendentes')]);
     }
 
@@ -201,6 +228,11 @@ final class SolicitacoesController extends Controller
             'autorizado_por' => $u['id'], 'autorizado_em' => date('Y-m-d H:i:s'),
         ], 'id = ?', [$id]);
         Audit::log('solicitacoes_acesso', $id, 'recusada', ['area_id' => $s['area_id'], 'visitante_nome' => $s['visitante_nome'], 'motivo_recusa' => $motivo]);
+        NotificacoesAcesso::solicitacao('recusada', [
+            ...$s,
+            'status'         => 'recusada',
+            'autorizado_por' => $u['id'],
+        ], ['usuario_id' => $u['id']]);
         $this->ok('Solicitação recusada.', '/solicitacoes', ['aba' => Http::str('aba', 'pendentes')]);
     }
 
@@ -219,7 +251,7 @@ final class SolicitacoesController extends Controller
     {
         $this->uuidOu404($id);
         return Database::one(
-            'SELECT s.*, a.responsavel_user_id FROM solicitacoes_acesso s LEFT JOIN areas a ON a.id = s.area_id WHERE s.id = ?',
+            'SELECT s.*, a.nome AS area_nome, a.responsavel_user_id FROM solicitacoes_acesso s LEFT JOIN areas a ON a.id = s.area_id WHERE s.id = ?',
             [$id]
         ) ?? Http::abort(404, 'Solicitação não encontrada.');
     }
